@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Run SCMP deploy from anywhere.
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: deploy <server-name>"
+  echo
+  echo "交互式示例:"
+  echo "  deploy ptc-301-gb"
+  echo
+  echo "首次使用需要先登录(保存 token，不会保存密码):"
+  echo "  export SCMP_SHARE_ID='<share_id>'"
+  echo "  python3 /Users/xin/auto-skills/scmp-deploy/scripts/scmp_cli.py login --prompt-password"
+  echo "  # 如需明文输入密码(可见/有回显): 追加 --plain-password 或设置 SCMP_PLAIN_PASSWORD=1"
+  exit 2
+fi
+
+SCMP_CLI_PATH_DEFAULT="/Users/xin/auto-skills/scmp-deploy/scripts/scmp_cli.py"
+SCMP_CLI_PATH="${SCMP_CLI_PATH:-$SCMP_CLI_PATH_DEFAULT}"
+
+exec python3 "$SCMP_CLI_PATH" deploy "$@"
