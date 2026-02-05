@@ -21,12 +21,13 @@ import os
 import sys
 from datetime import datetime
 from getpass import getpass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NoReturn, Optional, Tuple
 from urllib.parse import quote
 
 from scmp_api import (
     SCMPApi,
     default_token_path,
+    LoginError,
     load_token_file,
     login_and_get_token,
     redact_secret,
@@ -38,7 +39,7 @@ from scmp_api import (
 BASE_URL = "https://scmp.adsconflux.xyz"
 
 
-def _die(msg: str) -> None:
+def _die(msg: str) -> NoReturn:
     print(msg, file=sys.stderr)
     raise SystemExit(2)
 
@@ -133,10 +134,10 @@ def login_cmd(args: argparse.Namespace) -> None:
         password = _prompt_password(plain=plain, context="login")
     password = str(password)
 
-    token = login_and_get_token(BASE_URL, share_id, password)
-    if not token:
-        _die("login failed: could not parse token from response")
-    token = str(token)
+    try:
+        token = login_and_get_token(BASE_URL, share_id, password)
+    except LoginError as e:
+        _die(f"login failed: {e}")
 
     print(f"token={redact_secret(token)}")
 
@@ -186,9 +187,10 @@ def _ensure_daily_login(
 
     plain = bool(plain_password or _bool_env("SCMP_PLAIN_PASSWORD"))
     password = _prompt_password(plain=plain, context="daily login")
-    token = login_and_get_token(BASE_URL, str(sid), str(password))
-    if not token:
-        _die("daily login failed: could not parse token")
+    try:
+        token = login_and_get_token(BASE_URL, str(sid), str(password))
+    except LoginError as e:
+        _die(f"daily login failed: {e}")
 
     save_token_file(token_file, str(token))
     print(f"daily_login=ok saved_token_file={os.path.expanduser(token_file)}")

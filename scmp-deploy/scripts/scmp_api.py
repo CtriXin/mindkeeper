@@ -15,14 +15,17 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import stat
 import time
+import ssl
 import urllib.error
 import urllib.request
 import sys
 from getpass import getpass
 from datetime import datetime
 from dataclasses import dataclass
+from urllib.parse import urlparse
 from typing import Any, Dict, Optional
 
 
@@ -54,6 +57,110 @@ def _bool_env(name: str) -> bool:
     if v is None:
         return False
     return str(v).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _debug(msg: str) -> None:
+    if _bool_env("SCMP_DEBUG"):
+        print(f"[scmp_api debug] {msg}", file=sys.stderr)
+
+
+def _preview_text(value: Any, *, limit: int = 1200) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)):
+        try:
+            value = json.dumps(value, ensure_ascii=True)
+        except Exception:
+            value = str(value)
+    s = str(value)
+    if len(s) > limit:
+        return s[:limit] + "…"
+    return s
+
+
+def _is_private_host(host: str) -> bool:
+    host = (host or "").strip()
+    if not host:
+        return False
+    # IP literal
+    parts = host.split(".")
+    if len(parts) == 4 and all(p.isdigit() for p in parts):
+        a, b, c, d = (int(p) for p in parts)
+        if a == 10:
+            return True
+        if a == 192 and b == 168:
+            return True
+        if a == 172 and 16 <= b <= 31:
+            return True
+        return False
+
+    try:
+        ip = socket.gethostbyname(host)
+    except Exception:
+        return False
+    return _is_private_host(ip)
+
+
+def _disable_proxies_for_url(url: str) -> bool:
+    if _bool_env("SCMP_DISABLE_PROXY"):
+        return True
+    try:
+        host = urlparse(url).hostname or ""
+    except Exception:
+        host = ""
+    # Internal DNS tends to resolve to RFC1918; proxies often break these.
+    if host and _is_private_host(host):
+        return True
+    # Conservative fallback: allow users to opt-in via NO_PROXY.
+    return False
+
+
+def _open_url(req: urllib.request.Request, *, timeout: int) -> Any:
+    url = getattr(req, "full_url", "") or ""
+    ctx = ssl.create_default_context()
+
+    handlers: list[Any] = []
+    handlers.append(urllib.request.HTTPSHandler(context=ctx))
+
+    if _disable_proxies_for_url(url):
+        handlers.append(urllib.request.ProxyHandler({}))
+
+    if _bool_env("SCMP_DEBUG"):
+        try:
+            host = urlparse(url).hostname or ""
+        except Exception:
+            host = ""
+        try:
+            proxies = urllib.request.getproxies()  # type: ignore[attr-defined]
+        except Exception:
+            proxies = {}
+        _debug(
+            f"url={url} host={host} disable_proxy={_disable_proxies_for_url(url)} proxies={proxies} no_proxy={os.environ.get('no_proxy') or os.environ.get('NO_PROXY')}"
+        )
+
+    opener = urllib.request.build_opener(*handlers)
+    return opener.open(req, timeout=timeout)
+
+
+class LoginError(Exception):
+    pass
+
+
+def _extract_error_hint(body: Any) -> Optional[str]:
+    if not isinstance(body, dict):
+        return None
+    code = body.get("code")
+    msg = body.get("message")
+    result = body.get("result")
+    parts = []
+    if code is not None:
+        parts.append(f"code={code}")
+    if msg:
+        parts.append(f"message={msg}")
+    # Some endpoints return string errors in result.
+    if isinstance(result, str) and result:
+        parts.append(f"result={result}")
+    return " ".join(parts) if parts else None
 
 
 def redact_secret(value: str, *, keep_prefix: int = 8, keep_suffix: int = 6) -> str:
@@ -240,9 +347,10 @@ def ensure_daily_token(base_url: str) -> str:
             password = getpass("SCMP password (input hidden): ")
 
     print(f"Logging in as {share_id}...")
-    new_token = login_and_get_token(base_url, share_id, password)
-    if not new_token:
-        print("Login failed: could not parse token from response", file=sys.stderr)
+    try:
+        new_token = login_and_get_token(base_url, share_id, password)
+    except LoginError as e:
+        print(f"Login failed: {e}", file=sys.stderr)
         sys.exit(1)
 
     save_token_file(token_path, new_token)
@@ -287,7 +395,7 @@ class SCMPApi:
         req = urllib.request.Request(url, data=data, method=method, headers=headers)
 
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
+            with _open_url(req, timeout=60) as resp:
                 raw = resp.read()
                 content_type = resp.headers.get("content-type", "")
                 if "application/json" in content_type:
@@ -312,8 +420,12 @@ class SCMPApi:
             )
 
 
-def login_and_get_token(base_url: str, share_id: str, password: str) -> Optional[str]:
-    """Log in and return the `authentication` token if found."""
+def login_and_get_token(base_url: str, share_id: str, password: str) -> str:
+    """Log in and return the `authentication` token.
+
+    Raises:
+        LoginError: when the server rejects credentials or the network call fails.
+    """
     url = base_url.rstrip("/") + "/user/api/v1/login"
     data = json.dumps({"share_id": share_id, "password": password}).encode("utf-8")
     req = urllib.request.Request(
@@ -322,8 +434,9 @@ def login_and_get_token(base_url: str, share_id: str, password: str) -> Optional
         method="POST",
         headers={"accept": "application/json", "content-type": "application/json"},
     )
+    body: Any = None
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with _open_url(req, timeout=60) as resp:
             raw = resp.read()
             headers = {k.lower(): v for k, v in resp.headers.items()}
             header_token = headers.get("authentication")
@@ -353,9 +466,34 @@ def login_and_get_token(base_url: str, share_id: str, password: str) -> Optional
                 if _looks_like_auth_token(val):
                     return _normalize_token(val)
 
+            try:
+                body = json.loads(raw.decode("utf-8"))
+            except Exception as e:
+                _debug(
+                    f"login response not JSON: err={e} content_type={headers.get('content-type')} body={_preview_text(raw)}"
+                )
+                raise LoginError("login response is not JSON")
+    except urllib.error.HTTPError as e:
+        raw = e.read()
+        headers = {k.lower(): v for k, v in e.headers.items()} if e.headers else {}
+        try:
             body = json.loads(raw.decode("utf-8"))
-    except Exception:
-        return None
+        except Exception:
+            body = raw.decode("utf-8", errors="replace")
+        _debug(
+            "login HTTPError: "
+            + f"status={e.code} "
+            + f"content_type={headers.get('content-type')} "
+            + f"body={_preview_text(body)}"
+        )
+        hint = _extract_error_hint(body)
+        raise LoginError(hint or f"http={e.code} body={_preview_text(body)}")
+    except urllib.error.URLError as e:
+        _debug(f"login URLError: reason={getattr(e, 'reason', None) or e}")
+        raise LoginError(f"network/ssl error: {getattr(e, 'reason', None) or e}")
+    except Exception as e:
+        _debug(f"login exception: {e!r}")
+        raise LoginError(f"login exception: {e!r}")
 
     if isinstance(body, dict):
         token = (
@@ -371,5 +509,11 @@ def login_and_get_token(base_url: str, share_id: str, password: str) -> Optional
         if token and _looks_like_auth_token(str(token)):
             return _normalize_token(str(token))
 
+        hint = _extract_error_hint(body)
+        if hint:
+            raise LoginError(hint)
+
     found = _find_token_like(body)
-    return found.strip() if found else None
+    if found:
+        return found.strip()
+    raise LoginError("could not find token in response")

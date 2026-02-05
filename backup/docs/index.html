@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📚 知识库 Wiki</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f0f1a;
+            --bg-secondary: #1a1a2e;
+            --bg-tertiary: #252542;
+            --bg-card: rgba(30, 30, 50, 0.8);
+            --text-primary: #e4e4f0;
+            --text-secondary: #a0a0b8;
+            --text-muted: #6b6b80;
+            --accent-primary: #6366f1;
+            --accent-secondary: #8b5cf6;
+            --accent-gradient: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+            --border-color: rgba(99, 102, 241, 0.2);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --shadow-glow: 0 0 40px rgba(99, 102, 241, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* 背景动画 */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: -1;
+        }
+
+        .bg-animation::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(168, 85, 247, 0.05) 0%, transparent 40%);
+            animation: bgFloat 20s ease-in-out infinite;
+        }
+
+        @keyframes bgFloat {
+
+            0%,
+            100% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+
+            50% {
+                transform: translate(-2%, -2%) rotate(1deg);
+            }
+        }
+
+        /* 布局 */
+        .container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            padding: 24px;
+            position: fixed;
+            width: 280px;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            margin-bottom: 32px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            font-size: 28px;
+            -webkit-text-fill-color: initial;
+        }
+
+        .nav-section {
+            margin-bottom: 24px;
+        }
+
+        .nav-section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .nav-item:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: var(--accent-gradient);
+            color: white;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .nav-item-icon {
+            font-size: 18px;
+        }
+
+        /* 主内容区 */
+        .main {
+            margin-left: 280px;
+            padding: 40px 60px;
+            min-width: 600px;
+            max-width: 1200px;
+        }
+
+        .page-header {
+            margin-bottom: 40px;
+        }
+
+        .page-title {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+
+        /* 内容卡片 */
+        .content-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 24px;
+            backdrop-filter: blur(10px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        /* Markdown 样式 */
+        .markdown-content h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border-color);
+            color: var(--text-primary);
+            word-break: keep-all;
+            white-space: normal;
+        }
+
+        .markdown-content h2 {
+            font-size: 22px;
+            font-weight: 600;
+            margin: 32px 0 16px 0;
+            color: var(--accent-primary);
+        }
+
+        .markdown-content h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 24px 0 12px 0;
+            color: var(--text-primary);
+        }
+
+        .markdown-content p {
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        .markdown-content ul,
+        .markdown-content ol {
+            margin-bottom: 16px;
+            padding-left: 24px;
+        }
+
+        .markdown-content li {
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .markdown-content code {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-tertiary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #a5b4fc;
+        }
+
+        .markdown-content pre {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 16px 0;
+            overflow-x: auto;
+        }
+
+        .markdown-content pre code {
+            background: none;
+            padding: 0;
+            color: var(--text-secondary);
+        }
+
+        .markdown-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+
+        .markdown-content th,
+        .markdown-content td {
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            text-align: left;
+        }
+
+        .markdown-content th {
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .markdown-content td {
+            color: var(--text-secondary);
+        }
+
+        .markdown-content blockquote {
+            border-left: 4px solid var(--accent-primary);
+            padding-left: 20px;
+            margin: 16px 0;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .markdown-content a {
+            color: var(--accent-primary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .markdown-content a:hover {
+            color: var(--accent-secondary);
+            text-decoration: underline;
+        }
+
+        .markdown-content hr {
+            border: none;
+            height: 1px;
+            background: var(--border-color);
+            margin: 32px 0;
+        }
+
+        /* 状态标签 */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .status-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .status-error {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--error);
+        }
+
+        /* 文件列表 */
+        .file-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 20px;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .file-item:hover {
+            border-color: var(--accent-primary);
+            transform: translateX(4px);
+        }
+
+        .file-icon {
+            font-size: 24px;
+        }
+
+        .file-info h4 {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .file-info p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* 搜索框 */
+        .search-box {
+            position: relative;
+            margin-bottom: 24px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 14px 20px 14px 48px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        /* 加载动画 */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 60px;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--bg-tertiary);
+            border-top-color: var(--accent-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                display: none;
+            }
+
+            .main {
+                margin-left: 0;
+                padding: 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bg-animation"></div>
+
+    <div class="container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">📚</span>
+                    <span>知识库</span>
+                </div>
+            </div>
+
+            <nav>
+                <div class="nav-section">
+                    <div class="nav-section-title">概览</div>
+                    <div class="nav-item active" data-page="home">
+                        <span class="nav-item-icon">🏠</span>
+                        <span>首页</span>
+                    </div>
+                    <div class="nav-item" data-page="changelog">
+                        <span class="nav-item-icon">📅</span>
+                        <span>变更记录</span>
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">知识Wiki</div>
+                    <div class="nav-item" data-page="wiki-skills">
+                        <span class="nav-item-icon">🤖</span>
+                        <span>AI Skills</span>
+                    </div>
+                    <div class="nav-item" data-page="wiki-scripts">
+                        <span class="nav-item-icon">📜</span>
+                        <span>脚本指南</span>
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">快速链接</div>
+                    <div class="nav-item" data-page="templates">
+                        <span class="nav-item-icon">📋</span>
+                        <span>文档模板</span>
+                    </div>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="main">
+            <div id="content">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // 文档内容 (由于是本地文件，直接嵌入内容)
+        const docs = {
+            home: `# 📚 知识库 (Knowledge Wiki)
+
+> 个人开发知识库，记录所有迭代更新、功能开发、脚本创建和Bug修复。
+
+## 🗂️ 文档结构
+
+\`\`\`
+docs/
+├── README.md           # 本文件 - 知识库入口
+├── CHANGELOG.md        # 变更总览 (时间线)
+├── changelog/          # 详细变更记录 (按日期/版本)
+├── wiki/               # 知识Wiki (按主题分类)
+└── templates/          # 文档模板
+\`\`\`
+
+## 🏷️ 变更类型标签
+
+| 标签 | 说明 | 使用场景 |
+|------|------|----------|
+| \`✨ FEATURE\` | 新功能 | 新增功能或特性 |
+| \`🔧 UPDATE\` | 迭代更新 | 现有功能的改进或升级 |
+| \`🐛 BUGFIX\` | Bug修复 | 修复已知问题 |
+| \`📜 SCRIPT\` | 脚本创建 | 新工具脚本 |
+| \`📖 DOCS\` | 文档更新 | 文档新增或修改 |
+
+## 📋 快速导航
+
+点击左侧菜单开始浏览文档。
+
+---
+
+*最后更新: 2026-02-04*`,
+
+            changelog: `# 📅 变更总览 (CHANGELOG)
+
+> 所有变更的时间线索引
+
+---
+
+## 2026年2月
+
+### 2026-02-04
+
+| 类型 | 标题 | 状态 |
+|------|------|------|
+| \`🔧 UPDATE\` | Domain工具Excel映射和预览功能优化 | ✅ 完成 |
+| \`📖 DOCS\` | 创建知识库Wiki系统 | ✅ 完成 |
+
+---
+
+## 2026年1月
+
+### 2026-01-30
+
+| 类型 | 标题 | 状态 |
+|------|------|------|
+| \`✨ FEATURE\` | AdSense/AdX广告系统集成 | ✅ 完成 |
+
+### 2026-01-29
+
+| 类型 | 标题 | 状态 |
+|------|------|------|
+| \`🔧 UPDATE\` | Sass集成升级和deprecation警告修复 | ✅ 完成 |
+
+---
+
+## 快速统计
+
+| 类型 | 数量 |
+|------|------|
+| ✨ 新功能 | 1 |
+| 🔧 迭代更新 | 2 |
+| 🐛 Bug修复 | 0 |
+| 📜 脚本创建 | 0 |
+| 📖 文档更新 | 1 |`,
+
+            'wiki-skills': `# 📖 AI Skills 使用指南
+
+> 本项目中所有AI Skills的使用说明和维护指南
+
+## 现有Skills
+
+### 1. domain-service-lookup
+
+**功能**: 根据域名自动查找服务配置
+
+**触发词**:
+- "帮我用技能查找 xxx 的配置"
+- "帮我找 xxx 的配置"
+
+**用法**:
+\`\`\`bash
+python3 /Users/xin/auto-skills/domain-service-lookup/scripts/lookup.py <domain_name>
+\`\`\`
+
+---
+
+### 2. knowledge-wiki
+
+**功能**: 知识库文档管理
+
+**触发词**:
+- "记录变更"
+- "添加wiki"
+- "更新文档"
+- "查看变更记录"
+
+---
+
+## 如何创建新Skill
+
+1. 创建目录: \`mkdir -p .skills/<skill-name>\`
+2. 创建 \`SKILL.md\` 文件
+3. (可选) 添加辅助脚本到 \`scripts/\` 目录
+4. 更新本文档`,
+
+            'wiki-scripts': `# 📖 脚本使用指南
+
+> 项目中所有实用脚本的说明和使用方法
+
+## 部署相关
+
+### deploy
+
+**功能**: 在不打开SCMP图形界面的情况下执行部署
+
+**首次登录**:
+\`\`\`bash
+python3 /Users/xin/auto-skills/scmp-deploy/scripts/scmp_cli.py login --share-id "<share_id>" --prompt-password
+\`\`\`
+
+**使用方法**:
+\`\`\`bash
+deploy <server-name>
+\`\`\`
+
+---
+
+### service_lookup.py
+
+**功能**: 根据域名查找对应的后端服务
+
+\`\`\`bash
+python3 /Users/xin/auto-skills/scmp-deploy/scripts/service_lookup.py <domain>
+\`\`\`
+
+---
+
+## PATH设置
+
+\`\`\`bash
+echo 'export PATH="/Users/xin/auto-skills/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+\`\`\``,
+
+            templates: `# 📋 文档模板
+
+> 创建新文档时使用以下模板
+
+## 变更记录模板
+
+用于记录每次迭代更新、功能开发、Bug修复等。
+
+**模板位置**: \`docs/templates/changelog-entry.md\`
+
+**关键要素**:
+- 摘要 - 一句话描述
+- 基本信息 - 类型、范围、相关文件
+- 背景与目标
+- 实现过程
+- 遇到的问题及解决方案
+- 最终结果
+- 经验总结
+
+---
+
+## Wiki文章模板
+
+用于创建知识类文档。
+
+**模板位置**: \`docs/templates/wiki-article.md\`
+
+**关键要素**:
+- 简介
+- 目录
+- 概述
+- 快速开始
+- 详细说明
+- 常见问题
+- 参考资料`
+        };
+
+        // 页面切换逻辑
+        const navItems = document.querySelectorAll('.nav-item');
+        const content = document.getElementById('content');
+
+        function renderPage(pageId) {
+            const markdown = docs[pageId] || '# 页面未找到';
+            content.innerHTML = `
+                <div class="content-card">
+                    <div class="markdown-content">
+                        ${marked.parse(markdown)}
+                    </div>
+                </div>
+            `;
+        }
+
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                navItems.forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+                renderPage(item.dataset.page);
+            });
+        });
+
+        // 初始加载
+        renderPage('home');
+    </script>
+</body>
+
+</html>

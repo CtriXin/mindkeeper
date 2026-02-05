@@ -165,25 +165,54 @@ def get_latest_branch(api, service_name):
     return branch
 
 def main():
-    print("-" * 40)
-    print("SCMP 服务/域名快速查询工具")
-    print("1. 输入服务名: 直接查询 Git 地址和最新分支")
-    print("2. 输入域名: 自动解析 feServer 后查询对应服务")
-    print("-" * 40)
+    import sys
     
-    print("\n请输入服务名 (如: ptc-301-gb) 或域名 (如: example.com):")
-    try:
-        user_input = input("> ").strip()
-    except EOFError:
-        return
+    user_input = None
+    force_domain = False
+
+    # 1. Try to parse arguments
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1]
+        
+        if cmd in ("-h", "--help"):
+            print("Usage: lookup [domain|service] <name>")
+            print("       lookup <name>")
+            return
+
+        if cmd == "domain" and len(sys.argv) > 2:
+            user_input = sys.argv[2]
+            force_domain = True
+        elif cmd == "service" and len(sys.argv) > 2:
+            user_input = sys.argv[2]
+        elif cmd in ("list", "ip"):
+             print(f"Command '{cmd}' is not yet implemented in this script.")
+             return
+        else:
+            # Assume the first argument is the input (service or domain)
+            user_input = cmd
+
+    # 2. If no args, use interactive mode
+    if not user_input:
+        print("-" * 40)
+        print("SCMP 服务/域名快速查询工具")
+        print("1. 输入服务名: 直接查询 Git 地址和最新分支")
+        print("2. 输入域名: 自动解析 feServer 后查询对应服务")
+        print("-" * 40)
+        
+        print("\n请输入服务名 (如: ptc-301-gb) 或域名 (如: example.com):")
+        try:
+            user_input = input("> ").strip()
+        except EOFError:
+            return
 
     if not user_input:
         _die("Empty input.")
 
     service_name = user_input
 
-    # Simple heuristic: if it contains a dot and no spaces, treat as domain
-    if "." in user_input and " " not in user_input:
+    # 3. Resolve Domain
+    # Heuristic: if explicit 'domain' cmd used OR (contains dot AND no spaces)
+    if force_domain or ("." in user_input and " " not in user_input):
         service_name = resolve_domain(user_input)
 
     token = _load_token()
