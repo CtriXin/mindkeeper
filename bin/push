@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Global git push helper. Run inside a git repo.
+
+usage() {
+  cat <<'USAGE'
+Usage: push [-m "commit message"] [--no-notify]
+
+Environment:
+  FEISHU_WEBHOOK   Feishu bot webhook URL. If set, can send notify.
+  PUSH_NOTIFY      If set to 1, auto-send notify without prompt.
+  PUSH_LOCAL_HOOK  Path to local hook script (relative or absolute).
+
+Local hook search order (first match):
+  1) $PUSH_LOCAL_HOOK
+  2) ./.push.local.sh
+  3) ./scripts/push.local.sh
+USAGE
+}
+
+commit_message=""
+notify_flag="auto"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -m|--message)
+      commit_message="${2:-}"
+      shift 2
+      ;;
+    --no-notify)
+      notify_flag="no"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown arg: $1"
+      usage
+      exit 2
+      ;;
+  esac
+done
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [[ -z "${repo_root}" ]]; then
+  echo "当前目录不是 git 仓库"
+  exit 1
+fi
+
+cd "$repo_root"
+project_name=$(basename "$repo_root")
+current_branch=$(git symbolic-ref --short HEAD)
+
+# Stage all changes
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  git add -A
+fi
+
+# Commit if there are staged changes
+if git diff --cached --quiet; then
+  echo "没有可提交的变更"
+else
+  if [[ -z "$commit_message" ]]; then
+    read -r -p "请输入提交信息: " commit_message
+  fi
+  if [[ -z "$commit_message" ]]; then
+    echo "提交信息不能为空"
+    exit 1
+  fi
+  git commit -m "$commit_message"
+fi
+
+# Push
+if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+  git push
+else
+  git push -u origin "$current_branch"
+fi
+
+# Collect changed files from last commit (if any)
+changed_files=""
+if git rev-parse HEAD~1 >/dev/null 2>&1; then
+  changed_files=$(git diff --name-only HEAD~1 HEAD | tr '\n' ',' | sed 's/,$//')
+fi
+
+# Notify (Feishu)
+if [[ -n "${FEISHU_WEBHOOK:-}" && "$notify_flag" != "no" ]]; then
+  if [[ "${PUSH_NOTIFY:-0}" != "1" ]]; then
+    read -r -p "是否发送飞书通知? (y/N): " notify_choice
+    if [[ "${notify_choice}" != "y" && "${notify_choice}" != "Y" ]]; then
+      notify_choice=""
+    fi
+  else
+    notify_choice="y"
+  fi
+
+  if [[ -n "$notify_choice" ]]; then
+    notify_content="${commit_message:-已推送}"
+    curl -sS -X POST -H "Content-Type: application/json" \
+      -d "{\"msg_type\": \"text\", \"content\": {\"text\": \"🚀 推送通知\\n项目: ${project_name}\\n分支: ${current_branch}\\n提交信息: ${commit_message:-无}\\n更新文件: ${changed_files}\"}}" \
+      "$FEISHU_WEBHOOK" >/dev/null
+    echo "飞书通知已发送"
+  fi
+fi
+
+# Local hook
+hook_path=""
+if [[ -n "${PUSH_LOCAL_HOOK:-}" ]]; then
+  hook_path="$PUSH_LOCAL_HOOK"
+elif [[ -f ".push.local.sh" ]]; then
+  hook_path=".push.local.sh"
+elif [[ -f "scripts/push.local.sh" ]]; then
+  hook_path="scripts/push.local.sh"
+fi
+
+if [[ -n "$hook_path" ]]; then
+  echo "执行本地 Hook: $hook_path"
+  if [[ -x "$hook_path" ]]; then
+    "$hook_path" "$repo_root" "$current_branch" "$project_name"
+  else
+    bash "$hook_path" "$repo_root" "$current_branch" "$project_name"
+  fi
+fi
+

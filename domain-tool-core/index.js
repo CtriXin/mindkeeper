@@ -81,12 +81,12 @@ async function run(localConfig, args = {}) {
 
     const inputDir = localConfig.paths?.inputDir || path.join(process.cwd(), 'input')
     const files = fs.readdirSync(inputDir).filter(f => f.endsWith('.xlsx') && !f.startsWith('~'))
-    const inputFile = args.input || (files.length > 0 ? path.join(inputDir, files.sort((a,b) => fs.statSync(path.join(inputDir,b)).mtime.getTime() - fs.statSync(path.join(inputDir,a)).mtime.getTime())[0]) : null)
+    const inputFile = args.input || (files.length > 0 ? path.join(inputDir, files.sort((a, b) => fs.statSync(path.join(inputDir, b)).mtime.getTime() - fs.statSync(path.join(inputDir, a)).mtime.getTime())[0]) : null)
 
     if (!inputFile) { log(`❌ 未能找到 Excel 文件`, 'red'); process.exit(1) }
     log(`📄 目标文件: ${path.basename(inputFile)}`, 'blue')
 
-    const shouldGenSuggest = await ask("1. 是否根据参考数据生成 'suggested-config.js'？")
+    const shouldGenSuggest = await ask("💡 步骤 1: 是否根据现有数据生成 'suggested-config.js' (配置参考助手)？")
     if (shouldGenSuggest) {
         const outputPath = args.output || localConfig.paths?.output
         if (fs.existsSync(outputPath)) {
@@ -114,7 +114,7 @@ async function run(localConfig, args = {}) {
                 const templateObj = generateTemplate(referenceData)
                 templateObj.siteIcon = "/icon/${siteIcon}.svg"
                 templateObj.IAmURL = "${domain}"
-                
+
                 const templateStr = JSON.stringify(templateObj, null, 8).replace(/\"/g, "'")
                 const scaffold = `/**
  * 🛠️ 配置零件 (v2.6)
@@ -138,13 +138,17 @@ ${adsLines}
 */
 `
                 fs.writeFileSync(path.join(process.cwd(), 'suggested-config.js'), scaffold)
-                log("✅ 已产出 suggested-config.js，请修改后贴回 config.js。", 'green')
+                log("\n✅ 已产出 suggested-config.js！", 'green')
+                log("👉 请打开此文件，将生成的代码块分别贴回你的 'config.js' 中，调整无误后再继续运行命令生成结果。\n", 'cyan')
+
+                const continueNow = await ask("已经手动更新完 config.js 并决定现在就开始执行生成吗？")
+                if (!continueNow) { log("👋 好的，请在修改完 config.js 后再次运行命令。", 'yellow'); return }
             }
         }
+    } else {
+        const readyToRun = await ask("🚀 步骤 2: 准备好解析 Excel 并生成最终输出了吗？")
+        if (!readyToRun) { log("👋 好的，请在修改完 config.js 后再次运行命令。", 'yellow'); return }
     }
-
-    const readyToRun = await ask("2. 配置是否已就绪？准备开始解析 Excel 并生成结果？")
-    if (!readyToRun) { log("👋 好的，请在修改完 config.js 后再次运行命令。", 'yellow'); return }
 
     log('\n📊 正在执行解析与生成...', 'blue')
     const parsedData = await require('./lib/excel-parser').parseExcel(inputFile, localConfig)
