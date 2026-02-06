@@ -6,6 +6,13 @@ const fs = require('fs')
 
 function clone(obj) { return JSON.parse(JSON.stringify(obj)) }
 function randomInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min }
+function stableStringify(value) {
+    if (value === null || value === undefined) return ''
+    if (typeof value !== 'object') return JSON.stringify(value)
+    if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+    const keys = Object.keys(value).sort()
+    return `{${keys.map(k => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`
+}
 
 function generateRandomValues(config = null) {
     const ranges = config?.randomRanges || {}
@@ -33,7 +40,7 @@ function applyPlaceholders(obj, domain, config = null) {
             return result
         }
         if (typeof val === 'string') {
-            if (val === '${_ads}' || val === '${_ads_file}' || val === '${_ads_content}') return val
+            if (val === '${_ads}' || val === '${_ads_file}' || val === '${_ads_content}' || val === '${_adsMagic}') return val
             const fullMatch = val.match(/^\$\{(\w+)\}$/)
             if (fullMatch && fullMatch[1] in randomValues) return randomValues[fullMatch[1]]
             let value = val.replace(/\$\{domain\}/g, domain)
@@ -136,11 +143,19 @@ function generateDomainConfig(domain, domainData, adsData, config, existingConfi
     if (!isGrp && adsContent) { const m = String(adsContent).match(adsCfg.groupPattern || /^group[_\s]*(\d+)$/i); if (m) { groupNum = m[1]; isGrp = true } }
 
     const hasAds = result.hasOwnProperty('ads'); const hasAdsFile = result.hasOwnProperty('ads_file')
+    const adsPlaceholder = (typeof result.ads === 'string') ? result.ads : null
+    const adsMode = adsPlaceholder === '${_adsMagic}' ? 'magic'
+        : (adsPlaceholder === '${_ads}' || adsPlaceholder === '${_ads_content}') ? 'ads'
+        : null
     const adsTpl = adsCfg.adsFileTemplate || 'src/utils/config/adstxt/group_${group}.txt'
 
     if (isGrp) {
         if (hasAdsFile) result.ads_file = adsTpl.replace(/\$\{group\}/g, groupNum)
-        if (hasAds) result.ads = adsTpl.replace(/\$\{group\}/g, groupNum)
+        if (hasAds) {
+            if (adsMode === 'magic') result.ads = adsTpl.replace(/\$\{group\}/g, groupNum)
+            else if (adsMode === 'ads') result.ads = adsContent || (adsCfg.defaultValue || 'success')
+            else result.ads = adsTpl.replace(/\$\{group\}/g, groupNum)
+        }
     } else if (adsContent) {
         if (hasAds) result.ads = adsContent
     } else {
@@ -163,9 +178,21 @@ function generateDomainConfig(domain, domainData, adsData, config, existingConfi
         else if (val && typeof val === 'object') Object.keys(val).forEach(k => checkValue(val[k], `${path}.${k}`))
     }
     checkValue(result, domain)
+    const hasGroupValue = adsGroup !== null && adsGroup !== undefined && String(adsGroup).trim() !== ''
+    const hasAdsContentValue = adsContent !== null && adsContent !== undefined && String(adsContent).trim() !== ''
+    const outputAdsIsContent = hasAds && hasAdsContentValue && result.ads === String(adsContent)
     // 优先级丢失报警：核心判断！
     if (isGrp && !hasAdsFile) {
         issues.push(`\x1b[41m\x1b[37m[优先级报错]\x1b[0m Excel 中存在组号 (Group), 但配置 Template 中漏掉了 'ads_file' 字段！`)
+    }
+    if (hasGroupValue && hasAdsContentValue && outputAdsIsContent) {
+        issues.push(`\x1b[41m\x1b[37m[Ads.txt优先级]\x1b[0m Excel 同时提供了 ads.txt 与 ads.txt group，但输出仍为 ads.txt 内容，请检查 group 是否被识别或模板是否缺少 'ads_file' 字段。`)
+    }
+    if (hasGroupValue && adsMode === 'ads') {
+        issues.push('[Ads.txt配置提示] 模板使用 \\${_ads}，即使存在 ads.txt group 也会强制输出 ads.txt 内容。若希望 group 优先，请改用 \\${_adsMagic} 或在模板中加入 \'ads_file\'。')
+    }
+    if (hasGroupValue && !isGrp) {
+        issues.push(`[Ads.txt Group无效] 发现 ads.txt group 值="${String(adsGroup)}"，但未匹配到 groupPattern，已回退为 ads.txt 内容。`)
     }
     if (issues.length > 0) {
         console.log(`\n\x1b[31m⚠️  配置异常警告 (${domain}):\x1b[0m`)
@@ -189,7 +216,7 @@ function generateConfig(parsedData, config, options = {}) {
     let toProcess = targetDomains ? new Set(targetDomains) : new Set([...Object.keys(domains), ...Object.keys(adsData)])
     
     // 跨域名重复性校验存储
-    const uniqueStore = { firebase: new Map(), siteName: new Map(), IAMEMAIL: new Map() }
+    const uniqueStore = { firebase: new Map(), siteName: new Map(), iamemail: new Map() }
 
     for (const domain of toProcess) {
         const domainData = domains[domain] || null; const ads = adsData[domain] || null
@@ -208,12 +235,14 @@ function generateConfig(parsedData, config, options = {}) {
         // --- 深度重复校验 ---
         const checkDuplicate = (data, label) => {
             if (!data) return
-            const strValue = (typeof data === 'object') ? JSON.stringify(data) : String(data).trim()
+            const key = String(label || '').toLowerCase()
+            if (!uniqueStore[key]) return
+            const strValue = (typeof data === 'object') ? stableStringify(data) : String(data).trim()
             if (strValue.length < 10) return // 忽略太短的值
-            if (uniqueStore[label].has(strValue)) {
-                console.log(`\n\x1b[43m\x1b[30m[重复报警]\x1b[0m 域名 "${domain}" 的 ${label} 数据与 "${uniqueStore[label].get(strValue)}" 完全一致！请检查 Excel 是否公式拉错。`)
+            if (uniqueStore[key].has(strValue)) {
+                console.log(`\n\x1b[43m\x1b[30m[重复报警]\x1b[0m 域名 "${domain}" 的 ${label} 数据与 "${uniqueStore[key].get(strValue)}" 完全一致！请检查 Excel 是否公式拉错。`)
             } else {
-                uniqueStore[label].set(strValue, domain)
+                uniqueStore[key].set(strValue, domain)
             }
         }
         if (!adsOnly) {
