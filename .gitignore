@@ -1,0 +1,13 @@
+# 系统文件
+.DS_Store
+*.log
+
+# Node.js
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# 公司内部敏感内容 - 仅保留本地版本控制，不上传
+scmp-deploy/

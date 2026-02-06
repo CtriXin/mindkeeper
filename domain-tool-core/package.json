@@ -1,11 +1,28 @@
 {
   "name": "domain-tool-core",
-  "version": "2.0.0",
-  "description": "Central engine for domain configuration generation from Excel.",
+  "version": "2.6.0",
+  "description": "域名配置工具 - 中央引擎 (Mother Core)，从 Excel 生成域名配置 JSON",
   "main": "index.js",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "keywords": [
+    "domain-tool",
+    "excel-parser",
+    "config-generator",
+    "adsense",
+    "adx"
+  ],
+  "scripts": {
+    "test": "echo \"No tests yet\" && exit 0"
+  },
   "dependencies": {
     "exceljs": "^4.4.0"
   },
   "author": "Gemini & Xin",
-  "license": "ISC"
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/domain-tool-core.git"
+  }
 }
