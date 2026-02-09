@@ -79,19 +79,44 @@ function generateAdsenseConfig(slotData, config, adsTemplate = null) {
     const adsense = {}; const wrapperFmt = adsTemplate?.wrapper || { scriptUrl: '${scriptUrl}' }
     const firstSlot = Object.values(slots)[0] || {}
     for (const [k, v] of Object.entries(wrapperFmt)) adsense[k] = v === '${scriptUrl}' ? (slotData.scriptUrl || '') : (v === '${client}' ? (firstSlot.client || '') : v)
-    
+
     if (adsTemplate?.adsense) {
         const applyTpl = (t) => {
             if (Array.isArray(t)) return t.map(applyTpl).filter(Boolean)
             if (typeof t === 'string') { const m = t.match(/^\$\{(\w+)\}$/); return m ? (slots[m[1]] ? formatAdSlot(slots[m[1]], slotData, adsTemplate) : null) : null }
-            if (t && typeof t === 'object') { const r = {}; let has = false; for (const [k,v] of Object.entries(t)) { const res = applyTpl(v); if (res) { r[k] = res; has = true } }; return has ? r : null }
+            if (t && typeof t === 'object') { const r = {}; let has = false; for (const [k, v] of Object.entries(t)) { const res = applyTpl(v); if (res) { r[k] = res; has = true } }; return has ? r : null }
             return null
         }
         Object.assign(adsense, applyTpl(adsTemplate.adsense))
     } else {
         const mapping = config.adsMapping?.adsense || {}
-        for (const [name, data] of Object.entries(slots)) {
-            const path = mapping[name] || name; setPathValue(adsense, path, formatAdSlot(data, slotData, adsTemplate))
+
+        // 检测旧格式配置并警告
+        let hasOldFormat = false
+        for (const [key, value] of Object.entries(mapping)) {
+            if (typeof value === 'string' && !value.startsWith('${')) {
+                hasOldFormat = true
+                console.warn(`⚠️  检测到旧格式配置: '${key}': '${value}'`)
+            }
+        }
+
+        if (hasOldFormat) {
+            console.warn(`\n❌ 配置格式已过时！请升级为新语法：`)
+            console.warn(`   旧格式: 'excel_column': 'output_key'`)
+            console.warn(`   新格式: 'output_key': '\${excel_column}'`)
+            console.warn(`\n💡 提示：运行以下命令生成参考配置：`)
+            console.warn(`   node tools/domain-tool/index.js (选择 y 生成 suggested-config.js)\n`)
+            throw new Error('配置格式不兼容，请升级 adsMapping 配置为新语法')
+        }
+
+        // 只处理新语法：'output_key': '${excel_column}'
+        for (const [outputKey, mappingValue] of Object.entries(mapping)) {
+            if (typeof mappingValue === 'string' && mappingValue.startsWith('${') && mappingValue.endsWith('}')) {
+                const excelColumn = mappingValue.slice(2, -1)  // 提取 ${...} 中的列名
+                if (slots[excelColumn]) {
+                    setPathValue(adsense, outputKey, formatAdSlot(slots[excelColumn], slotData, adsTemplate))
+                }
+            }
         }
     }
     return adsense
@@ -105,14 +130,39 @@ function generateAdxConfig(slotData, config, adsTemplate = null) {
         const applyTpl = (t) => {
             if (Array.isArray(t)) return t.map(applyTpl).filter(Boolean)
             if (typeof t === 'string') { const m = t.match(/^\$\{(\w+)\}$/); return m ? (slots[m[1]] ? fmt(slots[m[1]]) : null) : null }
-            if (t && typeof t === 'object') { const r = {}; let has = false; for (const [k,v] of Object.entries(t)) { const res = applyTpl(v); if (res) { r[k] = res; has = true } }; return has ? r : null }
+            if (t && typeof t === 'object') { const r = {}; let has = false; for (const [k, v] of Object.entries(t)) { const res = applyTpl(v); if (res) { r[k] = res; has = true } }; return has ? r : null }
             return null
         }
         Object.assign(adsense, applyTpl(adsTemplate.adx))
     } else {
         const mapping = config.adsMapping?.adx || {}
-        for (const [name, data] of Object.entries(slots)) {
-            setPathValue(adsense, mapping[name] || name, fmt(data))
+
+        // 检测旧格式配置并警告
+        let hasOldFormat = false
+        for (const [key, value] of Object.entries(mapping)) {
+            if (typeof value === 'string' && !value.startsWith('${')) {
+                hasOldFormat = true
+                console.warn(`⚠️  检测到旧格式配置 (AdX): '${key}': '${value}'`)
+            }
+        }
+
+        if (hasOldFormat) {
+            console.warn(`\n❌ AdX 配置格式已过时！请升级为新语法：`)
+            console.warn(`   旧格式: 'excel_column': 'output_key'`)
+            console.warn(`   新格式: 'output_key': '\${excel_column}'`)
+            console.warn(`\n💡 提示：运行以下命令生成参考配置：`)
+            console.warn(`   node tools/domain-tool/index.js (选择 y 生成 suggested-config.js)\n`)
+            throw new Error('AdX 配置格式不兼容，请升级 adsMapping.adx 配置为新语法')
+        }
+
+        // 只处理新语法：'output_key': '${excel_column}'
+        for (const [outputKey, mappingValue] of Object.entries(mapping)) {
+            if (typeof mappingValue === 'string' && mappingValue.startsWith('${') && mappingValue.endsWith('}')) {
+                const excelColumn = mappingValue.slice(2, -1)  // 提取 ${...} 中的列名
+                if (slots[excelColumn]) {
+                    setPathValue(adsense, outputKey, fmt(slots[excelColumn]))
+                }
+            }
         }
     }
     return adsense
@@ -146,7 +196,7 @@ function generateDomainConfig(domain, domainData, adsData, config, existingConfi
     const adsPlaceholder = (typeof result.ads === 'string') ? result.ads : null
     const adsMode = adsPlaceholder === '${_adsMagic}' ? 'magic'
         : (adsPlaceholder === '${_ads}' || adsPlaceholder === '${_ads_content}') ? 'ads'
-        : null
+            : null
     const adsTpl = adsCfg.adsFileTemplate || 'src/utils/config/adstxt/group_${group}.txt'
 
     if (isGrp) {
@@ -214,7 +264,7 @@ function generateConfig(parsedData, config, options = {}) {
     const { domains, adsData } = parsedData; const { existingConfig = null, adsOnly = false, targetDomains = null, adsTemplate = null } = options
     let result = (existingConfig && config.advanced?.preserveExistingDomains) ? clone(existingConfig) : {}
     let toProcess = targetDomains ? new Set(targetDomains) : new Set([...Object.keys(domains), ...Object.keys(adsData)])
-    
+
     // 跨域名重复性校验存储
     const uniqueStore = { firebase: new Map(), siteName: new Map(), iamemail: new Map() }
 

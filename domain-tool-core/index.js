@@ -108,9 +108,25 @@ async function run(localConfig, args = {}) {
                     mappingLines.push(`        '${match || 'TODO_填入表头'}': '${p}', ${comment}`)
                 })
 
-                // 只提取顶层广告位名称（如 home_1, home_2），不递归展开嵌套属性
-                const adsTopKeys = Object.keys(referenceData.adsense || {}).filter(k => k !== 'scriptUrl')
-                let adsLines = adsTopKeys.map(adKey => `            'TODO_填入Excel列名': '${adKey}', // TODO: 对应Excel表格中的列名`).join('\n')
+                // 提取顶层广告位并识别数组类型
+                const adsData = referenceData.adsense || {}
+                const adsLines = []
+
+                Object.keys(adsData).filter(k => k !== 'scriptUrl').forEach(adKey => {
+                    const value = adsData[adKey]
+
+                    if (Array.isArray(value)) {
+                        // 数组类型广告位：为每个元素生成索引映射
+                        value.forEach((_, index) => {
+                            adsLines.push(`            '${adKey}[${index}]': '\${TODO_填入Excel列名_${index + 1}}', // TODO: 数组广告位 ${adKey} 的第 ${index + 1} 个元素`)
+                        })
+                    } else {
+                        // 单个对象广告位
+                        adsLines.push(`            '${adKey}': '\${TODO_填入Excel列名}', // TODO: 对应Excel表格中的列名`)
+                    }
+                })
+
+                const adsLinesStr = adsLines.join('\n')
 
                 const templateObj = generateTemplate(referenceData)
                 templateObj.siteIcon = "/icon/${siteIcon}.svg"
@@ -128,7 +144,7 @@ ${mappingLines.join('\n')}
     },
     adsMapping: {
         adsense: {
-${adsLines}
+${adsLinesStr}
         }
     }
 */
