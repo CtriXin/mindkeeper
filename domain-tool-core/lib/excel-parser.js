@@ -11,7 +11,6 @@ const BASE_MAPPING = {
     '_key': ['域名', 'domain', '新域名', 'Site Address'],
     'firebase': ['Firebase', 'Firebase信息', 'Firebase Info'],
     'siteName': ['网站标题', '网站名称', 'Title', 'Site Name'],
-    'IAMEMAIL': ['邮箱', 'Email', 'Contact us', 'Contact Us', 'CONTACT US'],
     '_ads_content': ['Ads.txt', 'ads.txt', 'Ads'],
     '_ads_group': ['ads.txt group', 'adsGroup', 'Ads Group', 'group'],
     '_adsense_script': ['验证代码', 'script', 'Script']

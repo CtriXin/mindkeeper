@@ -170,20 +170,39 @@ ${adsLinesStr}
     log('\n📊 正在执行解析与生成...', 'blue')
     const parsedData = await require('./lib/excel-parser').parseExcel(inputFile, localConfig)
     const result = require('./lib/generator').generateConfig(parsedData, localConfig, {
-        existingConfig: require('./lib/generator').readExistingConfig(localConfig.paths?.output),
-        adsOnly: args.adsOnly, targetDomains: args.domains
+        existingConfig: (args.merge !== false) ? require('./lib/generator').readExistingConfig(localConfig.paths?.output) : null,
+        adsOnly: args.adsOnly, 
+        targetDomains: args.domains,
+        adsTemplate: args.adsTemplate // 传递自定义模板
     })
+    const currentDomains = new Set([...Object.keys(parsedData.domains), ...Object.keys(parsedData.adsData)])
 
     if (args.preview) {
         const previewFile = path.join(process.cwd(), 'preview-output.json')
-        const currentDomains = new Set([...Object.keys(parsedData.domains), ...Object.keys(parsedData.adsData)])
+        if (fs.existsSync(previewFile)) fs.unlinkSync(previewFile) // 显式删除旧文件避免缓存或权限问题
+        
         const previewResult = {}
         currentDomains.forEach(d => { if (result[d]) previewResult[d] = result[d] })
-        fs.writeFileSync(previewFile, JSON.stringify(previewResult, null, 2))
-        log(`\n📋 预览完成 -> preview-output.json`, 'green')
+        
+        fs.writeFileSync(previewFile, JSON.stringify(previewResult, null, 2), 'utf8')
+        log(`\n📋 预览完成 -> ${previewFile} (已强制刷新)`, 'green')
     } else {
-        require('./lib/generator').writeConfig(localConfig.paths?.output, result)
+        const generator = require('./lib/generator')
+        generator.writeConfig(localConfig.paths?.output, result)
         log(`\n✅ 正式生成成功！`, 'green')
+
+        // 输出审批报告到控制台 (Print Approval Report)
+        try {
+            const domainList = Array.from(currentDomains).sort()
+            const approvalText = generator.generateApprovalText(domainList)
+            console.log(`\n\x1b[36m${approvalText}\x1b[0m`) 
+            
+            // 如果存在旧文件则删除，保持整洁
+            const approvalFile = path.join(process.cwd(), 'approval-list.txt')
+            if (fs.existsSync(approvalFile)) fs.unlinkSync(approvalFile)
+        } catch (e) {
+            log(`\n⚠️  输出审批报告失败: ${e.message}`, 'yellow')
+        }
     }
 }
 
