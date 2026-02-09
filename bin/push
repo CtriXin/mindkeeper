@@ -11,11 +11,18 @@ Environment:
   FEISHU_WEBHOOK   Feishu bot webhook URL. If set, can send notify.
   PUSH_NOTIFY      If set to 1, auto-send notify without prompt.
   PUSH_LOCAL_HOOK  Path to local hook script (relative or absolute).
+  PUSH_POST_HOOK   Path to post-push hook script (relative or absolute).
+  PUSH_SKIP_BUMP   If set to 1, skip version bump prompt.
 
-Local hook search order (first match):
+Local pre-hook search order (first match):
   1) $PUSH_LOCAL_HOOK
   2) ./.push.local.sh
   3) ./scripts/push.local.sh
+
+Local post-hook search order (first match):
+  1) $PUSH_POST_HOOK
+  2) ./.push.post.sh
+  3) ./scripts/push.post.sh
 USAGE
 }
 
@@ -53,6 +60,103 @@ fi
 cd "$repo_root"
 project_name=$(basename "$repo_root")
 current_branch=$(git symbolic-ref --short HEAD)
+
+# ----- version increment (generic) -----
+increment_version() {
+  local branch=$1
+  local format_type=$2
+
+  local pattern_standard="([0-9]+\\.[0-9]+)\\.([0-9]+)"
+  local pattern_extended="([0-9]+\\.[0-9]+\\.[0-9]+)\\.([0-9]+)"
+
+  if [[ $format_type == "extended" && $branch =~ $pattern_extended ]]; then
+    local main_version="${BASH_REMATCH[1]}"
+    local sub_version="${BASH_REMATCH[2]}"
+    local new_sub_version=$((sub_version + 1))
+    echo "${main_version}.${new_sub_version}"
+  elif [[ $format_type == "auto" && $branch =~ $pattern_extended ]]; then
+    local main_version="${BASH_REMATCH[1]}"
+    local sub_version="${BASH_REMATCH[2]}"
+    local new_sub_version=$((sub_version + 1))
+    echo "${main_version}.${new_sub_version}"
+  elif [[ $format_type == "extended" && $branch =~ ([0-9]+\\.[0-9]+\\.[0-9]+)$ ]]; then
+    echo "${branch}.1"
+  elif [[ $format_type != "extended" && $branch =~ $pattern_standard ]]; then
+    local main_version="${BASH_REMATCH[1]}"
+    local sub_version="${BASH_REMATCH[2]}"
+    local new_sub_version=$((sub_version + 1))
+    echo "${main_version}.${new_sub_version}"
+  elif [[ $format_type == "extended" && $branch =~ [0-9]+\\.[0-9]+$ ]]; then
+    echo "${branch}.0.1"
+  elif [[ $branch =~ [0-9]+\\.[0-9]+$ ]]; then
+    echo "${branch}.1"
+  else
+    echo "${branch}"
+  fi
+}
+
+old_branch="$current_branch"
+project_prefix=""
+version_part=""
+
+if [[ $current_branch =~ ^(.+)-([0-9]+\.[0-9]+.*)$ ]]; then
+  project_prefix="${BASH_REMATCH[1]}"
+  version_part="${BASH_REMATCH[2]}"
+else
+  version_part="$current_branch"
+fi
+
+if [[ "${PUSH_SKIP_BUMP:-0}" != "1" && $current_branch =~ [0-9]+\.[0-9]+ ]]; then
+  echo "当前分支: $current_branch"
+  echo "请选择版本号格式:"
+  echo "1. 标准格式 (x.x.y)"
+  echo "2. 扩展格式 (x.x.x.y) [默认]"
+  read -r -p "请选择版本号格式(1/2): " version_format_choice
+
+  version_format_choice=${version_format_choice:-2}
+  if [[ "$version_format_choice" == "1" ]]; then
+    version_format="standard"
+  else
+    version_format="extended"
+  fi
+
+  new_version_part=$(increment_version "$version_part" "$version_format")
+  if [[ -n "$project_prefix" ]]; then
+    new_branch_name="${project_prefix}-${new_version_part}"
+  else
+    new_branch_name="$new_version_part"
+  fi
+
+  echo "建议新分支: $new_branch_name"
+  read -r -p "是否使用新版本号(1/2)[默认1]: " use_new_version
+  use_new_version=${use_new_version:-1}
+  if [[ "$use_new_version" == "1" ]]; then
+    git checkout -b "$new_branch_name"
+    current_branch="$new_branch_name"
+  fi
+fi
+
+# Local pre-hook (project specific changes)
+pre_hook_path=""
+if [[ -n "${PUSH_LOCAL_HOOK:-}" ]]; then
+  pre_hook_path="$PUSH_LOCAL_HOOK"
+elif [[ -f ".push.local.sh" ]]; then
+  pre_hook_path=".push.local.sh"
+elif [[ -f "scripts/push.local.sh" ]]; then
+  pre_hook_path="scripts/push.local.sh"
+fi
+
+if [[ -n "$pre_hook_path" ]]; then
+  if [[ "$pre_hook_path" != /* ]]; then
+    pre_hook_path="$repo_root/$pre_hook_path"
+  fi
+  echo "执行本地 Pre Hook: $pre_hook_path"
+  if [[ -x "$pre_hook_path" ]]; then
+    "$pre_hook_path" "$repo_root" "$current_branch" "$project_name" "$old_branch"
+  else
+    bash "$pre_hook_path" "$repo_root" "$current_branch" "$project_name" "$old_branch"
+  fi
+fi
 
 # Stage all changes
 if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -106,22 +210,24 @@ if [[ -n "${FEISHU_WEBHOOK:-}" && "$notify_flag" != "no" ]]; then
   fi
 fi
 
-# Local hook
-hook_path=""
-if [[ -n "${PUSH_LOCAL_HOOK:-}" ]]; then
-  hook_path="$PUSH_LOCAL_HOOK"
-elif [[ -f ".push.local.sh" ]]; then
-  hook_path=".push.local.sh"
-elif [[ -f "scripts/push.local.sh" ]]; then
-  hook_path="scripts/push.local.sh"
+# Local post-hook (optional)
+post_hook_path=""
+if [[ -n "${PUSH_POST_HOOK:-}" ]]; then
+  post_hook_path="$PUSH_POST_HOOK"
+elif [[ -f ".push.post.sh" ]]; then
+  post_hook_path=".push.post.sh"
+elif [[ -f "scripts/push.post.sh" ]]; then
+  post_hook_path="scripts/push.post.sh"
 fi
 
-if [[ -n "$hook_path" ]]; then
-  echo "执行本地 Hook: $hook_path"
-  if [[ -x "$hook_path" ]]; then
-    "$hook_path" "$repo_root" "$current_branch" "$project_name"
+if [[ -n "$post_hook_path" ]]; then
+  if [[ "$post_hook_path" != /* ]]; then
+    post_hook_path="$repo_root/$post_hook_path"
+  fi
+  echo "执行本地 Post Hook: $post_hook_path"
+  if [[ -x "$post_hook_path" ]]; then
+    "$post_hook_path" "$repo_root" "$current_branch" "$project_name" "$old_branch"
   else
-    bash "$hook_path" "$repo_root" "$current_branch" "$project_name"
+    bash "$post_hook_path" "$repo_root" "$current_branch" "$project_name" "$old_branch"
   fi
 fi
-

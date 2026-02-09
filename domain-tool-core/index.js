@@ -108,8 +108,9 @@ async function run(localConfig, args = {}) {
                     mappingLines.push(`        '${match || 'TODO_填入表头'}': '${p}', ${comment}`)
                 })
 
-                const adsPaths = getAdsPaths(referenceData.adsense || {})
-                let adsLines = adsPaths.map(p => `            'TODO_填入广告位': '${p}', // TODO: 对应Excel位置`).join('\n')
+                // 只提取顶层广告位名称（如 home_1, home_2），不递归展开嵌套属性
+                const adsTopKeys = Object.keys(referenceData.adsense || {}).filter(k => k !== 'scriptUrl')
+                let adsLines = adsTopKeys.map(adKey => `            'TODO_填入Excel列名': '${adKey}', // TODO: 对应Excel表格中的列名`).join('\n')
 
                 const templateObj = generateTemplate(referenceData)
                 templateObj.siteIcon = "/icon/${siteIcon}.svg"
@@ -126,7 +127,7 @@ async function run(localConfig, args = {}) {
 ${mappingLines.join('\n')}
     },
     adsMapping: {
-        adx: {
+        adsense: {
 ${adsLines}
         }
     }
