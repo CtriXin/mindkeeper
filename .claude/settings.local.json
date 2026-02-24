@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude mcp:*)",
+      "WebSearch",
+      "WebFetch(domain:www.figma.com)",
+      "WebFetch(domain:developers.figma.com)",
+      "WebFetch(domain:localhost)",
+      "Bash(which npx:*)",
+      "Bash(head:*)",
+      "Bash(npm install:*)",
+      "Bash(npm root:*)",
+      "Bash(cd:*)",
+      "Bash(which bun:*)",
+      "Bash(cp:*)",
+      "Bash(bin/figmamcp status:*)",
+      "Bash(bin/figmamcp start:*)",
+      "Bash(bin/figmamcp log:*)",
+      "Bash(lsof:*)",
+      "Bash(kill 35498:*)",
+      "Bash(curl:*)",
+      "Bash(open:*)",
+      "Bash(cat:*)",
+      "Bash(grep ^data: :*)"
+    ]
+  }
+}

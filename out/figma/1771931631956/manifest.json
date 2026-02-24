@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "timestamp": 1771931647341,
+  "selected": {
+    "fileKey": "kwm3ymFCqeaMGASjFt5LBi",
+    "nodeId": "9425:11731",
+    "sourceFormatUsed": "svg",
+    "originalPath": "/Users/xin/auto-skills/out/figma/1771931631956/source.svg"
+  },
+  "overview": {
+    "path": "/Users/xin/auto-skills/out/figma/1771931631956/source_overview.webp",
+    "bytes": 326850,
+    "width": 750,
+    "height": 1624,
+    "format": "webp",
+    "quality": 95,
+    "scaleFactor": 1
+  },
+  "tiles": [
+    {
+      "path": "/Users/xin/auto-skills/out/figma/1771931631956/tiles/tile_0_0.webp",
+      "x": 0,
+      "y": 0,
+      "w": 750,
+      "h": 1536,
+      "bytes": 312480,
+      "width": 750,
+      "height": 1624
+    },
+    {
+      "path": "/Users/xin/auto-skills/out/figma/1771931631956/tiles/tile_1_0.webp",
+      "x": 0,
+      "y": 88,
+      "w": 750,
+      "h": 184,
+      "bytes": 16136,
+      "width": 750,
+      "height": 1624
+    }
+  ]
+}

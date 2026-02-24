@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+echo "==================================="
+echo "Claude Code Multi-Provider Launcher"
+echo "==================================="
+echo ""
+echo "Please select a provider:"
+echo "1. MiniMax - MiniMax-M2.5"
+echo "2. Alibaba Bailian Coding Plan - qwen3-coder-plus"
+echo "3. Kimi Moonshot CN - kimi-k2.5"
+echo "4. Exit"
+echo ""
+echo "Note: Each terminal window has isolated env vars."
+echo "Open multiple windows to use different providers simultaneously."
+echo ""
+
+read -p "Enter number 1-4: " choice
+
+create_claude_json() {
+    local provider=$1
+    local opus=$2
+    local sonnet=$3
+    local haiku=$4
+    local json_path="$HOME/.claude.json"
+
+    echo "Creating .claude.json in user directory..."
+    cat > "$json_path" << EOF
+{
+  "provider": "$provider",
+  "api_key": "sk-sp-123",
+  "models": {
+    "opus": "$opus",
+    "sonnet": "$sonnet",
+    "haiku": "$haiku"
+  },
+  "agent_teams": {
+    "enabled": true,
+    "max_concurrent": 5
+  },
+  "note": "Replace sk-sp-123 with your real API key. Agent Teams enabled for parallel subagents.",
+  "configured_at": "$(date)"
+}
+EOF
+    echo "Config saved to $json_path"
+    echo "Agent Teams enabled - Claude can now spawn parallel subagents"
+    echo ""
+}
+
+case "${choice}" in
+    1)
+        echo "Configuring MiniMax M2.5 with Agent Teams..."
+        export ANTHROPIC_BASE_URL="https://api.minimaxi.com/anthropic"
+        export ANTHROPIC_AUTH_TOKEN="sk-cp-IliHozU0eZMHGU8pwwkWhBJBDDB20C_LqUBO9lISA-_AkT7lOuaXmqT_6zJLu58wWq2zx09Uic_sPJ_Q4B2fyMRbRii2PyeIEWtt5N8sp_eupfvnvLy_qeQ"
+        export ANTHROPIC_DEFAULT_OPUS_MODEL="MiniMax-M2.5"
+        export ANTHROPIC_DEFAULT_SONNET_MODEL="MiniMax-M2.5"
+        export ANTHROPIC_DEFAULT_HAIKU_MODEL="MiniMax-M2.5"
+        export CLAUDE_CODE_SUBAGENT_MODEL="MiniMax-M2.5"
+        export CLAUDE_CODE_ENABLE_SUBAGENT_PARALLELISM="1"
+        export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS="5"
+        export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+        export API_TIMEOUT_MS="3000000"
+        create_claude_json "minimax" "MiniMax-M2.5" "MiniMax-M2.5" "MiniMax-M2.5"
+        ;;
+    2)
+        echo "Configuring Alibaba Bailian Coding Plan with Agent Teams..."
+        export ANTHROPIC_BASE_URL="https://coding.dashscope.aliyuncs.com/apps/anthropic"
+        export ANTHROPIC_AUTH_TOKEN="sk-sp-e688954f817f4fa3b15968a5230f28ff"
+        export ANTHROPIC_DEFAULT_OPUS_MODEL="qwen3-coder-plus"
+        export ANTHROPIC_DEFAULT_SONNET_MODEL="qwen3-coder-plus"
+        export ANTHROPIC_DEFAULT_HAIKU_MODEL="qwen3-coder-next"
+        export CLAUDE_CODE_SUBAGENT_MODEL="qwen3-coder-plus"
+        export CLAUDE_CODE_ENABLE_SUBAGENT_PARALLELISM="1"
+        export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS="5"
+        export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+        export API_TIMEOUT_MS="3000000"
+        create_claude_json "bailian-coding" "qwen3-coder-plus" "qwen3-coder-plus" "qwen3-coder-next"
+        ;;
+    3)
+        echo "Configuring Kimi Moonshot CN K2.5 with Agent Teams..."
+        export ANTHROPIC_BASE_URL="https://api.moonshot.cn/anthropic"
+        export ANTHROPIC_AUTH_TOKEN="sk-kimi-14cRYB7SCYHdEnJqjpighnvnPq8CfTWAtLqTq9PH00s9d6Sk5lHpC2K1udAWqcRd"
+        export ANTHROPIC_DEFAULT_OPUS_MODEL="kimi-k2.5"
+        export ANTHROPIC_DEFAULT_SONNET_MODEL="kimi-k2.5"
+        export ANTHROPIC_DEFAULT_HAIKU_MODEL="kimi-k2.5"
+        export CLAUDE_CODE_SUBAGENT_MODEL="kimi-k2.5"
+        export CLAUDE_CODE_ENABLE_SUBAGENT_PARALLELISM="1"
+        export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS="10"
+        export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+        export API_TIMEOUT_MS="3000000"
+        create_claude_json "kimi-cn" "kimi-k2.5" "kimi-k2.5" "kimi-k2.5"
+        ;;
+    4)
+        echo "Exiting..."
+        exit 0
+        ;;
+    *)
+        echo "Invalid choice, please run script again."
+        exit 1
+        ;;
+esac
+
+echo ""
+echo "==================================="
+echo "Starting Claude Code with Agent Teams..."
+echo "Provider: $ANTHROPIC_BASE_URL"
+echo "Sonnet: $ANTHROPIC_DEFAULT_SONNET_MODEL"
+echo "Subagent Model: $CLAUDE_CODE_SUBAGENT_MODEL"
+echo "Max Concurrent Agents: $CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS"
+echo "==================================="
+echo ""
+
+if ! command -v claude >/dev/null 2>&1; then
+  echo "Error: claude command not found in PATH."
+  exit 1
+fi
+
+echo "Starting Claude Code..."
+
+
+claude

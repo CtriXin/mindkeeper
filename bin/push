@@ -58,6 +58,46 @@ if [[ -z "${repo_root}" ]]; then
 fi
 
 cd "$repo_root"
+
+# --- 部署名称/服务名处理 ---
+# .deploy-service: 用于 deploy 默认服务名（推荐）
+# .deploy-name: 兼容历史用法（审批文案等）
+deploy_service_file=".deploy-service"
+deploy_name_file=".deploy-name"
+
+if [[ -f "$deploy_service_file" ]]; then
+  deploy_name=$(cat "$deploy_service_file")
+elif [[ -f "$deploy_name_file" ]]; then
+  deploy_name=$(cat "$deploy_name_file")
+else
+  echo "检测到尚未配置部署名称。"
+  read -r -p "请输入项目部署名 (可以lookup搜索域名对应的scmp项目名): " input_name
+  if [[ -n "$input_name" ]]; then
+    echo "$input_name" > "$deploy_service_file"
+    echo "$input_name" > "$deploy_name_file"
+    deploy_name="$input_name"
+    if [[ -f ".gitignore" ]] && ! grep -q "^${deploy_service_file}$" ".gitignore"; then
+      echo "$deploy_service_file" >> ".gitignore"
+      echo "已将 $deploy_service_file 加入 .gitignore"
+    fi
+    if [[ -f ".gitignore" ]] && ! grep -q "^${deploy_name_file}$" ".gitignore"; then
+      echo "$deploy_name_file" >> ".gitignore"
+      echo "已将 $deploy_name_file 加入 .gitignore"
+    fi
+  else
+    deploy_name=$(basename "$repo_root")
+  fi
+fi
+
+# 若读取到的是旧文件，自动补写新文件，便于 deploy 默认读取。
+if [[ -n "${deploy_name:-}" && ! -f "$deploy_service_file" ]]; then
+  echo "$deploy_name" > "$deploy_service_file"
+  if [[ -f ".gitignore" ]] && ! grep -q "^${deploy_service_file}$" ".gitignore"; then
+    echo "$deploy_service_file" >> ".gitignore"
+    echo "已将 $deploy_service_file 加入 .gitignore"
+  fi
+fi
+
 project_name=$(basename "$repo_root")
 current_branch=$(git symbolic-ref --short HEAD)
 
@@ -68,6 +108,8 @@ increment_version() {
 
   local pattern_standard="([0-9]+\\.[0-9]+)\\.([0-9]+)"
   local pattern_extended="([0-9]+\\.[0-9]+\\.[0-9]+)\\.([0-9]+)"
+  local pattern_three_parts="([0-9]+\\.[0-9]+\\.[0-9]+)$"
+  local pattern_two_parts="([0-9]+\\.[0-9]+)$"
 
   if [[ $format_type == "extended" && $branch =~ $pattern_extended ]]; then
     local main_version="${BASH_REMATCH[1]}"
@@ -79,16 +121,16 @@ increment_version() {
     local sub_version="${BASH_REMATCH[2]}"
     local new_sub_version=$((sub_version + 1))
     echo "${main_version}.${new_sub_version}"
-  elif [[ $format_type == "extended" && $branch =~ ([0-9]+\\.[0-9]+\\.[0-9]+)$ ]]; then
+  elif [[ $format_type == "extended" && $branch =~ $pattern_three_parts ]]; then
     echo "${branch}.1"
   elif [[ $format_type != "extended" && $branch =~ $pattern_standard ]]; then
     local main_version="${BASH_REMATCH[1]}"
     local sub_version="${BASH_REMATCH[2]}"
     local new_sub_version=$((sub_version + 1))
     echo "${main_version}.${new_sub_version}"
-  elif [[ $format_type == "extended" && $branch =~ [0-9]+\\.[0-9]+$ ]]; then
+  elif [[ $format_type == "extended" && $branch =~ $pattern_two_parts ]]; then
     echo "${branch}.0.1"
-  elif [[ $branch =~ [0-9]+\\.[0-9]+$ ]]; then
+  elif [[ $branch =~ $pattern_two_parts ]]; then
     echo "${branch}.1"
   else
     echo "${branch}"

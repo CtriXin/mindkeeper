@@ -3,11 +3,52 @@ set -euo pipefail
 
 # Run SCMP deploy from anywhere.
 
-if [[ $# -lt 1 ]]; then
+SCMP_CLI_PATH_DEFAULT="/Users/xin/auto-skills/scmp-deploy/scripts/scmp_cli.py"
+SCMP_CLI_PATH="${SCMP_CLI_PATH:-$SCMP_CLI_PATH_DEFAULT}"
+
+if [[ ! -f "$SCMP_CLI_PATH" ]]; then
+  echo "Error: Script not found at $SCMP_CLI_PATH"
+  exit 1
+fi
+
+# Try to infer default service from current git repo.
+# Prefer .deploy-service; keep .deploy-name for backward compatibility.
+default_service=""
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [[ -n "$repo_root" ]]; then
+  if [[ -f "$repo_root/.deploy-service" ]]; then
+    default_service=$(head -n 1 "$repo_root/.deploy-service" | tr -d '\r')
+  elif [[ -f "$repo_root/.deploy-name" ]]; then
+    default_service=$(head -n 1 "$repo_root/.deploy-name" | tr -d '\r')
+  fi
+  default_service="${default_service#"${default_service%%[![:space:]]*}"}"
+  default_service="${default_service%"${default_service##*[![:space:]]}"}"
+fi
+
+if [[ $# -eq 0 ]]; then
+  if [[ -n "$default_service" ]]; then
+    echo "使用仓库默认服务名: $default_service"
+    exec python3 "$SCMP_CLI_PATH" deploy "$default_service"
+  fi
+
+  if [[ -t 0 && -t 1 ]]; then
+    read -r -p "请输入要部署的服务名: " service_name
+    service_name="${service_name#"${service_name%%[![:space:]]*}"}"
+    service_name="${service_name%"${service_name##*[![:space:]]}"}"
+
+    if [[ -z "$service_name" ]]; then
+      echo "Error: 服务名不能为空"
+      exit 2
+    fi
+
+    exec python3 "$SCMP_CLI_PATH" deploy "$service_name"
+  fi
+
   echo "Usage: deploy <server-name>"
   echo
-  echo "交互式示例:"
+  echo "示例:"
   echo "  deploy ptc-301-gb"
+  echo "  deploy                # 在 git 仓库中优先读取 .deploy-service / .deploy-name"
   echo
   echo "首次使用需要先登录(保存 token，不会保存密码):"
   echo "  export SCMP_SHARE_ID='<share_id>'"
@@ -16,7 +57,12 @@ if [[ $# -lt 1 ]]; then
   exit 2
 fi
 
-SCMP_CLI_PATH_DEFAULT="/Users/xin/auto-skills/scmp-deploy/scripts/scmp_cli.py"
-SCMP_CLI_PATH="${SCMP_CLI_PATH:-$SCMP_CLI_PATH_DEFAULT}"
+# If options are passed first (e.g. deploy --branch xxx), use repo default service.
+if [[ "${1:-}" == -* ]]; then
+  if [[ -n "$default_service" ]]; then
+    echo "未显式传服务名，使用仓库默认服务名: $default_service"
+    exec python3 "$SCMP_CLI_PATH" deploy "$default_service" "$@"
+  fi
+fi
 
 exec python3 "$SCMP_CLI_PATH" deploy "$@"

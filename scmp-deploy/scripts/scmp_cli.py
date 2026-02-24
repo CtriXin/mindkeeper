@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime
 from getpass import getpass
@@ -159,6 +160,32 @@ def _load_token_or_die(token_file: str) -> str:
 
 def _today_ymd() -> str:
     return datetime.now().strftime("%Y-%m-%d")
+
+
+def _mmddhhmm() -> str:
+    return datetime.now().strftime("%m%d%H%M")
+
+
+def _build_default_version(base_version: Optional[str]) -> str:
+    base = (base_version or "version").strip()
+    return f"{_mmddhhmm()}-{base}"
+
+
+def _git_current_branch() -> Optional[str]:
+    """Best-effort read current git branch from cwd."""
+    try:
+        p = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        branch = (p.stdout or "").strip()
+        if branch and branch != "HEAD":
+            return branch
+    except Exception:
+        return None
+    return None
 
 
 def _ensure_daily_login(
@@ -323,6 +350,7 @@ def deploy_cmd(args: argparse.Namespace) -> None:
 
     token = _load_token_or_die(args.token_file)
     api = SCMPApi(BASE_URL, token)
+    current_git_branch = _git_current_branch()
 
     # Interactive mode: ask for required/optional params.
     if args.interactive and _is_interactive():
@@ -332,14 +360,13 @@ def deploy_cmd(args: argparse.Namespace) -> None:
                 _die("invalid Env: must be prod or test")
 
         if not args.branch:
-            args.branch = _prompt("Branch")
-        if not args.branch:
-            _die("branch is required")
+            args.branch = _prompt("Branch", default=current_git_branch)
 
         if not args.version:
-            args.version = _prompt("Version")
-        if not args.version:
-            _die("version is required")
+            args.version = _prompt(
+                "Version",
+                default=_build_default_version(args.branch),
+            )
 
         use_defaults = _prompt_yes_no(
             "Use default values for tag/path/DEPLOY?",
@@ -362,9 +389,9 @@ def deploy_cmd(args: argparse.Namespace) -> None:
 
     # Non-interactive safeguard.
     if not _is_interactive() and args.interactive:
-        if not args.branch or not args.version or not args.env:
+        if not args.env:
             _die(
-                "non-interactive mode: provide --env/--branch/--version (and optional --tag/--path/--deploy)"
+                "non-interactive mode: provide --env (and optionally --branch/--version/--tag/--path/--deploy)"
             )
 
     # 1) service -> git_url
@@ -433,6 +460,9 @@ def deploy_cmd(args: argparse.Namespace) -> None:
         "DEPLOY": bool(args.deploy if args.deploy is not None else True),
     }
 
+    if not inferred["version"]:
+        inferred["version"] = _build_default_version(_extract_param(params, "version"))
+
     # 4) run
     params_list = [
         {"name": "Env", "value": inferred["Env"] or ""},
@@ -481,6 +511,26 @@ def deploy_cmd(args: argparse.Namespace) -> None:
                 )
             )
         resp = api.post_json(run_url, payload)
+
+    # If backend requires non-empty path, fallback to manual input once.
+    if (
+        not (200 <= resp.status < 300)
+        and _is_interactive()
+        and str(inferred.get("path") or "") == ""
+        and isinstance(resp.body, dict)
+    ):
+        message_text = str(resp.body.get("message") or "").lower()
+        body_text = json.dumps(resp.body, ensure_ascii=False).lower()
+        if "path" in message_text or "path" in body_text:
+            manual_path = _prompt("Path (required by backend)", default="")
+            if manual_path.strip():
+                inferred["path"] = manual_path.strip()
+                for item in params_list:
+                    if item.get("name") == "path":
+                        item["value"] = inferred["path"]
+                        break
+                resp = api.post_json(run_url, payload)
+
     out = {
         "service": args.service,
         "pipeline": pipeline_name,
