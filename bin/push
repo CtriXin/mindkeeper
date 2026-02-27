@@ -62,10 +62,49 @@ cd "$repo_root"
 # --- 部署名称/服务名处理 ---
 # .deploy-service: 用于 deploy 默认服务名（推荐）
 # .deploy-name: 兼容历史用法（审批文案等）
+# .deploy-path: 用于 deploy 默认 path（可为空）
 deploy_service_file=".deploy-service"
 deploy_name_file=".deploy-name"
+deploy_path_file=".deploy-path"
+reconfigure_deploy=0
 
-if [[ -f "$deploy_service_file" ]]; then
+# 历史兼容：旧版本会把部署配置写入 .gitignore，导致不同项目/分支共享本地配置。
+# 现在统一移除这些忽略项，并在本次 push 中重新询问配置。
+if [[ -f ".gitignore" ]]; then
+  gitignore_tmp=$(mktemp)
+  awk -v s="$deploy_service_file" -v n="$deploy_name_file" -v p="$deploy_path_file" '
+    $0 == s || $0 == n || $0 == p { next }
+    { print }
+  ' ".gitignore" > "$gitignore_tmp"
+
+  if ! cmp -s ".gitignore" "$gitignore_tmp"; then
+    mv "$gitignore_tmp" ".gitignore"
+    reconfigure_deploy=1
+    echo "已从 .gitignore 移除旧部署忽略项: $deploy_service_file, $deploy_name_file, $deploy_path_file"
+  else
+    rm -f "$gitignore_tmp"
+  fi
+fi
+
+if [[ "$reconfigure_deploy" == "1" ]]; then
+  current_deploy_name=""
+  if [[ -f "$deploy_service_file" ]]; then
+    current_deploy_name=$(cat "$deploy_service_file")
+  elif [[ -f "$deploy_name_file" ]]; then
+    current_deploy_name=$(cat "$deploy_name_file")
+  fi
+  echo "检测到历史忽略配置，为避免部署名称冲突，请重新确认。"
+  read -r -p "请输入项目部署名 (当前: ${current_deploy_name:-未配置}，直接回车保持不变): " input_name
+  if [[ -n "$input_name" ]]; then
+    echo "$input_name" > "$deploy_service_file"
+    echo "$input_name" > "$deploy_name_file"
+    deploy_name="$input_name"
+  else
+    deploy_name="${current_deploy_name:-$(basename "$repo_root")}"
+    echo "$deploy_name" > "$deploy_service_file"
+    echo "$deploy_name" > "$deploy_name_file"
+  fi
+elif [[ -f "$deploy_service_file" ]]; then
   deploy_name=$(cat "$deploy_service_file")
 elif [[ -f "$deploy_name_file" ]]; then
   deploy_name=$(cat "$deploy_name_file")
@@ -76,14 +115,6 @@ else
     echo "$input_name" > "$deploy_service_file"
     echo "$input_name" > "$deploy_name_file"
     deploy_name="$input_name"
-    if [[ -f ".gitignore" ]] && ! grep -q "^${deploy_service_file}$" ".gitignore"; then
-      echo "$deploy_service_file" >> ".gitignore"
-      echo "已将 $deploy_service_file 加入 .gitignore"
-    fi
-    if [[ -f ".gitignore" ]] && ! grep -q "^${deploy_name_file}$" ".gitignore"; then
-      echo "$deploy_name_file" >> ".gitignore"
-      echo "已将 $deploy_name_file 加入 .gitignore"
-    fi
   else
     deploy_name=$(basename "$repo_root")
   fi
@@ -92,10 +123,18 @@ fi
 # 若读取到的是旧文件，自动补写新文件，便于 deploy 默认读取。
 if [[ -n "${deploy_name:-}" && ! -f "$deploy_service_file" ]]; then
   echo "$deploy_name" > "$deploy_service_file"
-  if [[ -f ".gitignore" ]] && ! grep -q "^${deploy_service_file}$" ".gitignore"; then
-    echo "$deploy_service_file" >> ".gitignore"
-    echo "已将 $deploy_service_file 加入 .gitignore"
+fi
+
+# path 首次录入（含历史项目补录）：
+# 仅在 .deploy-path 文件不存在时触发；可输入空值，但必须走一次输入步骤。
+if [[ "$reconfigure_deploy" == "1" || ! -f "$deploy_path_file" ]]; then
+  echo "请确认本项目是否需要执行上传命令。"
+  current_deploy_path=""
+  if [[ -f "$deploy_path_file" ]]; then
+    current_deploy_path=$(cat "$deploy_path_file")
   fi
+  read -r -p "请输入部署 path (可留空；当前: ${current_deploy_path}，直接回车保持不变): " input_path
+  echo "${input_path}" > "$deploy_path_file"
 fi
 
 project_name=$(basename "$repo_root")

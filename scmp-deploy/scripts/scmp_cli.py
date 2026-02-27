@@ -188,6 +188,47 @@ def _git_current_branch() -> Optional[str]:
     return None
 
 
+def _git_repo_root() -> Optional[str]:
+    try:
+        p = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        root = (p.stdout or "").strip()
+        return root or None
+    except Exception:
+        return None
+
+
+def _read_repo_field(filename: str) -> Optional[str]:
+    root = _git_repo_root()
+    if not root:
+        return None
+    fp = os.path.join(root, filename)
+    try:
+        if not os.path.isfile(fp):
+            return None
+        with open(fp, "r", encoding="utf-8") as f:
+            val = (f.readline() or "").rstrip("\r\n")
+        return val
+    except Exception:
+        return None
+
+
+def _write_repo_field(filename: str, value: str) -> None:
+    root = _git_repo_root()
+    if not root:
+        return
+    fp = os.path.join(root, filename)
+    try:
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write(f"{value.strip()}\n")
+    except Exception:
+        pass
+
+
 def _ensure_daily_login(
     token_file: str, *, share_id: Optional[str], plain_password: bool
 ) -> None:
@@ -351,6 +392,7 @@ def deploy_cmd(args: argparse.Namespace) -> None:
     token = _load_token_or_die(args.token_file)
     api = SCMPApi(BASE_URL, token)
     current_git_branch = _git_current_branch()
+    saved_path = _read_repo_field(".deploy-path")
 
     # Interactive mode: ask for required/optional params.
     if args.interactive and _is_interactive():
@@ -368,6 +410,17 @@ def deploy_cmd(args: argparse.Namespace) -> None:
                 default=_build_default_version(args.branch),
             )
 
+        if args.path is None:
+            path_default_display = (
+                str(saved_path)
+                if (saved_path is not None and str(saved_path).strip() != "")
+                else "无"
+            )
+            path_input = _prompt("Path", default=path_default_display).strip()
+            if path_input == "无":
+                path_input = ""
+            args.path = path_input
+
         use_defaults = _prompt_yes_no(
             "Use default values for tag/path/DEPLOY?",
             default=True,
@@ -376,14 +429,17 @@ def deploy_cmd(args: argparse.Namespace) -> None:
             if args.tag is None:
                 args.tag = ""
             if args.path is None:
-                args.path = ""
+                args.path = saved_path if saved_path is not None else ""
             if args.deploy is None:
                 args.deploy = True
         else:
             if args.tag is None:
                 args.tag = _prompt("Tag", default="")
             if args.path is None:
-                args.path = _prompt("Path", default="")
+                args.path = _prompt(
+                    "Path",
+                    default=saved_path if saved_path is not None else "",
+                )
             if args.deploy is None:
                 args.deploy = _prompt_yes_no("DEPLOY?", default=True)
 
@@ -456,12 +512,19 @@ def deploy_cmd(args: argparse.Namespace) -> None:
         "version": args.version or _extract_param(params, "version"),
         "path": args.path
         if args.path is not None
-        else (_extract_param(params, "path") or ""),
+        else (
+            saved_path
+            if saved_path is not None
+            else (_extract_param(params, "path") or "")
+        ),
         "DEPLOY": bool(args.deploy if args.deploy is not None else True),
     }
 
     if not inferred["version"]:
         inferred["version"] = _build_default_version(_extract_param(params, "version"))
+
+    if inferred["path"]:
+        _write_repo_field(".deploy-path", str(inferred["path"]))
 
     # 4) run
     params_list = [
