@@ -80,3 +80,23 @@ git checkout <commit-id> -- scmp-deploy/
 本次配置由 AI (Antigravity) 协助完成：
 - **日期**: 2026-02-06
 - **操作项**: 初始化 Git、配置 `.gitignore`、添加远程 origin、完成首次推送。
+
+## 6. Worktree 管理工具 (`bin/wt`)
+
+我们提供了一个交互式的 `bin/wt` 脚本，用于快捷管理 Git worktree，并支持保存中文描述。
+
+### 主要功能
+
+- **`wt`** (或 `wt create`): 交互式建立 worktree。
+  - 支持模糊搜索分支（按提交时间降序，优先显示最近的分支）
+  - 支持直接创建新分支
+  - 自动在当前项目父目录生成规范的 worktree 目录 (`项目名--自定义名`)
+  - 支持输入简短描述（如 "修复登录缺陷"）
+- **`wt branch`**: 查看分支，按最后提交时间倒序排列。
+- **`wt list`**: 查看所有 worktree，并显示对应的描述信息。
+- **`wt remove`**: 交互式安全移除 worktree 并清理元数据。
+- **`wt -h`**: 查看完整的帮助信息。
+
+> [!TIP]
+> **描述信息存储在哪？**
+> `wt` 脚本会在仓库根目录生成 `.worktree-meta.json` 文件用于存储自定义描述，此文件已在 `.gitignore` 配置中忽略，不会提交到远程。
