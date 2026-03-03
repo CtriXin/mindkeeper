@@ -1,0 +1,376 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# wt - Git Worktree 交互式管理工具
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+GRAY='\033[1;30m'
+NC='\033[0m' # No Color
+
+# 元数据文件
+META_FILE=".worktree-meta.json"
+
+# 获取仓库根目录
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [[ -z "${repo_root}" ]]; then
+  echo -e "${RED}当前目录不是 Git 仓库${NC}"
+  exit 1
+fi
+cd "$repo_root"
+
+# 通用函数：去掉字符串首尾空格
+trim() {
+  local v="$1"
+  v="${v#"${v%%[![:space:]]*}"}"
+  v="${v%"${v##*[![:space:]]}"}"
+  printf '%s' "$v"
+}
+
+# 确保 META_FILE 存在且合法
+ensure_meta_file() {
+  if [[ ! -f "$META_FILE" ]]; then
+    echo "{}" > "$META_FILE"
+  fi
+}
+
+# 读取指定 worktree 的属性 (依赖 node)
+get_meta_prop() {
+  local path="$1"
+  local prop="$2"
+  if command -v node >/dev/null 2>&1; then
+    node -e "
+    const fs = require('fs');
+    try {
+      const data = JSON.parse(fs.readFileSync('$META_FILE', 'utf8'));
+      if (data['$path'] && data['$path']['$prop']) {
+        console.log(data['$path']['$prop']);
+      }
+    } catch(e) {}
+    "
+  fi
+}
+
+# 写入 metadata (依赖 node)
+set_meta() {
+  local path="$1"
+  local branch="$2"
+  local name="$3"
+  local desc="$4"
+  if command -v node >/dev/null 2>&1; then
+    node -e "
+    const fs = require('fs');
+    let data = {};
+    try {
+      data = JSON.parse(fs.readFileSync('$META_FILE', 'utf8'));
+    } catch(e) {}
+    data['$path'] = {
+      branch: '$branch',
+      name: '$name',
+      description: '$desc',
+      created: new Date().toISOString()
+    };
+    fs.writeFileSync('$META_FILE', JSON.stringify(data, null, 2));
+    "
+  fi
+}
+
+# 移除 metadata (依赖 node)
+remove_meta() {
+  local path="$1"
+  if command -v node >/dev/null 2>&1; then
+    node -e "
+    const fs = require('fs');
+    try {
+      let data = JSON.parse(fs.readFileSync('$META_FILE', 'utf8'));
+      if (data['$path']) {
+        delete data['$path'];
+        fs.writeFileSync('$META_FILE', JSON.stringify(data, null, 2));
+      }
+    } catch(e) {}
+    "
+  fi
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: wt <command>
+
+Commands:
+  (空)        等同于 wt create，交互式创建 worktree
+  create      交互式创建新 worktree
+  branch      查看分支列表 (按最新提交时间倒序)
+  list        列出所有 worktree (包含描述信息)
+  remove      交互式移除 worktree
+  -h, --help  显示此帮助信息
+USAGE
+}
+
+# 1. 查看分支 (倒序)
+cmd_branch() {
+  echo -e "${BLUE}=== 本地及远程分支 (按最新提交时间排列) ===${NC}"
+  # 获取当前分支
+  local current_branch
+  current_branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+  
+  # 按 committerdate 倒序显示，附带相对时间。排除 HEAD 指针。
+  git for-each-ref --sort=-committerdate --format='%(HEAD) %(refname:short) | %(committerdate:relative) | %(subject)' refs/heads refs/remotes | grep -v 'HEAD$' | awk -v current="$current_branch" -v green="$GREEN" -v cyan="$CYAN" -v  gray="$GRAY" -v nc="$NC" '
+  BEGIN {FS=" \\| "}
+  {
+    prefix = $1
+    ref = prefix
+    gsub(/^[\* ]+/, "", ref) # 获取纯净的分支名
+    time = $2
+    msg = $3
+    
+    # 获取原始 refname (包含 remotes/origin) 用于着色判断
+    
+    if (index(prefix, "*") > 0) {
+      color = green
+    } else if (index($1, "origin/") > 0) {
+      color = cyan
+    } else {
+      color = nc
+    }
+    
+    printf "%s%-35s%s %s(%s)%s\t%s%s%s\n", color, $1, nc, gray, time, nc, nc, msg, nc
+  }' | head -n 30
+  
+  echo -e "${GRAY}(最多显示最近的30个分支)${NC}"
+}
+
+# 2. 创建 Worktree
+cmd_create() {
+  echo -e "${BLUE}=== 建立新的 Git Worktree ===${NC}"
+  ensure_meta_file
+  
+  # 步骤 1: 搜索分支
+  read -r -p "请输入要检出分支的关键词 (留空列出最近分支): " search_key
+  search_key=$(trim "$search_key")
+  
+  # 获取匹配的分支列表
+  local matching_branches=()
+  local i=1
+  
+  echo -e "\n${CYAN}>>> 匹配的分支 (按时间倒序):${NC}"
+  
+  # 读取匹配的分支
+  while IFS= read -r line; do
+    if [[ -z "$line" ]]; then continue; fi
+    matching_branches+=("$line")
+    echo "$i. $line"
+    i=$((i+1))
+  done < <(git for-each-ref --sort=-committerdate --format='%(refname:short)' refs/heads refs/remotes | grep -v 'HEAD$' | grep -i "${search_key:-.}" | head -n 15)
+  
+  if [[ ${#matching_branches[@]} -eq 0 ]]; then
+    echo -e "${RED}未找到匹配的分支。${NC}"
+    # 提供直接创建新分支的选项
+    read -r -p "是否要创建名为 '$search_key' 的新分支? (y/N): " create_new
+    if [[ "$create_new" =~ ^[Yy]$ ]]; then
+      target_branch="$search_key"
+      is_new_branch=1
+    else
+      echo "已取消。"
+      exit 0
+    fi
+  else
+    echo "0. [创建全新分支]"
+    
+    read -r -p "请选择分支序号 (0-${#matching_branches[@]}): " branch_idx
+    branch_idx=$(trim "$branch_idx")
+    
+    if [[ "$branch_idx" == "0" ]]; then
+       read -r -p "请输入新分支的名称: " target_branch
+       target_branch=$(trim "$target_branch")
+       if [[ -z "$target_branch" ]]; then echo "分支名不能为空"; exit 1; fi
+       is_new_branch=1
+    elif [[ "$branch_idx" =~ ^[0-9]+$ ]] && [[ "$branch_idx" -ge 1 ]] && [[ "$branch_idx" -le ${#matching_branches[@]} ]]; then
+       target_branch="${matching_branches[$((branch_idx-1))]}"
+       # 如果包含 origin/ 则只取后面的部分作为本地分支名
+       target_branch=${target_branch#origin/}
+       is_new_branch=0
+    else
+       echo -e "${RED}无效的选择。${NC}"
+       exit 1
+    fi
+  fi
+  
+  # 步骤 2: 确定目录
+  local project_name
+  project_name=$(basename "$repo_root")
+  local parent_dir
+  parent_dir=$(dirname "$repo_root")
+  
+  local default_dir_suffix="${target_branch//\//-}"
+  
+  echo -e "\n${CYAN}>>> 配置 Worktree 目录名称${NC}"
+  echo "将建立在父目录: $parent_dir"
+  echo "默认格式: ${project_name}--<这里输入名称>"
+  read -r -p "请输入简短名称 (默认: $default_dir_suffix): " dir_suffix_input
+  
+  local dir_suffix="${dir_suffix_input:-$default_dir_suffix}"
+  dir_suffix=$(trim "$dir_suffix")
+  
+  local target_path="${parent_dir}/${project_name}--${dir_suffix}"
+  
+  if [[ -d "$target_path" ]]; then
+    echo -e "${RED}错误: 目录 $target_path 已存在！${NC}"
+    exit 1
+  fi
+  
+  # 步骤 3: 描述信息
+  echo -e "\n${CYAN}>>> 添加描述信息${NC}"
+  read -r -p "请输入该 worktree 的简短描述 (可选, 比如'用于开发登录功能'): " wt_desc
+  wt_desc=$(trim "$wt_desc")
+  
+  # 步骤 4: 执行创建
+  echo -e "\n${BLUE}即将执行:${NC}"
+  if [[ "$is_new_branch" == "1" ]]; then
+    echo "git worktree add -b \"$target_branch\" \"$target_path\""
+  else
+    echo "git worktree add \"$target_path\" \"$target_branch\""
+  fi
+  
+  read -r -p "确认创建? (Y/n): " confirm
+  if [[ "$confirm" =~ ^[Nn]$ ]]; then
+    echo "已取消。"
+    exit 0
+  fi
+  
+  if [[ "$is_new_branch" == "1" ]]; then
+    git worktree add -b "$target_branch" "$target_path"
+  else
+    git worktree add "$target_path" "$target_branch"
+  fi
+  
+  # 记录元数据
+  set_meta "$target_path" "$target_branch" "$dir_suffix" "$wt_desc"
+  
+  echo -e "${GREEN}✓ Worktree 创建成功: $target_path${NC}"
+  echo -e "可使用 \`cd $target_path\` 进入目录。"
+}
+
+# 3. 列出 Worktree
+cmd_list() {
+  echo -e "${BLUE}=== 当前 Worktrees ===${NC}"
+  ensure_meta_file
+  
+  # 读取 git 原生列表并逐行处理
+  local main_repo=""
+  
+  while IFS= read -r line; do
+    if [[ -z "$line" ]]; then continue; fi
+    # 解析路径和分支
+    # git worktree list 格式示例:
+    # /Users/xin/auto-skills        b612310 [main]
+    # /Users/xin/auto-skills--feat  xyz1234 [feature/abc]
+    
+    local path
+    path=$(echo "$line" | awk '{print $1}')
+    local branch
+    branch=$(echo "$line" | grep -o '\[.*\]' | tr -d '[]' || true)
+    
+    if [[ -z "$branch" ]]; then
+      # 可能是 (detached HEAD)
+      branch="(detached)"
+    fi
+    
+    if [[ "$path" == "$repo_root" ]]; then
+      # 主仓库
+      echo -e "${GREEN}$path${NC} \t [$branch] \t ${GRAY}(主仓库)${NC}"
+    else
+      local desc
+      desc=$(get_meta_prop "$path" "description")
+      local f_desc=""
+      if [[ -n "$desc" ]]; then
+        f_desc="${GRAY}\"$desc\"${NC}"
+      fi
+      echo -e "$path \t [$branch] \t $f_desc"
+    fi
+    
+  done < <(git worktree list)
+}
+
+# 4. 移除 Worktree
+cmd_remove() {
+  echo -e "${BLUE}=== 移除 Worktree ===${NC}"
+  ensure_meta_file
+  
+  local wts=()
+  local i=1
+  
+  echo -e "${CYAN}可移除的 Worktree 列表:${NC}"
+  while IFS= read -r line; do
+    if [[ -z "$line" ]]; then continue; fi
+    local path
+    path=$(echo "$line" | awk '{print $1}')
+    
+    if [[ "$path" == "$repo_root" ]]; then
+      continue # 跳过主仓库
+    fi
+    
+    local branch
+    branch=$(echo "$line" | grep -o '\[.*\]' | tr -d '[]' || true)
+    local desc
+    desc=$(get_meta_prop "$path" "description")
+    
+    wts+=("$path")
+    echo -e "$i. $path [$branch] ${GRAY}${desc}${NC}"
+    i=$((i+1))
+  done < <(git worktree list)
+  
+  if [[ ${#wts[@]} -eq 0 ]]; then
+    echo "未找到任何通过 worktree 添加的目录 (主仓库除外)。"
+    exit 0
+  fi
+  
+  read -r -p "请选择要移除的序号 (1-${#wts[@]}): " rm_idx
+  rm_idx=$(trim "$rm_idx")
+  
+  if [[ "$rm_idx" =~ ^[0-9]+$ ]] && [[ "$rm_idx" -ge 1 ]] && [[ "$rm_idx" -le ${#wts[@]} ]]; then
+    local target_path="${wts[$((rm_idx-1))]}"
+    
+    echo -e "${RED}警告: 即将移除 $target_path (将删除该目录及所有未提交的内容)${NC}"
+    read -r -p "请确认是否继续 (y/N): " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+      # 先判断是否有未修改的文件
+      echo "执行 git worktree remove -f \"$target_path\""
+      git worktree remove -f "$target_path"
+      remove_meta "$target_path"
+      echo -e "${GREEN}✓ 已移除 $target_path 并清理元数据。${NC}"
+    else
+      echo "已取消。"
+    fi
+  else
+    echo -e "${RED}无效的选择。${NC}"
+    exit 1
+  fi
+}
+
+cmd="${1:-create}"
+
+case "$cmd" in
+  branch)
+    cmd_branch
+    ;;
+  create)
+    cmd_create
+    ;;
+  list)
+    cmd_list
+    ;;
+  remove)
+    cmd_remove
+    ;;
+  -h|--h|--help|help)
+    usage
+    ;;
+  *)
+    echo "Unknown command: $cmd"
+    usage
+    exit 1
+    ;;
+esac

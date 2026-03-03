@@ -11,3 +11,4 @@ __pycache__/
 
 # 公司内部敏感内容 - 仅保留本地版本控制，不上传
 scmp-deploy/
+.worktree-meta.json
