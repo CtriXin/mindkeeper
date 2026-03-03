@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0",
+  "projects": {
+    "users-xin-vue2-init": {
+      "path": "/Users/xin/vue2-init",
+      "name": "vue2-init",
+      "isGit": true,
+      "lastActive": "2026-02-28T10:34:53.316Z",
+      "currentBranch": "1.0.0.2"
+    },
+    "users-xin-ptc_v5_citys": {
+      "path": "/Users/xin/ptc_v5_citys",
+      "name": "ptc_v5_citys",
+      "isGit": true,
+      "lastActive": "2026-02-28T11:02:11Z",
+      "currentBranch": "1.0.2.3"
+    }
+  },
+  "lastUpdate": "2026-02-28T11:05:33.272Z"
+}

@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "createdAt": "2026-02-28T10:34:53.266Z",
+  "settings": {
+    "autoRecord": true,
+    "maxHistoryEntries": 1000,
+    "archiveAfterDays": 180,
+    "defaultHistoryLimit": 10
+  }
+}

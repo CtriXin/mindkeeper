@@ -218,3 +218,56 @@ Figma integration script for connecting design systems with SCMP.
 - Most scripts provide help with `-h` or `--help`
 - Check script permissions if not executing properly
 - Verify all dependencies are installed and accessible
+## push Marker Extension (feature/ab)
+
+`push` now supports optional release markers while remaining backward compatible.
+
+### New CLI options
+- `--feature <name>`: mark this push as a feature release
+- `--ab <name>`: mark this push as an A/B release
+- `--no-marker`: force marker mode to `none`
+- `--dry-run`: print planned actions without commit/push/hook execution
+
+### New environment variables
+- `PUSH_FEATURE`
+- `PUSH_AB`
+- `PUSH_MARKER_MODE` (`none|feature|ab`)
+- `PUSH_NON_INTERACTIVE=1` (skip marker prompts)
+
+### Priority order
+1. CLI args
+2. Environment variables
+3. Interactive selection
+4. Default `none`
+
+### Interactive behavior
+When no marker is provided and not in non-interactive mode:
+- `0. none` (default)
+- `1. feature`
+- `2. ab`
+
+If marker is `feature`/`ab`, `push` will try to read options from:
+- `scripts/push.options.json`
+
+Format:
+```json
+{
+  "feature": ["login-refactor", "seo-meta"],
+  "ab": ["homehero", "payflow"]
+}
+```
+
+`0) Manual input` is always available even if options exist.
+
+### Hook context
+Legacy hook args are unchanged:
+- `$1 repo_root`
+- `$2 current_branch`
+- `$3 project_name`
+- `$4 old_branch`
+
+Additional exported context:
+- `PUSH_FEATURE`
+- `PUSH_AB`
+- `PUSH_MARKER_MODE`
+- `PUSH_CTX_JSON`

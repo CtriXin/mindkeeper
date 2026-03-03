@@ -5,14 +5,18 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: push [-m "commit message"] [--no-notify]
+Usage: push [-m "commit message"] [--feature <name>] [--ab <name>] [--no-marker] [--dry-run] [--no-notify]
 
 Environment:
-  FEISHU_WEBHOOK   Feishu bot webhook URL. If set, can send notify.
-  PUSH_NOTIFY      If set to 1, auto-send notify without prompt.
-  PUSH_LOCAL_HOOK  Path to local hook script (relative or absolute).
-  PUSH_POST_HOOK   Path to post-push hook script (relative or absolute).
-  PUSH_SKIP_BUMP   If set to 1, skip version bump prompt.
+  FEISHU_WEBHOOK      Feishu bot webhook URL. If set, can send notify.
+  PUSH_NOTIFY         If set to 1, auto-send notify without prompt.
+  PUSH_LOCAL_HOOK     Path to local hook script (relative or absolute).
+  PUSH_POST_HOOK      Path to post-push hook script (relative or absolute).
+  PUSH_SKIP_BUMP      If set to 1, skip version bump prompt.
+  PUSH_FEATURE        Marker value for feature (lower priority than CLI args).
+  PUSH_AB             Marker value for ab (lower priority than CLI args).
+  PUSH_MARKER_MODE    Marker mode: none|feature|ab.
+  PUSH_NON_INTERACTIVE If set to 1, skip interactive marker prompt.
 
 Local pre-hook search order (first match):
   1) $PUSH_LOCAL_HOOK
@@ -26,14 +30,121 @@ Local post-hook search order (first match):
 USAGE
 }
 
+trim() {
+  local v="$1"
+  v="${v#"${v%%[![:space:]]*}"}"
+  v="${v%"${v##*[![:space:]]}"}"
+  printf '%s' "$v"
+}
+
+json_escape() {
+  local s="$1"
+  s=${s//\\/\\\\}
+  s=${s//"/\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\r'/\\r}
+  s=${s//$'\t'/\\t}
+  printf '%s' "$s"
+}
+
+load_marker_options() {
+  local options_file="$1"
+  local marker_type="$2"
+
+  if [[ ! -f "$options_file" ]]; then
+    return 0
+  fi
+
+  if ! command -v node >/dev/null 2>&1; then
+    return 0
+  fi
+
+  node -e '
+const fs = require("fs");
+const file = process.argv[1];
+const key = process.argv[2];
+try {
+  const raw = fs.readFileSync(file, "utf8");
+  const json = JSON.parse(raw);
+  const arr = Array.isArray(json[key]) ? json[key] : [];
+  for (const item of arr) {
+    if (typeof item === "string" && item.trim()) {
+      console.log(item.trim());
+    }
+  }
+} catch (_) {}
+' "$options_file" "$marker_type"
+}
+
+prompt_marker_value() {
+  local marker_type="$1"
+  local options_file="$2"
+  local value=""
+  local opts=()
+  local line=""
+
+  while IFS= read -r line; do
+    opts+=("$line")
+  done < <(load_marker_options "$options_file" "$marker_type")
+
+  if [[ ${#opts[@]} -gt 0 ]]; then
+    echo "请选择 ${marker_type}：" >&2
+    echo "0. 手动输入" >&2
+    local i=1
+    for item in "${opts[@]}"; do
+      echo "${i}. ${item}" >&2
+      i=$((i + 1))
+    done
+
+    read -r -p "请输入 ${marker_type} 选项序号（或直接输入名称，回车=手动输入）: " marker_choice
+    marker_choice=$(trim "${marker_choice:-}")
+
+    if [[ "$marker_choice" =~ ^[0-9]+$ ]] && [[ "$marker_choice" -ge 1 ]] && [[ "$marker_choice" -le ${#opts[@]} ]]; then
+      value="${opts[$((marker_choice - 1))]}"
+      echo "$value"
+      return 0
+    fi
+
+    if [[ -n "$marker_choice" && ! "$marker_choice" =~ ^[0-9]+$ ]]; then
+      value="$marker_choice"
+      echo "$value"
+      return 0
+    fi
+  fi
+
+  read -r -p "请输入 ${marker_type} 名称(直接回车取消): " value
+  value=$(trim "$value")
+  echo "$value"
+}
+
 commit_message=""
 notify_flag="auto"
+cli_feature=""
+cli_ab=""
+cli_no_marker=0
+dry_run=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -m|--message)
       commit_message="${2:-}"
       shift 2
+      ;;
+    --feature)
+      cli_feature="${2:-}"
+      shift 2
+      ;;
+    --ab)
+      cli_ab="${2:-}"
+      shift 2
+      ;;
+    --no-marker)
+      cli_no_marker=1
+      shift
+      ;;
+    --dry-run)
+      dry_run=1
+      shift
       ;;
     --no-notify)
       notify_flag="no"
@@ -51,6 +162,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -n "$cli_feature" && -n "$cli_ab" ]]; then
+  echo "--feature 和 --ab 不能同时使用"
+  exit 2
+fi
+
+if [[ "$cli_no_marker" == "1" ]] && ([[ -n "$cli_feature" ]] || [[ -n "$cli_ab" ]]); then
+  echo "--no-marker 不能与 --feature/--ab 同时使用"
+  exit 2
+fi
+
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
 if [[ -z "${repo_root}" ]]; then
   echo "当前目录不是 git 仓库"
@@ -58,6 +179,95 @@ if [[ -z "${repo_root}" ]]; then
 fi
 
 cd "$repo_root"
+
+marker_mode=""
+marker_value=""
+
+# Priority: CLI > ENV > Interactive > none
+if [[ "$cli_no_marker" == "1" ]]; then
+  marker_mode="none"
+elif [[ -n "$cli_feature" ]]; then
+  marker_mode="feature"
+  marker_value="$(trim "$cli_feature")"
+elif [[ -n "$cli_ab" ]]; then
+  marker_mode="ab"
+  marker_value="$(trim "$cli_ab")"
+else
+  env_marker_mode="$(trim "${PUSH_MARKER_MODE:-}")"
+  env_feature="$(trim "${PUSH_FEATURE:-}")"
+  env_ab="$(trim "${PUSH_AB:-}")"
+
+  if [[ "$env_marker_mode" == "none" ]]; then
+    marker_mode="none"
+  elif [[ "$env_marker_mode" == "feature" ]]; then
+    marker_mode="feature"
+    marker_value="$env_feature"
+  elif [[ "$env_marker_mode" == "ab" ]]; then
+    marker_mode="ab"
+    marker_value="$env_ab"
+  elif [[ -n "$env_feature" ]]; then
+    marker_mode="feature"
+    marker_value="$env_feature"
+  elif [[ -n "$env_ab" ]]; then
+    marker_mode="ab"
+    marker_value="$env_ab"
+  fi
+
+  if [[ -z "$marker_mode" ]] && [[ "${PUSH_NON_INTERACTIVE:-0}" != "1" ]]; then
+    echo "请选择发布标记："
+    echo "0. 不加标记（默认）"
+    echo "1. feature"
+    echo "2. ab"
+    read -r -p "请输入标记类型序号(默认0): " marker_choice
+    marker_choice=${marker_choice:-0}
+
+    options_file="$repo_root/scripts/push.options.json"
+    if [[ "$marker_choice" == "1" ]]; then
+      marker_mode="feature"
+      marker_value="$(prompt_marker_value "feature" "$options_file")"
+      if [[ -z "$marker_value" ]]; then
+        marker_mode="none"
+      fi
+    elif [[ "$marker_choice" == "2" ]]; then
+      marker_mode="ab"
+      marker_value="$(prompt_marker_value "ab" "$options_file")"
+      if [[ -z "$marker_value" ]]; then
+        marker_mode="none"
+      fi
+    else
+      marker_mode="none"
+    fi
+  fi
+fi
+
+if [[ -z "$marker_mode" ]]; then
+  marker_mode="none"
+fi
+
+if [[ "$marker_mode" != "none" && -z "$marker_value" ]]; then
+  if [[ "${PUSH_NON_INTERACTIVE:-0}" == "1" ]]; then
+    echo "非交互模式下，${marker_mode} 不能为空"
+    exit 2
+  fi
+  read -r -p "请输入 ${marker_mode} 名称(直接回车取消): " marker_value
+  marker_value="$(trim "$marker_value")"
+  if [[ -z "$marker_value" ]]; then
+    marker_mode="none"
+  fi
+fi
+
+if [[ "$marker_mode" == "feature" ]]; then
+  export PUSH_MARKER_MODE="feature"
+  export PUSH_FEATURE="$marker_value"
+  unset PUSH_AB
+elif [[ "$marker_mode" == "ab" ]]; then
+  export PUSH_MARKER_MODE="ab"
+  export PUSH_AB="$marker_value"
+  unset PUSH_FEATURE
+else
+  export PUSH_MARKER_MODE="none"
+  unset PUSH_FEATURE PUSH_AB
+fi
 
 # --- 部署名称/服务名处理 ---
 # .deploy-service: 用于 deploy 默认服务名（推荐）
@@ -137,6 +347,11 @@ if [[ "$reconfigure_deploy" == "1" || ! -f "$deploy_path_file" ]]; then
   echo "${input_path}" > "$deploy_path_file"
 fi
 
+deploy_path=""
+if [[ -f "$deploy_path_file" ]]; then
+  deploy_path=$(cat "$deploy_path_file")
+fi
+
 project_name=$(basename "$repo_root")
 current_branch=$(git symbolic-ref --short HEAD)
 
@@ -212,12 +427,17 @@ if [[ "${PUSH_SKIP_BUMP:-0}" != "1" && $current_branch =~ [0-9]+\.[0-9]+ ]]; the
   read -r -p "是否使用新版本号(1/2)[默认1]: " use_new_version
   use_new_version=${use_new_version:-1}
   if [[ "$use_new_version" == "1" ]]; then
-    git checkout -b "$new_branch_name"
-    current_branch="$new_branch_name"
+    if [[ "$dry_run" == "1" ]]; then
+      echo "[dry-run] 将创建并切换到新分支: $new_branch_name"
+      current_branch="$new_branch_name"
+    else
+      git checkout -b "$new_branch_name"
+      current_branch="$new_branch_name"
+    fi
   fi
 fi
 
-# Local pre-hook (project specific changes)
+# Build hook paths first (for dry-run preview)
 pre_hook_path=""
 if [[ -n "${PUSH_LOCAL_HOOK:-}" ]]; then
   pre_hook_path="$PUSH_LOCAL_HOOK"
@@ -226,11 +446,65 @@ elif [[ -f ".push.local.sh" ]]; then
 elif [[ -f "scripts/push.local.sh" ]]; then
   pre_hook_path="scripts/push.local.sh"
 fi
+if [[ -n "$pre_hook_path" && "$pre_hook_path" != /* ]]; then
+  pre_hook_path="$repo_root/$pre_hook_path"
+fi
 
-if [[ -n "$pre_hook_path" ]]; then
-  if [[ "$pre_hook_path" != /* ]]; then
-    pre_hook_path="$repo_root/$pre_hook_path"
+post_hook_path=""
+if [[ -n "${PUSH_POST_HOOK:-}" ]]; then
+  post_hook_path="$PUSH_POST_HOOK"
+elif [[ -f ".push.post.sh" ]]; then
+  post_hook_path=".push.post.sh"
+elif [[ -f "scripts/push.post.sh" ]]; then
+  post_hook_path="scripts/push.post.sh"
+fi
+if [[ -n "$post_hook_path" && "$post_hook_path" != /* ]]; then
+  post_hook_path="$repo_root/$post_hook_path"
+fi
+
+marker_value_escaped="$(json_escape "$marker_value")"
+deploy_name_escaped="$(json_escape "${deploy_name:-}")"
+deploy_path_escaped="$(json_escape "${deploy_path:-}")"
+project_name_escaped="$(json_escape "$project_name")"
+branch_escaped="$(json_escape "$current_branch")"
+marker_mode_escaped="$(json_escape "$marker_mode")"
+
+export PUSH_CTX_JSON="{\"markerMode\":\"${marker_mode_escaped}\",\"markerValue\":\"${marker_value_escaped}\",\"feature\":\"$(json_escape "${PUSH_FEATURE:-}")\",\"ab\":\"$(json_escape "${PUSH_AB:-}")\",\"dryRun\":${dry_run},\"project\":\"${project_name_escaped}\",\"branch\":\"${branch_escaped}\",\"deployService\":\"${deploy_name_escaped}\",\"deployPath\":\"${deploy_path_escaped}\"}"
+
+if [[ "$dry_run" == "1" ]]; then
+  echo "[dry-run] 仓库: $repo_root"
+  echo "[dry-run] 分支: $current_branch"
+  echo "[dry-run] 标记模式: $marker_mode"
+  if [[ "$marker_mode" != "none" ]]; then
+    echo "[dry-run] 标记值: $marker_value"
   fi
+  if [[ -n "$pre_hook_path" ]]; then
+    echo "[dry-run] 将执行 Pre Hook: $pre_hook_path"
+  else
+    echo "[dry-run] 未配置 Pre Hook"
+  fi
+  echo "[dry-run] 将执行: git add -A"
+  if [[ -n "$commit_message" ]]; then
+    echo "[dry-run] 将执行: git commit -m \"$commit_message\""
+  else
+    echo "[dry-run] 将在运行时询问提交信息"
+  fi
+  echo "[dry-run] 将执行: git push (或首次 push -u origin <branch>)"
+  if [[ "$notify_flag" != "no" ]]; then
+    echo "[dry-run] 通知策略: ${PUSH_NOTIFY:-0} (1=自动发送, 其他=交互确认)"
+  else
+    echo "[dry-run] 通知策略: 已禁用"
+  fi
+  if [[ -n "$post_hook_path" ]]; then
+    echo "[dry-run] 将执行 Post Hook: $post_hook_path"
+  else
+    echo "[dry-run] 未配置 Post Hook"
+  fi
+  exit 0
+fi
+
+# Local pre-hook (project specific changes)
+if [[ -n "$pre_hook_path" ]]; then
   echo "执行本地 Pre Hook: $pre_hook_path"
   if [[ -x "$pre_hook_path" ]]; then
     "$pre_hook_path" "$repo_root" "$current_branch" "$project_name" "$old_branch"
@@ -284,27 +558,21 @@ if [[ -n "${FEISHU_WEBHOOK:-}" && "$notify_flag" != "no" ]]; then
 
   if [[ -n "$notify_choice" ]]; then
     notify_content="${commit_message:-已推送}"
+    marker_notify=""
+    if [[ "$marker_mode" == "feature" ]]; then
+      marker_notify="\\nFeature: ${marker_value}"
+    elif [[ "$marker_mode" == "ab" ]]; then
+      marker_notify="\\nAB: ${marker_value}"
+    fi
     curl -sS -X POST -H "Content-Type: application/json" \
-      -d "{\"msg_type\": \"text\", \"content\": {\"text\": \"🚀 推送通知\\n项目: ${project_name}\\n分支: ${current_branch}\\n提交信息: ${commit_message:-无}\\n更新文件: ${changed_files}\"}}" \
+      -d "{\"msg_type\": \"text\", \"content\": {\"text\": \"🚀 推送通知\\n项目: ${project_name}\\n分支: ${current_branch}${marker_notify}\\n提交信息: ${commit_message:-无}\\n更新文件: ${changed_files}\"}}" \
       "$FEISHU_WEBHOOK" >/dev/null
     echo "飞书通知已发送"
   fi
 fi
 
 # Local post-hook (optional)
-post_hook_path=""
-if [[ -n "${PUSH_POST_HOOK:-}" ]]; then
-  post_hook_path="$PUSH_POST_HOOK"
-elif [[ -f ".push.post.sh" ]]; then
-  post_hook_path=".push.post.sh"
-elif [[ -f "scripts/push.post.sh" ]]; then
-  post_hook_path="scripts/push.post.sh"
-fi
-
 if [[ -n "$post_hook_path" ]]; then
-  if [[ "$post_hook_path" != /* ]]; then
-    post_hook_path="$repo_root/$post_hook_path"
-  fi
   echo "执行本地 Post Hook: $post_hook_path"
   if [[ -x "$post_hook_path" ]]; then
     "$post_hook_path" "$repo_root" "$current_branch" "$project_name" "$old_branch"
