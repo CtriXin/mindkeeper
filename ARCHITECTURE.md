@@ -229,3 +229,12 @@ Scripts enhance basic functionality:
 - Status tracking and reporting
 
 This architecture enables rapid development and deployment while maintaining security, scalability, and maintainability.
+## 7. AI 辅助研发与知识管理
+
+本项目引入了 AI 辅助维护机制，确保研发过程中的逻辑变更与技术细节可追溯：
+
+1. **[docs/changelog/](docs/changelog/)**: 记录每次功能迭代的详细 **Walkthrough**。包含技术方案权衡、Bug 修复细节以及验证结果。
+2. **[docs/README.md](docs/README.md)**: 项目知识库入口，沉淀核心资产的解析。
+3. **Traceability**: 重要的脚本（如 `wt`）在主文档中均会引用对应的 AI 开发日志。
+
+这种「文档随代码走」的机制保证了项目知识的持久性。
