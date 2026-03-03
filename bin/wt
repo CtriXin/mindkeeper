@@ -8,6 +8,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+YELLOW='\033[0;33m'
 GRAY='\033[1;30m'
 NC='\033[0m' # No Color
 
@@ -267,20 +268,25 @@ cmd_create() {
        if git worktree list | grep -q "\[$target_branch\]"; then
          echo -e "\n${RED}注意: 分支 '$target_branch' 已经被当前项目或其他 Worktree 使用。${NC}"
          echo -e "Git 不允许重复检出同一个分支。"
-         read -r -p "是否要基于 '$target_branch' 创建一个新分支并在新 Worktree 打开? (y/N): " create_from_existing
-         if [[ "$create_from_existing" =~ ^[Yy]$ ]]; then
-           local base_branch="$target_branch"
-           read -r -p "请输入新分支的名称: " target_branch
-           target_branch=$(trim "$target_branch")
-           if [[ -z "$target_branch" ]]; then echo "分支名不能为空"; exit 1; fi
-           is_new_branch=1
-           # 这里特殊标记，说明是基于 base_branch 建立的
-           is_derived_branch=1
-           derived_base="$base_branch"
-         else
-           echo "已取消。你可以选择其他分支或创建全新分支。"
-           exit 0
-         fi
+         
+         # 自动递增 _wt_{index} 后缀
+         local base_branch="$target_branch"
+         local idx=1
+         while true; do
+           target_branch="${base_branch}_wt_${idx}"
+           # 检查该分支名字是否已经在本地或远程存在了
+           if ! git show-ref --verify --quiet "refs/heads/$target_branch" && \
+              ! git show-ref --verify --quiet "refs/remotes/origin/$target_branch"; then
+             break
+           fi
+           ((idx++))
+         done
+         
+         echo -e "${YELLOW}已自动为你分配新的派生分支名称: ${GREEN}$target_branch${NC}"
+         is_new_branch=1
+         # 这里特殊标记，说明是基于 base_branch 建立的
+         is_derived_branch=1
+         derived_base="$base_branch"
        fi
     fi
   fi
