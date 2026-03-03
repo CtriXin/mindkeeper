@@ -262,6 +262,26 @@ cmd_create() {
        # 如果包含 origin/ 则只取后面的部分作为本地分支名
        target_branch=${target_branch#origin/}
        is_new_branch=0
+       
+       # 检查分支是否已被检出
+       if git worktree list | grep -q "\[$target_branch\]"; then
+         echo -e "\n${RED}注意: 分支 '$target_branch' 已经被当前项目或其他 Worktree 使用。${NC}"
+         echo -e "Git 不允许重复检出同一个分支。"
+         read -r -p "是否要基于 '$target_branch' 创建一个新分支并在新 Worktree 打开? (y/N): " create_from_existing
+         if [[ "$create_from_existing" =~ ^[Yy]$ ]]; then
+           local base_branch="$target_branch"
+           read -r -p "请输入新分支的名称: " target_branch
+           target_branch=$(trim "$target_branch")
+           if [[ -z "$target_branch" ]]; then echo "分支名不能为空"; exit 1; fi
+           is_new_branch=1
+           # 这里特殊标记，说明是基于 base_branch 建立的
+           is_derived_branch=1
+           derived_base="$base_branch"
+         else
+           echo "已取消。你可以选择其他分支或创建全新分支。"
+           exit 0
+         fi
+       fi
     fi
   fi
   
@@ -296,7 +316,11 @@ cmd_create() {
   # 步骤 4: 执行创建
   echo -e "\n${BLUE}即将执行:${NC}"
   if [[ "$is_new_branch" == "1" ]]; then
-    echo "git worktree add -b \"$target_branch\" \"$target_path\""
+    if [[ "${is_derived_branch:-0}" == "1" ]]; then
+      echo "git worktree add -b \"$target_branch\" \"$target_path\" \"$derived_base\""
+    else
+      echo "git worktree add -b \"$target_branch\" \"$target_path\""
+    fi
   else
     echo "git worktree add \"$target_path\" \"$target_branch\""
   fi
@@ -308,7 +332,11 @@ cmd_create() {
   fi
   
   if [[ "$is_new_branch" == "1" ]]; then
-    git worktree add -b "$target_branch" "$target_path"
+    if [[ "${is_derived_branch:-0}" == "1" ]]; then
+      git worktree add -b "$target_branch" "$target_path" "$derived_base"
+    else
+      git worktree add -b "$target_branch" "$target_path"
+    fi
   else
     git worktree add "$target_path" "$target_branch"
   fi
