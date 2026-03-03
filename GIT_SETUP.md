@@ -101,3 +101,8 @@ git checkout <commit-id> -- scmp-deploy/
 > [!TIP]
 > **描述信息存储在哪？**
 > `wt` 脚本会在仓库根目录生成 `.worktree-meta.json` 文件用于存储自定义描述，此文件已在 `.gitignore` 配置中忽略，不会提交到远程。
+>
+> **详细开发日志 (Walkthrough)**
+> 关于此脚本开发过程的技术文档与变更日志，请参阅：
+> [📜 2026-03-03 开发日志 (docs/changelog/2026-03-03.md)](docs/changelog/2026-03-03.md)
+> 更多文档见：[📚 项目知识库 (docs/README.md)](docs/README.md)
