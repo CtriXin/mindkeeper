@@ -112,7 +112,7 @@ interactive_select() {
   echo -ne "\033[?25l" >&2
 
   # 捕获退出信号，确保恢复光标
-  trap 'echo -ne "\033[?25h" >&2' EXIT INIT INT QUIT TERM
+  trap 'echo -ne "\033[?25h" >&2' EXIT INT QUIT TERM
 
   # 初次打印预留空行
   for ((i=0; i<num_options; i++)); do
@@ -134,15 +134,24 @@ interactive_select() {
 
   while true; do
     draw_menu
+    local key=""
+    local key2=""
+    local key3=""
+    
+    # 逐个字符读取
     read -rsn1 key
     if [[ "$key" == $'\x1b' ]]; then
-      read -rsn2 -t 0.1 key2
-      if [[ "$key2" == '[A' ]]; then # 上
-        ((selected--))
-        if [[ $selected -lt 0 ]]; then selected=$((num_options - 1)); fi
-      elif [[ "$key2" == '[B' ]]; then # 下
-        ((selected++))
-        if [[ $selected -ge $num_options ]]; then selected=0; fi
+      # 读到 ESC
+      read -rsn1 -t 1 key2 || true
+      if [[ "$key2" == '[' ]]; then
+        read -rsn1 -t 1 key3 || true
+        if [[ "$key3" == 'A' ]]; then # 上
+          ((selected--))
+          if [[ $selected -lt 0 ]]; then selected=$((num_options - 1)); fi
+        elif [[ "$key3" == 'B' ]]; then # 下
+          ((selected++))
+          if [[ $selected -ge $num_options ]]; then selected=0; fi
+        fi
       fi
     elif [[ "$key" == "" ]]; then # Enter
       break
@@ -151,7 +160,7 @@ interactive_select() {
   
   # 恢复并向下移动
   echo -ne "\033[?25h" >&2
-  trap - EXIT INIT INT QUIT TERM
+  trap - EXIT INT QUIT TERM
   echo -ne "\033[${num_options}B" >&2
   
   echo "$selected"
