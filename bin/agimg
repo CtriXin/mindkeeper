@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="/Users/xin/auto-skills/antigravity-image"
+SCRIPT="$ROOT/scripts/ag_image.sh"
+OUT_DIR="/Users/xin/auto-skills/out/antigravity-image"
+PROMPT_DIR="$ROOT/prompts"
+
+[[ -x "$SCRIPT" ]] || {
+  printf '错误: 未找到可执行脚本: %s\n' "$SCRIPT" >&2
+  exit 1
+}
+
+mkdir -p "$OUT_DIR"
+
+prompt_file=""
+prompt_preset=""
+has_out=0
+fetch_only=0
+watch_only=0
+no_fetch=0
+
+declare -a passthrough=()
+declare -a prompt_parts=()
+
+usage() {
+  cat <<'EOF'
+用法:
+  agimg [选项] "图片需求"
+  agimg --prompt-file PATH
+  agimg --preset NAME
+  agimg --fetch-latest --out PATH
+
+说明:
+  这是 auto-skills 下的 Antigravity 生图独立入口。
+  默认会：
+  1. 重启 Antigravity
+  2. 通过 GUI 方式发送 prompt
+  3. 发送后尽量切回你原来的前台应用
+  4. 自动等待并抓取最新图片到 /Users/xin/auto-skills/out/antigravity-image
+
+常用选项:
+  --prompt-file PATH   读取固定 prompt 文件
+  --preset NAME        使用内置 prompt 预设
+  --list-presets       列出当前可用预设
+  --out PATH           指定最终输出路径
+  --fetch-latest       不发送 prompt，只抓最近图片
+  --no-fetch           发送 prompt，但不自动抓图
+  --settle-sec SEC     发现首张新图后，等待静默期再拿最后一张
+  --smart-crop-aspect RATIO 生成后按边框智能裁成目标比例，例如 3:4 或 16:9
+  --no-restore-front-app 发送后停留在 Antigravity，不切回原前台应用
+  --keep-antigravity-front 与 --no-restore-front-app 等价
+  --dry-run            只预览最终命令和 prompt
+  -h, --help           查看帮助
+
+当前预设:
+  xhs-ai-memory        小红书风格 AI 记忆系统信息图
+EOF
+}
+
+resolve_preset_file() {
+  local preset_name="$1"
+  case "$preset_name" in
+    xhs-ai-memory)
+      printf '%s\n' "$PROMPT_DIR/xhs_ai_memory_infographic.txt"
+      ;;
+    *)
+      printf '错误: 未知预设: %s\n' "$preset_name" >&2
+      return 1
+      ;;
+  esac
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --prompt-file)
+      [[ $# -ge 2 ]] || {
+        printf '错误: --prompt-file 缺少参数\n' >&2
+        exit 1
+      }
+      prompt_file="$2"
+      shift 2
+      ;;
+    --preset)
+      [[ $# -ge 2 ]] || {
+        printf '错误: --preset 缺少参数\n' >&2
+        exit 1
+      }
+      prompt_preset="$2"
+      shift 2
+      ;;
+    --list-presets)
+      printf 'xhs-ai-memory\n'
+      exit 0
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --out)
+      [[ $# -ge 2 ]] || {
+        printf '错误: --out 缺少参数\n' >&2
+        exit 1
+      }
+      has_out=1
+      passthrough+=("$1" "$2")
+      shift 2
+      ;;
+    --fetch-latest)
+      fetch_only=1
+      passthrough+=("$1")
+      shift
+      ;;
+    --watch)
+      watch_only=1
+      passthrough+=("$1")
+      shift
+      ;;
+    --no-fetch)
+      no_fetch=1
+      passthrough+=("$1")
+      shift
+      ;;
+    --mode|--add-file|--profile|--restart-wait|--ready-timeout|--gui-send-delay|--timeout|--settle-sec|--smart-crop-aspect|--lookback-sec|--bin)
+      [[ $# -ge 2 ]] || {
+        printf '错误: %s 缺少参数\n' "$1" >&2
+        exit 1
+      }
+      passthrough+=("$1" "$2")
+      shift 2
+      ;;
+    --restart-antigravity|--send-via-gui|--new-window|--reuse-window|--maximize|--raw|--dry-run|--keep-antigravity-front|--no-restore-front-app)
+      passthrough+=("$1")
+      shift
+      ;;
+    --)
+      passthrough+=("$1")
+      shift
+      while [[ $# -gt 0 ]]; do
+        prompt_parts+=("$1")
+        shift
+      done
+      ;;
+    -*)
+      passthrough+=("$1")
+      shift
+      ;;
+    *)
+      prompt_parts+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ -n "$prompt_file" && -n "$prompt_preset" ]]; then
+  printf '错误: --prompt-file 和 --preset 不能同时使用\n' >&2
+  exit 1
+fi
+
+if [[ -n "$prompt_preset" ]]; then
+  prompt_file="$(resolve_preset_file "$prompt_preset")" || exit 1
+fi
+
+prompt=""
+if [[ -n "$prompt_file" ]]; then
+  [[ -f "$prompt_file" ]] || {
+    printf '错误: prompt 文件不存在: %s\n' "$prompt_file" >&2
+    exit 1
+  }
+  prompt="$(cat "$prompt_file")"
+elif [[ ${#prompt_parts[@]} -gt 0 ]]; then
+  prompt="${prompt_parts[*]}"
+fi
+
+if [[ -z "$prompt" && "$fetch_only" -eq 0 && "$watch_only" -eq 0 ]]; then
+  printf '错误: 缺少图片需求。请传文本、--prompt-file 或 --preset。\n' >&2
+  exit 1
+fi
+
+declare -a cmd=(
+  bash "$SCRIPT"
+  --restart-antigravity
+  --restart-wait 20
+  --send-via-gui
+  --ready-timeout 8
+  --gui-send-delay 4
+  --timeout 360
+)
+
+if [[ "$has_out" -eq 0 && "$fetch_only" -eq 0 && "$watch_only" -eq 0 && "$no_fetch" -eq 0 ]]; then
+  cmd+=(--out "$OUT_DIR/ag_$(date +%Y%m%d-%H%M%S).png")
+fi
+
+if (( ${#passthrough[@]} > 0 )); then
+  cmd+=("${passthrough[@]}")
+fi
+
+if [[ -n "$prompt" ]]; then
+  cmd+=("$prompt")
+fi
+
+exec "${cmd[@]}"
