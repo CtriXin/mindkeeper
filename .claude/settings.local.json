@@ -21,7 +21,14 @@
       "Bash(curl:*)",
       "Bash(open:*)",
       "Bash(cat:*)",
-      "Bash(grep ^data: :*)"
+      "Bash(grep ^data: :*)",
+      "Bash(chmod +x:*)",
+      "Bash(/Users/xin/.claude/statusline-command.sh:*)",
+      "WebFetch(domain:minimax-algeng-chat-tts.oss-cn-wulanchabu.aliyuncs.com)",
+      "Bash(echo TERM=$TERM:*)",
+      "Bash(printf \\\\033[0;32m+4\\\\033[0m \\\\033[0;31m-1\\\\033[0m\\\\n:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(/bin/bash:*)"
     ]
   }
 }
