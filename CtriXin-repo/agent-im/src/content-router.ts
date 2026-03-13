@@ -3,6 +3,7 @@ import type { Store, CLISession } from './store.js';
 import type { DiscordAdapter, RenderedMessage } from './discord/adapter.js';
 import type { IPCServer, EventMsg, PermissionRequestMsg } from './ipc-server.js';
 import { type FilterLevel, getAgentBrand } from './config.js';
+import { TranscriptWatcher } from './transcript-watcher.js';
 
 interface EventPayload {
   type: string;
@@ -36,6 +37,7 @@ interface SessionContext {
 
 export class ContentRouter {
   private sessionContext = new Map<string, SessionContext>();
+  private transcriptWatcher = new TranscriptWatcher();
   private static readonly TITLE_COOLDOWN_MS = 5 * 60 * 1000; // 5 min (Discord rate limit: 2 per 10 min)
 
   constructor(
@@ -71,6 +73,50 @@ export class ContentRouter {
     this.discord.onPermissionDecision = (permissionId, decision) => {
       this.handlePermissionDecision(permissionId, decision);
     };
+
+    // Transcript watcher: forward Claude's text output to Discord
+    this.registry.on('session:registered', (session) => {
+      this.transcriptWatcher.startWatching(session.sessionId, session.cwd);
+    });
+    this.registry.on('session:unregistered', (session) => {
+      this.transcriptWatcher.stopWatching(session.sessionId);
+    });
+    this.registry.on('session:dead', (session) => {
+      this.transcriptWatcher.stopWatching(session.sessionId);
+    });
+    this.transcriptWatcher.on('assistant:text', (sessionId, text) => {
+      this.handleAssistantText(sessionId, text).catch(err => {
+        console.error('[router] Error sending assistant text:', err);
+      });
+    });
+  }
+
+  stop(): void {
+    this.transcriptWatcher.stopAll();
+  }
+
+  // ── Transcript → IM (assistant text output) ──
+
+  private async handleAssistantText(sessionId: string, text: string): Promise<void> {
+    const session = this.registry.getSession(sessionId);
+    if (!session?.threadId) return;
+    if (session.filterLevel === 'silent') return;
+
+    const brand = getAgentBrand(session.agent);
+    const author = { name: brand.label, ...(brand.iconUrl ? { icon_url: brand.iconUrl } : {}) };
+
+    // Discord embed description limit is 4096 chars
+    const truncated = text.length > 3800
+      ? text.slice(0, 3800) + `\n*[${text.length} chars total]*`
+      : text;
+
+    await this.discord.sendToThread(session.threadId, {
+      embed: {
+        author,
+        description: truncated,
+        color: brand.color,
+      },
+    });
   }
 
   // ── CLI → IM ──

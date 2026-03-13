@@ -59,6 +59,7 @@ async function main(): Promise<void> {
     shuttingDown = true;
     const reason = signal ? `signal: ${signal}` : 'shutdown';
     console.log(`[agent-im] Shutting down (${reason})...`);
+    router.stop();
     registry.stop();
     await discord.stop();
     await ipc.stop();
