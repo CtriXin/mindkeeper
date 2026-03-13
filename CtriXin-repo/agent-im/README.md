@@ -102,6 +102,31 @@ Rate-limited to 1 update per 5 minutes (Discord API limit).
 
 Custom icons: set `AGENT_IM_CLAUDE_ICON_URL` / `AGENT_IM_CODEX_ICON_URL` in config.env.
 
+### Codex CLI Usage
+
+Codex has no hook system, so use the wrapper script:
+
+```bash
+# Instead of: codex "fix the bug"
+# Run:
+bash scripts/codex-im "fix the bug"
+
+# Or install globally for convenience:
+ln -sf "$(pwd)/scripts/codex-im" /usr/local/bin/codex-im
+codex-im "fix the bug"
+```
+
+What works with Codex:
+- Hub card with 🧠 green branding
+- Discord thread created on session start
+- Thread archived on session end
+
+What doesn't work (Codex has no hooks):
+- Tool call events (Read, Bash, Edit, etc.)
+- User prompt forwarding
+- Assistant text output
+- Permission forwarding
+
 ## Permission Forwarding
 
 With `--with-permissions` hooks installed, dangerous tool calls (Bash, Write, Edit) are forwarded to Discord with Allow/Deny buttons. The CLI blocks until you click.

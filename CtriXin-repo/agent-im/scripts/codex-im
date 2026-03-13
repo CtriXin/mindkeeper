@@ -1,0 +1,37 @@
+#!/bin/bash
+# codex-im — run Codex CLI with agent-im Discord integration
+# Usage: codex-im [codex args...]
+#
+# Creates a Discord thread with Codex branding (🧠 green).
+# Session registers on start, unregisters on exit.
+#
+# Note: Codex has no hook system, so only session lifecycle is tracked.
+# Tool events and assistant text output are not forwarded (Codex limitation).
+
+SOCK="$HOME/.agent-im/agent-im.sock"
+SID="codex-$(date +%s)-$$"
+CWD="$(pwd)"
+PROJECT=$(basename "$CWD")
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "none")
+
+# Register session with agent-im daemon
+if [ -S "$SOCK" ]; then
+  printf '{"type":"register","sessionId":"%s","cwd":"%s","pid":%d,"project":"%s","branch":"%s","agent":"codex"}\n' \
+    "$SID" "$CWD" $$ "$PROJECT" "$BRANCH" \
+    | nc -U "$SOCK" -w 1 2>/dev/null || true
+  echo "[codex-im] Session registered: $PROJECT / $BRANCH [$SID]"
+fi
+
+# Run codex with all arguments passed through
+set +e
+codex "$@"
+EXIT_CODE=$?
+set -e
+
+# Unregister session
+if [ -S "$SOCK" ]; then
+  printf '{"type":"unregister","sessionId":"%s"}\n' "$SID" \
+    | nc -U "$SOCK" -w 1 2>/dev/null || true
+fi
+
+exit $EXIT_CODE
