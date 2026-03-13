@@ -1,0 +1,23 @@
+{
+  "name": "agent-im",
+  "version": "0.1.0",
+  "description": "Multi-CLI session bridge to IM platforms — auto-create Discord threads per Claude Code CLI instance",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
