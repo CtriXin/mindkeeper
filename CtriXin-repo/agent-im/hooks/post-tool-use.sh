@@ -16,13 +16,22 @@ echo "$TOOL_INPUT" | jq . >/dev/null 2>&1 || TOOL_INPUT='{}'
 
 # Extract readable output text from tool response.
 # Uses jq -r to get raw text FIRST, then truncates safely (no broken JSON).
-# Handles: Bash {stdout}, Read {content}, content-block arrays, plain strings.
+# Handles: Bash {stdout}, Agent/nested {content:[blocks]}, Read {content:str}, arrays, strings.
 TOOL_OUTPUT_RAW=$(echo "$INPUT" | jq -r '
   .tool_response // null |
   if type == "null" then ""
   elif type == "string" then .
-  elif type == "object" then (.stdout // .content // .output // .text // tojson)
-  elif type == "array" then ([.[] | select(.type == "text") | .text] | join("\n"))
+  elif type == "array" then
+    [.[] | select(type == "object" and .type == "text") | .text] | join("\n")
+  elif type == "object" then
+    if .stdout != null then .stdout
+    elif (.content | type) == "array" then
+      [.content[] | select(type == "object" and .type == "text") | .text] | join("\n")
+    elif (.content | type) == "string" then .content
+    elif .output != null then .output
+    elif .text != null then .text
+    else tojson
+    end
   else tostring
   end' 2>/dev/null | head -c 2000) || true
 

@@ -18,9 +18,27 @@ cp config.env.example ~/.agent-im/config.env
 bash scripts/install-hooks.sh                    # basic hooks
 bash scripts/install-hooks.sh --with-permissions  # + permission forwarding
 
-# 4. Start daemon
-npm run dev      # dev mode (tsx, auto-reload friendly)
-npm run start    # production (node dist/)
+# 4. Start daemon (pick one)
+bash scripts/daemon.sh start          # manual foreground-ish (nohup)
+bash scripts/install-launchd.sh       # auto-start on login (recommended)
+```
+
+## Daemon Management
+
+```bash
+# Manual control
+bash scripts/daemon.sh start          # start
+bash scripts/daemon.sh stop           # stop
+bash scripts/daemon.sh restart        # restart
+bash scripts/daemon.sh status         # check if running
+bash scripts/daemon.sh logs           # last 50 lines
+bash scripts/daemon.sh logs 200       # last 200 lines
+
+# Auto-start on login (macOS launchd)
+bash scripts/install-launchd.sh       # install + start immediately
+# After this, daemon auto-starts on every login and restarts on crash.
+# To remove:
+launchctl bootout gui/$(id -u)/com.agent-im.daemon
 ```
 
 ## Config (`~/.agent-im/config.env`)
@@ -62,6 +80,8 @@ Events forwarded (depends on filter level):
 | Done (cost/tokens) | Yes | Yes | No |
 | Notifications | Yes | Yes | No |
 | Permission requests | Yes | Yes | Yes |
+
+**Not captured:** Claude's direct text responses (the analysis, tables, recommendations you see in CLI). Claude Code hooks only fire on tool calls, user prompts, and session events. Claude's "thinking" output has no hook. What you DO get: every tool call + result, which covers the majority of observable work.
 
 ## Thread Title Auto-Update
 
@@ -123,7 +143,9 @@ src/
     thread-ops.ts      # thread create/archive/rename, hub cards
 hooks/                 # bash scripts installed into ~/.claude/settings.json
 scripts/
+  daemon.sh            # start/stop/status/logs
   install-hooks.sh     # hook installer
+  install-launchd.sh   # macOS auto-start
   smoke-test.sh        # E2E test
 data/                  # ~/.agent-im/data/ (sessions.json, permissions.json)
 ```
