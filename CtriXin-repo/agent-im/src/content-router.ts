@@ -2,7 +2,7 @@ import type { SessionRegistry } from './session-registry.js';
 import type { Store, CLISession } from './store.js';
 import type { DiscordAdapter, RenderedMessage } from './discord/adapter.js';
 import type { IPCServer, EventMsg, PermissionRequestMsg } from './ipc-server.js';
-import type { FilterLevel } from './config.js';
+import { type FilterLevel, getAgentBrand } from './config.js';
 
 interface EventPayload {
   type: string;
@@ -88,7 +88,7 @@ export class ContentRouter {
     // Filter check
     if (!this.shouldForward(event, level)) return;
 
-    const rendered = this.renderEvent(event, msg.data);
+    const rendered = this.renderEvent(event, msg.data, session.agent);
     await this.discord.sendToThread(session.threadId, rendered);
   }
 
@@ -368,7 +368,9 @@ export class ContentRouter {
     return String(output);
   }
 
-  private renderEvent(eventType: string, data: unknown): RenderedMessage {
+  private renderEvent(eventType: string, data: unknown, agent?: string): RenderedMessage {
+    const brand = getAgentBrand(agent || 'unknown');
+    const author = { name: brand.label, ...(brand.iconUrl ? { icon_url: brand.iconUrl } : {}) };
     switch (eventType) {
       case 'text':
         return { text: String(data) };
@@ -419,6 +421,7 @@ export class ContentRouter {
 
         return {
           embed: {
+            author,
             title: titleLine.length > 256 ? titleLine.slice(0, 253) + '...' : titleLine,
             description,
             color: isError ? 0xED4245 : 0x57F287,
@@ -430,6 +433,7 @@ export class ContentRouter {
       case 'error':
         return {
           embed: {
+            author,
             title: '\ud83d\udea8 Error',
             description: String(data),
             color: 0xED4245,
@@ -441,6 +445,7 @@ export class ContentRouter {
         const usage = d.usage;
         return {
           embed: {
+            author,
             title: '\u2705 Done',
             color: 0x57F287,
             ...(usage ? {

@@ -12,6 +12,7 @@ export interface RegisterMsg {
   pid: number;
   project?: string;
   branch?: string;
+  agent?: string;  // 'claude' | 'codex' | custom
 }
 
 export interface UnregisterMsg {

@@ -65,6 +65,7 @@ export class SessionRegistry extends EventEmitter<SessionRegistryEvents> {
       project: msg.project || this.extractProjectName(msg.cwd),
       branch: msg.branch || this.detectBranch(msg.cwd),
       pid: msg.pid,
+      agent: msg.agent || 'unknown',
       filterLevel: this.defaultFilter,
       registeredAt: new Date().toISOString(),
       lastActivityAt: new Date().toISOString(),

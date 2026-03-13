@@ -20,7 +20,7 @@ BRANCH=$(cd "$CWD" 2>/dev/null && git rev-parse --abbrev-ref HEAD 2>/dev/null ||
 PROJECT=$(basename "$CWD")
 
 # Fire-and-forget registration — compact JSON on single line
-printf '{"type":"register","sessionId":"%s","cwd":"%s","pid":%d,"project":"%s","branch":"%s"}\n' \
+printf '{"type":"register","sessionId":"%s","cwd":"%s","pid":%d,"project":"%s","branch":"%s","agent":"claude"}\n' \
   "$SESSION_ID" "$CWD" "$PID" "$PROJECT" "$BRANCH" \
   | nc -U "$SOCK" -w 1 2>/dev/null || true
 

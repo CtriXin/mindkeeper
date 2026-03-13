@@ -26,6 +26,7 @@ export interface CLISession {
   project: string;
   branch: string;
   pid: number;
+  agent: string;  // 'claude' | 'codex' | custom
   threadId?: string;
   hubMessageId?: string;
   filterLevel: 'full' | 'summary' | 'silent';

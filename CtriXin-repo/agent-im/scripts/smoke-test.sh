@@ -72,7 +72,7 @@ pause
 # Step 1: Register session → Discord thread creation
 # ═══════════════════════════════════════════════════════════════
 step 1 "Register session" "Hub channel: new thread \"${PROJECT} / ${BRANCH}\""
-send "{\"type\":\"register\",\"sessionId\":\"$SID\",\"cwd\":\"$CWD\",\"pid\":$$,\"project\":\"$PROJECT\",\"branch\":\"$BRANCH\"}"
+send "{\"type\":\"register\",\"sessionId\":\"$SID\",\"cwd\":\"$CWD\",\"pid\":$$,\"project\":\"$PROJECT\",\"branch\":\"$BRANCH\",\"agent\":\"claude\"}"
 echo "  Waiting 4s for thread creation..."
 sleep 4
 

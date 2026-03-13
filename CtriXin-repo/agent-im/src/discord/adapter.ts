@@ -25,6 +25,7 @@ const DISCORD_CHAR_LIMIT = 2000;
 export interface RenderedMessage {
   text?: string;
   embed?: {
+    author?: { name: string; icon_url?: string };
     title?: string;
     description?: string;
     color?: number;

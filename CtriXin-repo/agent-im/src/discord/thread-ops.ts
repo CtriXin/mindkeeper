@@ -5,6 +5,7 @@ import type {
   ThreadAutoArchiveDuration,
 } from 'discord.js';
 import type { CLISession } from '../store.js';
+import { getAgentBrand } from '../config.js';
 
 /** Map autoArchiveHours config to Discord's allowed durations */
 function archiveDuration(hours: number): ThreadAutoArchiveDuration {
@@ -35,16 +36,22 @@ export async function createSessionThread(
   const textChannel = channel as TextChannel;
 
   // Send a starter message in hub channel
+  const brand = getAgentBrand(session.agent);
+  const author = {
+    name: brand.label,
+    ...(brand.iconUrl ? { icon_url: brand.iconUrl } : {}),
+  };
   const starterMsg = await textChannel.send({
     embeds: [{
-      title: `🖥️ ${session.project} / ${session.branch}`,
+      author,
+      title: `${brand.emoji} ${session.project} / ${session.branch}`,
       description: [
         `**Session:** \`${session.sessionId.slice(0, 8)}\``,
         `**Directory:** \`${session.cwd}\``,
         `**Filter:** ${session.filterLevel}`,
-        `**Status:** 🟢 Active`,
+        `**Status:** \ud83d\udfe2 Active`,
       ].join('\n'),
-      color: 0x5865F2, // Discord blurple
+      color: brand.color,
       timestamp: new Date().toISOString(),
     }],
   });
@@ -103,12 +110,18 @@ export async function updateHubMessage(
     const channel = await client.channels.fetch(hubChannelId);
     if (!channel || !('messages' in channel)) return;
     const msg = await (channel as TextChannel).messages.fetch(messageId);
-    const statusEmoji = status === 'active' ? '🟢 Active' : '🔴 Ended';
-    const color = status === 'active' ? 0x5865F2 : 0x95A5A6;
+    const brand = getAgentBrand(session.agent);
+    const author = {
+      name: brand.label,
+      ...(brand.iconUrl ? { icon_url: brand.iconUrl } : {}),
+    };
+    const statusEmoji = status === 'active' ? '\ud83d\udfe2 Active' : '\ud83d\udd34 Ended';
+    const color = status === 'active' ? brand.color : 0x95A5A6;
 
     await msg.edit({
       embeds: [{
-        title: `🖥️ ${session.project} / ${session.branch}`,
+        author,
+        title: `${brand.emoji} ${session.project} / ${session.branch}`,
         description: [
           `**Session:** \`${session.sessionId.slice(0, 8)}\``,
           `**Directory:** \`${session.cwd}\``,
