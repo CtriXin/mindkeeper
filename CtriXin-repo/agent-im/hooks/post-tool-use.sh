@@ -12,11 +12,26 @@ SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // "unknown"')
 # Use jq -c to ensure compact single-line JSON (no newlines that break IPC protocol)
 TOOL_INPUT=$(echo "$INPUT" | jq -c '.tool_input // {}' | head -c 500)
-TOOL_OUTPUT=$(echo "$INPUT" | jq -c '.tool_response // null' | head -c 2000)
-
-# Ensure valid JSON for --argjson (head -c may truncate mid-JSON)
 echo "$TOOL_INPUT" | jq . >/dev/null 2>&1 || TOOL_INPUT='{}'
-echo "$TOOL_OUTPUT" | jq . >/dev/null 2>&1 || TOOL_OUTPUT='null'
+
+# Extract readable output text from tool response.
+# Uses jq -r to get raw text FIRST, then truncates safely (no broken JSON).
+# Handles: Bash {stdout}, Read {content}, content-block arrays, plain strings.
+TOOL_OUTPUT_RAW=$(echo "$INPUT" | jq -r '
+  .tool_response // null |
+  if type == "null" then ""
+  elif type == "string" then .
+  elif type == "object" then (.stdout // .content // .output // .text // tojson)
+  elif type == "array" then ([.[] | select(.type == "text") | .text] | join("\n"))
+  else tostring
+  end' 2>/dev/null | head -c 2000) || true
+
+# Re-encode as JSON string for --argjson (safe: raw text was truncated, not JSON)
+if [ -n "$TOOL_OUTPUT_RAW" ]; then
+  TOOL_OUTPUT=$(printf '%s' "$TOOL_OUTPUT_RAW" | jq -Rsc '.') || TOOL_OUTPUT='null'
+else
+  TOOL_OUTPUT='null'
+fi
 
 # Build compact single-line JSON with jq -c (--argjson preserves JSON types)
 EVENT=$(jq -c -n \

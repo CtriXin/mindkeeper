@@ -359,10 +359,21 @@ export class ContentRouter {
     }
     if (typeof output === 'object') {
       const o = output as Record<string, unknown>;
+      // Bash: {stdout, stderr, interrupted, ...}
+      if (typeof o.stdout === 'string') {
+        let text = o.stdout;
+        if (typeof o.stderr === 'string' && o.stderr) text += `\n[stderr] ${o.stderr}`;
+        return text;
+      }
       if (typeof o.content === 'string') return o.content;                      // {content:"text"}
       if (Array.isArray(o.content)) return this.extractOutputText(o.content);   // {type:"tool_result",content:[...]}
       if (typeof o.output === 'string') return o.output;                        // {output:"text"}
       if (typeof o.text === 'string') return o.text;                            // {text:"..."}
+      if (typeof o.result === 'string') return o.result;                        // {result:"text"}
+      // Edit/Write: {filePath, success}
+      if (typeof o.filePath === 'string' && typeof o.success === 'boolean') {
+        return o.success ? `\u2713 ${o.filePath}` : `\u2717 ${o.filePath}`;
+      }
       return JSON.stringify(output, null, 2);
     }
     return String(output);
