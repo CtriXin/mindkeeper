@@ -4,106 +4,151 @@ import os from 'node:os';
 import { execSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 
+/** Codex thread from state_5.sqlite */
+interface CodexThread {
+  id: string;
+  cwd: string;
+  gitBranch: string;
+  rolloutPath: string;
+  title: string;
+  updatedAt: number;
+}
+
 export interface CodexWatcherEvents {
-  'assistant:text': [sessionId: string, text: string];
-  'tool:call': [sessionId: string, name: string, args: string];
-  'user:message': [sessionId: string, text: string];
+  /** New Codex thread detected — register as session */
+  'session:new': [thread: CodexThread];
+  /** Codex thread archived/gone — unregister */
+  'session:ended': [threadId: string];
+  /** Assistant text output */
+  'assistant:text': [threadId: string, text: string];
+  /** Tool call (exec_command, apply_patch, etc.) */
+  'tool:call': [threadId: string, name: string, args: string];
+  /** User message */
+  'user:message': [threadId: string, text: string];
 }
 
 /**
- * Watches Codex CLI rollout JSONL files for assistant text, tool calls, and user messages.
+ * Auto-discovers Codex CLI sessions by polling ~/.codex/state_5.sqlite,
+ * then tails each session's rollout JSONL for events.
  *
- * Codex stores conversations at paths like:
- *   ~/.codex/sessions/2026/03/12/rollout-{date}T{time}-{thread-id}.jsonl
- *
- * The rollout_path is stored in ~/.codex/state_5.sqlite → threads table.
- * We look up the rollout path by matching cwd + git branch from the wrapper script.
+ * No wrapper script needed — just run `codex` normally.
  */
 export class CodexWatcher extends EventEmitter<CodexWatcherEvents> {
-  private sessions = new Map<string, {
+  private threads = new Map<string, {
     rolloutPath: string;
     offset: number;
-    timer: ReturnType<typeof setInterval>;
   }>();
 
+  private detectTimer: NodeJS.Timeout | null = null;
+  private rolloutTimer: NodeJS.Timeout | null = null;
+  private startTime: number; // unix seconds — only detect threads updated after daemon start
+
   private static readonly STATE_DB = path.join(os.homedir(), '.codex', 'state_5.sqlite');
-  private static readonly POLL_MS = 2000;
+  private static readonly DETECT_MS = 5000; // poll SQLite every 5s
+  private static readonly ROLLOUT_MS = 2000; // poll rollout files every 2s
 
-  /**
-   * Start watching a Codex session.
-   * Finds the latest active Codex thread matching the given cwd, then tails the rollout JSONL.
-   */
-  startWatching(sessionId: string, cwd: string): void {
-    if (this.sessions.has(sessionId)) return;
+  constructor() {
+    super();
+    this.startTime = Math.floor(Date.now() / 1000);
+  }
 
-    const rolloutPath = this.findRolloutPath(cwd);
-    if (!rolloutPath) {
-      console.log(`[codex-watcher] No active Codex thread found for ${cwd}`);
+  /** Start auto-detecting Codex sessions */
+  start(): void {
+    if (!fs.existsSync(CodexWatcher.STATE_DB)) {
+      console.log('[codex-watcher] Codex not installed (no state DB), skipping');
       return;
     }
-
-    // Start at current file size — don't replay history
-    let offset = 0;
-    try { offset = fs.statSync(rolloutPath).size; } catch { /* ok */ }
-
-    const timer = setInterval(() => this.poll(sessionId), CodexWatcher.POLL_MS);
-    this.sessions.set(sessionId, { rolloutPath, offset, timer });
-    console.log(`[codex-watcher] Watching: ${rolloutPath}`);
+    this.detectTimer = setInterval(() => this.detectThreads(), CodexWatcher.DETECT_MS);
+    this.rolloutTimer = setInterval(() => this.pollAllRollouts(), CodexWatcher.ROLLOUT_MS);
+    console.log('[codex-watcher] Auto-detection started');
   }
 
-  stopWatching(sessionId: string): void {
-    const s = this.sessions.get(sessionId);
-    if (!s) return;
-    clearInterval(s.timer);
-    this.sessions.delete(sessionId);
+  stop(): void {
+    if (this.detectTimer) clearInterval(this.detectTimer);
+    if (this.rolloutTimer) clearInterval(this.rolloutTimer);
+    this.threads.clear();
   }
 
-  stopAll(): void {
-    for (const [id] of this.sessions) this.stopWatching(id);
-  }
+  // ── Thread detection from SQLite ──
 
-  /**
-   * Find the most recently updated Codex thread rollout_path matching a CWD.
-   * Uses sqlite3 CLI since we can't bundle a native SQLite driver easily.
-   */
-  private findRolloutPath(cwd: string): string | null {
-    try {
-      const result = execSync(
-        `sqlite3 "${CodexWatcher.STATE_DB}" "SELECT rollout_path FROM threads WHERE cwd = '${cwd.replace(/'/g, "''")}' AND archived = 0 ORDER BY updated_at DESC LIMIT 1"`,
-        { encoding: 'utf-8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] },
-      ).trim();
-      return result || null;
-    } catch {
-      return null;
+  private detectThreads(): void {
+    const active = this.queryActiveThreads();
+    const activeIds = new Set<string>();
+
+    for (const t of active) {
+      activeIds.add(t.id);
+      if (!this.threads.has(t.id)) {
+        // New thread discovered
+        let offset = 0;
+        try { offset = fs.statSync(t.rolloutPath).size; } catch { /* ok */ }
+        this.threads.set(t.id, { rolloutPath: t.rolloutPath, offset });
+        this.emit('session:new', t);
+        console.log(`[codex-watcher] New thread: ${path.basename(t.cwd)} / ${t.gitBranch} [${t.id.slice(0, 8)}]`);
+      }
+    }
+
+    // Detect archived/removed threads
+    for (const [id] of this.threads) {
+      if (!activeIds.has(id)) {
+        this.threads.delete(id);
+        this.emit('session:ended', id);
+        console.log(`[codex-watcher] Thread ended: ${id.slice(0, 8)}`);
+      }
     }
   }
 
-  private poll(sessionId: string): void {
-    const s = this.sessions.get(sessionId);
-    if (!s) return;
+  private queryActiveThreads(): CodexThread[] {
+    try {
+      // Tab-separated output for reliable parsing
+      const raw = execSync(
+        `sqlite3 -separator '\t' "${CodexWatcher.STATE_DB}" ` +
+        `"SELECT id, cwd, COALESCE(git_branch,'none'), rollout_path, COALESCE(title,''), updated_at ` +
+        `FROM threads WHERE archived = 0 AND updated_at > ${this.startTime} ` +
+        `ORDER BY updated_at DESC LIMIT 20"`,
+        { encoding: 'utf-8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] },
+      ).trim();
+      if (!raw) return [];
 
+      return raw.split('\n').map(line => {
+        const [id, cwd, gitBranch, rolloutPath, title, updatedAt] = line.split('\t');
+        return { id, cwd, gitBranch, rolloutPath, title, updatedAt: parseInt(updatedAt, 10) };
+      }).filter(t => t.id && t.rolloutPath);
+    } catch {
+      return [];
+    }
+  }
+
+  // ── Rollout JSONL polling ──
+
+  private pollAllRollouts(): void {
+    for (const [threadId, state] of this.threads) {
+      this.pollRollout(threadId, state);
+    }
+  }
+
+  private pollRollout(threadId: string, state: { rolloutPath: string; offset: number }): void {
     let size: number;
-    try { size = fs.statSync(s.rolloutPath).size; } catch { return; }
-    if (size <= s.offset) return;
+    try { size = fs.statSync(state.rolloutPath).size; } catch { return; }
+    if (size <= state.offset) return;
 
     try {
-      const fd = fs.openSync(s.rolloutPath, 'r');
-      const buf = Buffer.alloc(size - s.offset);
-      fs.readSync(fd, buf, 0, buf.length, s.offset);
+      const fd = fs.openSync(state.rolloutPath, 'r');
+      const buf = Buffer.alloc(size - state.offset);
+      fs.readSync(fd, buf, 0, buf.length, state.offset);
       fs.closeSync(fd);
-      s.offset = size;
+      state.offset = size;
 
       for (const line of buf.toString('utf-8').split('\n')) {
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
-          this.processEntry(sessionId, JSON.parse(trimmed));
+          this.processEntry(threadId, JSON.parse(trimmed));
         } catch { /* partial or invalid JSON */ }
       }
     } catch { /* read error */ }
   }
 
-  private processEntry(sessionId: string, entry: unknown): void {
+  private processEntry(threadId: string, entry: unknown): void {
     if (!entry || typeof entry !== 'object') return;
     const e = entry as Record<string, unknown>;
     const payload = e.payload as Record<string, unknown> | undefined;
@@ -123,20 +168,20 @@ export class CodexWatcher extends EventEmitter<CodexWatcherEvents> {
         }
       }
       const fullText = texts.join('\n').trim();
-      if (fullText) this.emit('assistant:text', sessionId, fullText);
+      if (fullText) this.emit('assistant:text', threadId, fullText);
     }
 
-    // Tool calls (function_call)
+    // Tool calls
     if (e.type === 'response_item' && payload.type === 'function_call') {
       const name = String(payload.name || 'unknown');
       const args = String(payload.arguments || '');
-      this.emit('tool:call', sessionId, name, args);
+      this.emit('tool:call', threadId, name, args);
     }
 
     // User messages
     if (e.type === 'event_msg' && payload.type === 'user_message') {
       const text = String(payload.message || payload.text || '');
-      if (text.trim()) this.emit('user:message', sessionId, text);
+      if (text.trim()) this.emit('user:message', threadId, text);
     }
   }
 }

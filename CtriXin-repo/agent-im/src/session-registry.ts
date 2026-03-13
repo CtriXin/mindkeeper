@@ -140,7 +140,8 @@ export class SessionRegistry extends EventEmitter<SessionRegistryEvents> {
     for (const session of this.store.listSessions({ status: 'active' })) {
       const lastActivity = new Date(session.lastActivityAt).getTime();
       const inactive = (now - lastActivity) > INACTIVITY_THRESHOLD_MS;
-      const pidDead = !this.isProcessAlive(session.pid);
+      // PID 0 = externally managed (e.g. Codex via SQLite watcher) — skip PID check
+      const pidDead = session.pid === 0 ? false : !this.isProcessAlive(session.pid);
 
       if (pidDead && inactive) {
         session.status = 'dead';

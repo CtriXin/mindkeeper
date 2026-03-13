@@ -76,43 +76,47 @@ export class ContentRouter {
       this.handlePermissionDecision(permissionId, decision);
     };
 
-    // Transcript watchers: forward assistant text to Discord
+    // Claude transcript watcher: forward assistant text on session register
     this.registry.on('session:registered', (session) => {
-      if (session.agent === 'codex') {
-        this.codexWatcher.startWatching(session.sessionId, session.cwd);
-      } else {
+      if (session.agent !== 'codex') {
         this.transcriptWatcher.startWatching(session.sessionId, session.cwd);
       }
     });
     this.registry.on('session:unregistered', (session) => {
       this.transcriptWatcher.stopWatching(session.sessionId);
-      this.codexWatcher.stopWatching(session.sessionId);
     });
     this.registry.on('session:dead', (session) => {
       this.transcriptWatcher.stopWatching(session.sessionId);
-      this.codexWatcher.stopWatching(session.sessionId);
     });
-
-    // Claude transcript → assistant text
     this.transcriptWatcher.on('assistant:text', (sessionId, text) => {
       this.handleAssistantText(sessionId, text).catch(err => {
         console.error('[router] Error sending assistant text:', err);
       });
     });
 
-    // Codex rollout → assistant text + tool calls + user messages
-    this.codexWatcher.on('assistant:text', (sessionId, text) => {
-      this.handleAssistantText(sessionId, text).catch(err => {
-        console.error('[router] Error sending codex assistant text:', err);
+    // Codex auto-detection: discovers sessions from SQLite, no wrapper needed
+    this.codexWatcher.start();
+    this.codexWatcher.on('session:new', (thread) => {
+      this.handleCodexSessionNew(thread).catch(err => {
+        console.error('[router] Error registering codex session:', err);
       });
     });
-    this.codexWatcher.on('tool:call', (sessionId, name, args) => {
-      this.handleCodexToolCall(sessionId, name, args).catch(err => {
+    this.codexWatcher.on('session:ended', (threadId) => {
+      const sid = `codex-${threadId}`;
+      this.registry.handleUnregister({ type: 'unregister', sessionId: sid });
+    });
+    this.codexWatcher.on('assistant:text', (threadId, text) => {
+      this.handleAssistantText(`codex-${threadId}`, text).catch(err => {
+        console.error('[router] Error sending codex text:', err);
+      });
+    });
+    this.codexWatcher.on('tool:call', (threadId, name, args) => {
+      this.handleCodexToolCall(`codex-${threadId}`, name, args).catch(err => {
         console.error('[router] Error sending codex tool call:', err);
       });
     });
-    this.codexWatcher.on('user:message', (sessionId, text) => {
-      this.handleCodexUserMessage(sessionId, text).catch(err => {
+    this.codexWatcher.on('user:message', (threadId, text) => {
+      this.handleCodexUserMessage(`codex-${threadId}`, text).catch(err => {
         console.error('[router] Error sending codex user message:', err);
       });
     });
@@ -120,7 +124,20 @@ export class ContentRouter {
 
   stop(): void {
     this.transcriptWatcher.stopAll();
-    this.codexWatcher.stopAll();
+    this.codexWatcher.stop();
+  }
+
+  private async handleCodexSessionNew(thread: { id: string; cwd: string; gitBranch: string; title: string }): Promise<void> {
+    const sid = `codex-${thread.id}`;
+    this.registry.handleRegister({
+      type: 'register',
+      sessionId: sid,
+      cwd: thread.cwd,
+      pid: 0, // no PID — rely on SQLite archived check instead
+      project: thread.cwd.split('/').pop() || 'unknown',
+      branch: thread.gitBranch,
+      agent: 'codex',
+    });
   }
 
   // ── Transcript → IM (assistant text output) ──

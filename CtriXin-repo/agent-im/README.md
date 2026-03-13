@@ -104,28 +104,18 @@ Custom icons: set `AGENT_IM_CLAUDE_ICON_URL` / `AGENT_IM_CODEX_ICON_URL` in conf
 
 ### Codex CLI Usage
 
-Codex has no hook system, so use the wrapper script:
+**No setup needed.** The daemon auto-detects Codex sessions by polling `~/.codex/state_5.sqlite`. Just run `codex` normally.
 
-```bash
-# Instead of: codex "fix the bug"
-# Run:
-bash scripts/codex-im "fix the bug"
-
-# Or install globally for convenience:
-ln -sf "$(pwd)/scripts/codex-im" /usr/local/bin/codex-im
-codex-im "fix the bug"
-```
-
-What works with Codex:
+What works:
+- Auto-discovery: daemon detects new Codex conversations within 5s
 - Hub card with 🧠 green branding
-- Discord thread created on session start
-- Thread archived on session end
+- Assistant text output (reads Codex rollout JSONL)
+- Tool calls (exec_command, apply_patch, etc.)
+- User messages
+- Thread auto-archive when Codex conversation ends
 
-What doesn't work (Codex has no hooks):
-- Tool call events (Read, Bash, Edit, etc.)
-- User prompt forwarding
-- Assistant text output
-- Permission forwarding
+What doesn't work (no Codex hook system):
+- Permission forwarding (Allow/Deny buttons)
 
 ## Permission Forwarding
 
