@@ -3,10 +3,7 @@
 # Usage: codex-im [codex args...]
 #
 # Creates a Discord thread with Codex branding (🧠 green).
-# Session registers on start, unregisters on exit.
-#
-# Note: Codex has no hook system, so only session lifecycle is tracked.
-# Tool events and assistant text output are not forwarded (Codex limitation).
+# Watches Codex's rollout JSONL for assistant text, tool calls, and user messages.
 
 SOCK="$HOME/.agent-im/agent-im.sock"
 SID="codex-$(date +%s)-$$"
@@ -19,7 +16,7 @@ if [ -S "$SOCK" ]; then
   printf '{"type":"register","sessionId":"%s","cwd":"%s","pid":%d,"project":"%s","branch":"%s","agent":"codex"}\n' \
     "$SID" "$CWD" $$ "$PROJECT" "$BRANCH" \
     | nc -U "$SOCK" -w 1 2>/dev/null || true
-  echo "[codex-im] Session registered: $PROJECT / $BRANCH [$SID]"
+  echo "[codex-im] Session registered: $PROJECT / $BRANCH"
 fi
 
 # Run codex with all arguments passed through

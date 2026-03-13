@@ -4,6 +4,7 @@ import type { DiscordAdapter, RenderedMessage } from './discord/adapter.js';
 import type { IPCServer, EventMsg, PermissionRequestMsg } from './ipc-server.js';
 import { type FilterLevel, getAgentBrand } from './config.js';
 import { TranscriptWatcher } from './transcript-watcher.js';
+import { CodexWatcher } from './codex-watcher.js';
 
 interface EventPayload {
   type: string;
@@ -38,6 +39,7 @@ interface SessionContext {
 export class ContentRouter {
   private sessionContext = new Map<string, SessionContext>();
   private transcriptWatcher = new TranscriptWatcher();
+  private codexWatcher = new CodexWatcher();
   private static readonly TITLE_COOLDOWN_MS = 5 * 60 * 1000; // 5 min (Discord rate limit: 2 per 10 min)
 
   constructor(
@@ -74,25 +76,51 @@ export class ContentRouter {
       this.handlePermissionDecision(permissionId, decision);
     };
 
-    // Transcript watcher: forward Claude's text output to Discord
+    // Transcript watchers: forward assistant text to Discord
     this.registry.on('session:registered', (session) => {
-      this.transcriptWatcher.startWatching(session.sessionId, session.cwd);
+      if (session.agent === 'codex') {
+        this.codexWatcher.startWatching(session.sessionId, session.cwd);
+      } else {
+        this.transcriptWatcher.startWatching(session.sessionId, session.cwd);
+      }
     });
     this.registry.on('session:unregistered', (session) => {
       this.transcriptWatcher.stopWatching(session.sessionId);
+      this.codexWatcher.stopWatching(session.sessionId);
     });
     this.registry.on('session:dead', (session) => {
       this.transcriptWatcher.stopWatching(session.sessionId);
+      this.codexWatcher.stopWatching(session.sessionId);
     });
+
+    // Claude transcript → assistant text
     this.transcriptWatcher.on('assistant:text', (sessionId, text) => {
       this.handleAssistantText(sessionId, text).catch(err => {
         console.error('[router] Error sending assistant text:', err);
+      });
+    });
+
+    // Codex rollout → assistant text + tool calls + user messages
+    this.codexWatcher.on('assistant:text', (sessionId, text) => {
+      this.handleAssistantText(sessionId, text).catch(err => {
+        console.error('[router] Error sending codex assistant text:', err);
+      });
+    });
+    this.codexWatcher.on('tool:call', (sessionId, name, args) => {
+      this.handleCodexToolCall(sessionId, name, args).catch(err => {
+        console.error('[router] Error sending codex tool call:', err);
+      });
+    });
+    this.codexWatcher.on('user:message', (sessionId, text) => {
+      this.handleCodexUserMessage(sessionId, text).catch(err => {
+        console.error('[router] Error sending codex user message:', err);
       });
     });
   }
 
   stop(): void {
     this.transcriptWatcher.stopAll();
+    this.codexWatcher.stopAll();
   }
 
   // ── Transcript → IM (assistant text output) ──
@@ -117,6 +145,45 @@ export class ContentRouter {
         color: brand.color,
       },
     });
+  }
+
+  private async handleCodexToolCall(sessionId: string, name: string, args: string): Promise<void> {
+    const session = this.registry.getSession(sessionId);
+    if (!session?.threadId) return;
+    if (session.filterLevel === 'silent') return;
+
+    const brand = getAgentBrand('codex');
+    const author = { name: brand.label, ...(brand.iconUrl ? { icon_url: brand.iconUrl } : {}) };
+
+    // Parse args for a summary line
+    let summary = '';
+    try {
+      const parsed = JSON.parse(args);
+      if (parsed.cmd) summary = String(parsed.cmd).slice(0, 120);
+      else if (parsed.file_path) summary = String(parsed.file_path);
+    } catch {
+      summary = args.slice(0, 120);
+    }
+
+    const titleLine = `\ud83d\udd27 ${name}${summary ? ` \u2014 ${summary}` : ''}`;
+
+    await this.discord.sendToThread(session.threadId, {
+      embed: {
+        author,
+        title: titleLine.length > 256 ? titleLine.slice(0, 253) + '...' : titleLine,
+        color: 0x57F287,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  }
+
+  private async handleCodexUserMessage(sessionId: string, text: string): Promise<void> {
+    const session = this.registry.getSession(sessionId);
+    if (!session?.threadId) return;
+    if (session.filterLevel === 'silent') return;
+
+    const truncated = text.length > 500 ? text.slice(0, 500) + '...' : text;
+    await this.discord.sendToThread(session.threadId, `**User:** ${truncated}`);
   }
 
   // ── CLI → IM ──
