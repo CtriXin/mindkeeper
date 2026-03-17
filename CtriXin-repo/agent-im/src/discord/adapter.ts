@@ -15,12 +15,12 @@ import type { CLISession } from '../store.js';
 import {
   createSessionThread,
   archiveThread,
+  deleteHubMessage,
   updateHubMessage,
   updateThreadName,
 } from './thread-ops.js';
 
 const DISCORD_CHAR_LIMIT = 2000;
-
 /** Rendered message from content router — plain text or Discord embed */
 export interface RenderedMessage {
   text?: string;
@@ -67,8 +67,17 @@ export class DiscordAdapter {
 
     // Wire session lifecycle events
     this.registry.on('session:registered', (session) => this.onSessionRegistered(session));
-    this.registry.on('session:unregistered', (session) => this.onSessionEnded(session));
-    this.registry.on('session:dead', (session) => this.onSessionEnded(session));
+    this.registry.on('session:active', (session) => this.onSessionActive(session));
+    this.registry.on('session:idle', (session) => this.onSessionIdle(session));
+    this.registry.on('session:ended', (session) => this.onSessionEnded(session));
+
+    // Run cleanup in background so startup never blocks routing/watcher availability.
+    void this.cleanupDeadHubCards().catch((err) => {
+      console.warn('[discord] Failed to cleanup dead hub cards:', err);
+    });
+    void this.cleanupLegacyEndedCards().catch((err) => {
+      console.warn('[discord] Failed to cleanup legacy ended cards:', err);
+    });
   }
 
   async stop(): Promise<void> {
@@ -227,14 +236,14 @@ export class DiscordAdapter {
   private async handleHubCommand(msg: Message): Promise<void> {
     const text = msg.content.trim();
     if (text === '/status') {
-      const sessions = this.registry.listActive();
+      const sessions = this.registry.listVisible();
       if (sessions.length === 0) {
         await msg.reply('No active CLI sessions.');
         return;
       }
       const lines = sessions.map(s => {
         const thread = s.threadId ? `<#${s.threadId}>` : 'no thread';
-        return `• **${s.project}/${s.branch}** [${s.sessionId.slice(0, 6)}] — ${thread} — ${s.filterLevel}`;
+        return `• **${s.project}/${s.branch}** [${s.sessionId.slice(0, 6)}] — ${thread} — ${s.filterLevel} — ${s.status}`;
       });
       await msg.reply(lines.join('\n'));
     }
@@ -257,25 +266,91 @@ export class DiscordAdapter {
     }
   }
 
-  /** Track already-ended sessions to prevent duplicate archive calls */
-  private endedSessions = new Set<string>();
+  private async onSessionActive(session: CLISession): Promise<void> {
+    if (!session.hubMessageId) return;
+    await updateHubMessage(
+      this.client,
+      this.config.discord.hubChannelId,
+      session.hubMessageId,
+      session,
+      'active',
+    );
+  }
+
+  private async onSessionIdle(session: CLISession): Promise<void> {
+    if (!session.hubMessageId) return;
+    await updateHubMessage(
+      this.client,
+      this.config.discord.hubChannelId,
+      session.hubMessageId,
+      session,
+      'idle',
+    );
+  }
 
   private async onSessionEnded(session: CLISession): Promise<void> {
-    // Prevent duplicate end handling (both unregister and dead events may fire)
-    if (this.endedSessions.has(session.sessionId)) return;
-    this.endedSessions.add(session.sessionId);
-
     if (session.threadId) {
       await archiveThread(this.client, session.threadId);
     }
     if (session.hubMessageId) {
-      await updateHubMessage(
+      const deleted = await deleteHubMessage(
         this.client,
         this.config.discord.hubChannelId,
         session.hubMessageId,
-        session,
-        'dead',
       );
+      if (deleted) {
+        this.registry.clearHubMessage(session.sessionId);
+      }
+    }
+  }
+
+  private async cleanupDeadHubCards(): Promise<void> {
+    for (const session of this.registry.listAll()) {
+      if (session.status !== 'dead') continue;
+      const candidateMessageId = session.hubMessageId || session.threadId;
+      if (!candidateMessageId) continue;
+      const deleted = await deleteHubMessage(
+        this.client,
+        this.config.discord.hubChannelId,
+        candidateMessageId,
+      );
+      if (deleted && session.hubMessageId) {
+        this.registry.clearHubMessage(session.sessionId);
+      }
+    }
+  }
+
+  private async cleanupLegacyEndedCards(): Promise<void> {
+    try {
+      const channel = await this.client.channels.fetch(this.config.discord.hubChannelId);
+      if (!channel || !('messages' in channel)) return;
+
+      let before: string | undefined;
+      let scanned = 0;
+      while (scanned < 1000) {
+        const messages = await (channel as TextChannel).messages.fetch({ limit: 100, before });
+        if (messages.size === 0) break;
+
+        for (const msg of messages.values()) {
+          scanned += 1;
+          if (msg.author.id !== this.client.user?.id) continue;
+          const embed = msg.embeds[0];
+          if (!embed) continue;
+          const description = embed.description || '';
+          const looksLikeSessionCard = description.includes('**Session:**')
+            && description.includes('**Directory:**')
+            && description.includes('**Status:**');
+          const isLegacyEndedCard = looksLikeSessionCard && description.includes('Ended');
+
+          if (!isLegacyEndedCard) continue;
+          await msg.delete().catch(() => undefined);
+        }
+
+        before = messages.last()?.id;
+        if (!before) break;
+      }
+    } catch (err) {
+      console.warn('[discord] Failed to cleanup legacy ended cards:', err);
     }
   }
 

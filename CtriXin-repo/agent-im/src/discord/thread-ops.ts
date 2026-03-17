@@ -1,11 +1,17 @@
+import os from 'node:os';
 import type {
   Client,
+  Message,
   TextChannel,
   ThreadChannel,
   ThreadAutoArchiveDuration,
 } from 'discord.js';
 import type { CLISession } from '../store.js';
 import { getAgentBrand } from '../config.js';
+
+export type HubStatus = 'pending' | 'active' | 'idle';
+
+const HOME_DIR = os.homedir();
 
 /** Map autoArchiveHours config to Discord's allowed durations */
 function archiveDuration(hours: number): ThreadAutoArchiveDuration {
@@ -21,6 +27,15 @@ export function threadName(session: CLISession): string {
   const name = `${session.project} / ${session.branch} [${shortId}]`;
   // Discord thread names max 100 chars
   return name.length > 100 ? name.slice(0, 97) + '...' : name;
+}
+
+function formatDirectory(dir: string): string {
+  if (!dir) return dir;
+  if (dir === HOME_DIR) return '~';
+  if (dir.startsWith(`${HOME_DIR}/`)) {
+    return `~${dir.slice(HOME_DIR.length)}`;
+  }
+  return dir;
 }
 
 export async function createSessionThread(
@@ -42,18 +57,7 @@ export async function createSessionThread(
     ...(brand.iconUrl ? { icon_url: brand.iconUrl } : {}),
   };
   const starterMsg = await textChannel.send({
-    embeds: [{
-      author,
-      title: `${brand.emoji} ${session.project} / ${session.branch}`,
-      description: [
-        `**Session:** \`${session.sessionId.slice(0, 8)}\``,
-        `**Directory:** \`${session.cwd}\``,
-        `**Filter:** ${session.filterLevel}`,
-        `**Status:** \ud83d\udfe2 Active`,
-      ].join('\n'),
-      color: brand.color,
-      timestamp: new Date().toISOString(),
-    }],
+    embeds: [hubEmbed(session, 'pending')],
   });
 
   // Create thread from the starter message
@@ -99,40 +103,120 @@ export async function archiveThread(
   }
 }
 
+export async function deleteHubMessage(
+  client: Client,
+  hubChannelId: string,
+  messageId: string,
+): Promise<boolean> {
+  try {
+    const channel = await client.channels.fetch(hubChannelId);
+    if (!channel || !('messages' in channel)) return false;
+    const msg = await (channel as TextChannel).messages.fetch(messageId);
+    await (msg as Message).delete();
+    return true;
+  } catch (err) {
+    if (isDiscordUnknownMessage(err)) {
+      // Already deleted on Discord side; treat as success to stop repeated cleanup retries.
+      return true;
+    }
+    return deleteHubMessageViaThread(client, hubChannelId, messageId, err);
+  }
+}
+
 export async function updateHubMessage(
   client: Client,
   hubChannelId: string,
   messageId: string,
   session: CLISession,
-  status: 'active' | 'dead',
+  status: HubStatus,
 ): Promise<void> {
   try {
     const channel = await client.channels.fetch(hubChannelId);
     if (!channel || !('messages' in channel)) return;
     const msg = await (channel as TextChannel).messages.fetch(messageId);
-    const brand = getAgentBrand(session.agent);
-    const author = {
-      name: brand.label,
-      ...(brand.iconUrl ? { icon_url: brand.iconUrl } : {}),
-    };
-    const statusEmoji = status === 'active' ? '\ud83d\udfe2 Active' : '\ud83d\udd34 Ended';
-    const color = status === 'active' ? brand.color : 0x95A5A6;
-
     await msg.edit({
-      embeds: [{
-        author,
-        title: `${brand.emoji} ${session.project} / ${session.branch}`,
-        description: [
-          `**Session:** \`${session.sessionId.slice(0, 8)}\``,
-          `**Directory:** \`${session.cwd}\``,
-          `**Filter:** ${session.filterLevel}`,
-          `**Status:** ${statusEmoji}`,
-        ].join('\n'),
-        color,
-        timestamp: new Date().toISOString(),
-      }],
+      embeds: [hubEmbed(session, status)],
     });
   } catch (err) {
     console.warn(`[thread-ops] Failed to update hub message:`, err);
   }
+}
+
+function hubEmbed(session: CLISession, status: HubStatus) {
+  const brand = getAgentBrand(session.agent);
+  const author = {
+    name: brand.label,
+    ...(brand.iconUrl ? { icon_url: brand.iconUrl } : {}),
+  };
+  let statusText = '⚪ 等待中';
+  let color = 0xFEE75C;
+  if (status === 'active') {
+    statusText = '\ud83d\udfe2 进行中';
+    color = brand.color;
+  } else if (status === 'idle') {
+    statusText = '\ud83d\udfe1 空闲等待…';
+    color = 0xFAA307;
+  } else if (status === 'pending') {
+    statusText = '\ud83d\udfe0 等待激活';
+    color = 0xFEE75C;
+  }
+
+  return {
+    author,
+    title: `${brand.emoji} ${session.project} / ${session.branch}`,
+    description: [
+      `**会话:** \`${session.sessionId.slice(0, 8)}\``,
+      `**目录:** \`${formatDirectory(session.cwd)}\``,
+      `**过滤:** ${session.filterLevel}`,
+      `**状态:** ${statusText}`,
+    ].join('\n'),
+    color,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+async function deleteHubMessageViaThread(
+  client: Client,
+  hubChannelId: string,
+  threadId: string,
+  originalError: unknown,
+): Promise<boolean> {
+  try {
+    const channel = await client.channels.fetch(threadId);
+    if (!channel || !('fetchStarterMessage' in channel)) {
+      if (isDiscordUnknownMessage(originalError)) return true;
+      console.warn(`[thread-ops] Failed to delete hub message:`, originalError);
+      return false;
+    }
+
+    const thread = channel as ThreadChannel;
+    if (thread.parentId !== hubChannelId) {
+      if (isDiscordUnknownMessage(originalError)) return true;
+      console.warn(`[thread-ops] Failed to delete hub message:`, originalError);
+      return false;
+    }
+
+    const starter = await thread.fetchStarterMessage();
+    if (!starter) {
+      if (isDiscordUnknownMessage(originalError)) return true;
+      console.warn(`[thread-ops] Failed to delete hub message:`, originalError);
+      return false;
+    }
+
+    await starter.delete();
+    return true;
+  } catch {
+    if (isDiscordUnknownMessage(originalError)) return true;
+    console.warn(`[thread-ops] Failed to delete hub message:`, originalError);
+    return false;
+  }
+}
+
+function isDiscordUnknownMessage(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const maybeErr = err as {
+    code?: unknown;
+    rawError?: { code?: unknown };
+  };
+  return maybeErr.code === 10008 || maybeErr.rawError?.code === 10008;
 }
