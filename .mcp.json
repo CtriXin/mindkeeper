@@ -1,8 +1,14 @@
 {
   "mcpServers": {
-    "zhiji": {
-      "command": "node",
-      "args": ["/Users/xin/auto-skills/CtriXin-repo/zhiji/dist/server.js"]
+    "mindkeeper": {
+      "command": "/Users/xin/.nvm/versions/node/v22.19.0/bin/pnpm",
+      "args": [
+        "--dir",
+        "/Users/xin/auto-skills/CtriXin-repo/mindkeeper",
+        "exec",
+        "tsx",
+        "src/server.ts"
+      ]
     }
   }
 }

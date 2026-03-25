@@ -213,18 +213,12 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'brain_bootstrap',
-      description: '任务启动入口。输入 repo + task，输出完整的 Working Set：规则、procedure、thread、风险点、建议文件、下一步。在开始任何任务前先调用这个。',
+      description: '任务启动入口。输入 repo + task，输出完整的 Working Set：规则、风险、文件推荐、连续性恢复、procedure、下一步。v2 自动读取 Git 上下文和项目规则。',
       inputSchema: {
         type: 'object',
         properties: {
           task: { type: 'string', description: '当前任务描述' },
-          repo: { type: 'string', description: '当前仓库路径' },
-          branch: { type: 'string', description: '当前 Git 分支' },
-          recentFiles: {
-            type: 'array',
-            items: { type: 'string' },
-            description: '最近修改的文件路径',
-          },
+          repo: { type: 'string', description: '当前仓库路径（自动读取 Git 和项目规则）' },
         },
         required: ['task'],
       },
@@ -498,12 +492,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'brain_bootstrap': {
-        const taskDesc = String(args.task);
         const ws = bootstrap({
-          task: taskDesc,
+          task: String(args.task),
           repo: args.repo ? String(args.repo) : undefined,
-          branch: args.branch ? String(args.branch) : undefined,
-          recentFiles: args.recentFiles as string[] | undefined,
         });
 
         const text = formatWorkingSet(ws);

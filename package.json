@@ -1,11 +1,11 @@
 {
-  "name": "zhiji",
+  "name": "mindkeeper",
   "version": "0.1.0",
-  "description": "知己 — Personal Cognitive Substrate that truly knows you",
+  "description": "MindKeeper — Personal Cognitive Substrate that truly knows you",
   "type": "module",
   "main": "dist/server.js",
   "bin": {
-    "zhiji": "dist/cli.js"
+    "mindkeeper": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc",
