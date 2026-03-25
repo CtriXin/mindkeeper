@@ -1,4 +1,4 @@
-# zhiji TODO — 四象限
+# MindKeeper TODO — 四象限
 
 > 最后更新：2026-03-25
 
@@ -6,16 +6,17 @@
 
 ## 🔴 紧急且重要（本周）
 
-### 1. 建立 ~/.sce/ 目录结构
-- [ ] 创建 6 层目录
-- [ ] 创建 identity.json（吸收 SOUL.md 理念）
-- [ ] 创建 beliefs/SUMMARY.md 模板
-- [ ] 创建 HIGHLIGHTS.md 模板
+### 1. 建立 ~/.sce/ 目录结构 ✅
+- [x] 创建 6 层目录
+- [x] 创建 identity.json（吸收 SOUL.md 理念）
+- [x] 创建 beliefs/SUMMARY.md 模板
+- [x] 创建 HIGHLIGHTS.md 模板
 
-### 2. 实现 📌 pin 机制
-- [ ] 识别 "📌" 或 "pin this" 触发词
-- [ ] 写入 ~/.sce/highlights/HIGHLIGHTS.md
-- [ ] 格式：`- **标题** — 内容 [日期] [来源]`
+### 2. 实现 📌 pin 机制 ✅
+- [x] 识别 "📌" 或 "pin this" 触发词
+- [x] 写入 ~/.sce/highlights/HIGHLIGHTS.md
+- [x] 格式：`- **标题** — 内容 [日期] [来源]`
+- [x] 添加 brain_pin 和 brain_highlights MCP 工具
 
 ### 3. Claude Code 集成
 - [ ] 配置 MCP server 到 ~/.claude/settings.json
@@ -26,7 +27,24 @@
 
 ## 🟡 重要不紧急（本月）
 
-### 4. 实现信号采集（from self-evolution）
+### 4. Procedure Markdown 格式 (from 10x) ✅
+- [x] 设计 frontmatter schema（name, trigger, model）
+- [x] 每个 step 支持 `(model: fast|smart)` 标注
+- [x] `{{input}}` / `{{previous}}` 变量插值
+- [x] 学习回路 7 段做成可组合的 procedure
+- [x] MCP 工具：brain_procedures, brain_procedure, brain_learn
+
+### 5. mindkeeper-guide "下一步建议" (from BMAD) ✅
+- [x] 读取当前 TODO + observations + 项目状态
+- [x] 输出一条建议（不是决定，是帮你理清思路）
+- [x] MCP 工具：brain_guide, brain_status
+
+### 6. Scale-Adaptive 学习深度 (from BMAD)
+- [ ] 轻量模式：< 3 文件，evidence 直接存
+- [ ] 标准模式：3-10 文件，capture → distill
+- [ ] 完整模式：> 10 文件，7 段全走 + Thread Capsule
+
+### 7. 实现信号采集（from self-evolution）
 - [ ] 定义 4 类信号：Failure / Missing / Inefficiency / Suggestion
 - [ ] 排除规则：闲聊、权限限制、一次性问题
 - [ ] 格式：`[日期] [类型] 描述 | session | 关键词`
@@ -56,7 +74,7 @@
 ## 🟢 紧急不重要（委派/快速处理）
 
 ### 8. 文档同步
-- [ ] 更新 zhiji README 反映最新架构
+- [ ] 更新 MindKeeper README 反映最新架构
 - [ ] 同步 PROJECT_CARD.md
 - [ ] 确保 CONTRIBUTING.md 完整
 
@@ -98,7 +116,7 @@
 - [x] 架构设计：SCE/PCS 分离
 - [x] 6 类认知对象定义
 - [x] 7 段学习回路定义
-- [x] 项目命名：zhiji (知己)
+- [x] 项目命名：MindKeeper
 - [x] Git 仓库建立
 - [x] README / PROJECT_CARD / CONTRIBUTING
 - [x] 10 项目 + 8 论文研究综合
