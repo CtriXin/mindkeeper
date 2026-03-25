@@ -1,5 +1,5 @@
 /**
- * agents-brain 核心类型定义
+ * MindKeeper 核心类型定义
  *
  * 设计哲学：
  * 1. 每个知识单元是自描述的（Self-Describing）
@@ -69,4 +69,8 @@ export const TOOLS = {
   LIST: 'brain_list',
   /** 根据上下文自动召回 */
   RECALL: 'brain_recall',
+  /** 📌 Pin 重要内容 */
+  PIN: 'brain_pin',
+  /** 查看 highlights */
+  HIGHLIGHTS: 'brain_highlights',
 } as const;

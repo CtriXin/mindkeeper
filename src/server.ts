@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * agents-brain MCP Server
+ * MindKeeper MCP Server
  *
  * 提供以下工具：
  * - brain_search: 语义检索
@@ -19,13 +19,18 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { loadIndex, saveIndex, loadUnit, saveUnit, deleteUnit, metaFromUnit } from './storage.js';
 import { search, recall, findRelated } from './router.js';
+import { isPinRequest, pin, pinDirect, loadHighlights } from './pin.js';
+import { listProcedures, loadProcedure, parseProcedure, planExecution, formatStepPrompt } from './procedure.js';
+import { guide, getContextState } from './guide.js';
+import { bootstrap, formatWorkingSet } from './bootstrap.js';
 import type { BrainIndex, Unit } from './types.js';
+import type { ExecutionContext } from './procedure.js';
 
 // 启动时加载索引（唯一的初始 IO）
 let index: BrainIndex = loadIndex();
 
 const server = new Server(
-  { name: 'agents-brain', version: '0.1.0' },
+  { name: 'mindkeeper', version: '0.1.0' },
   { capabilities: { tools: {} } }
 );
 
@@ -132,6 +137,96 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           limit: { type: 'number', description: '返回数量，默认 3', default: 3 },
         },
         required: ['id'],
+      },
+    },
+    {
+      name: 'brain_pin',
+      description: '📌 Pin 重要内容到 HIGHLIGHTS.md。用于保存用户标记的关键信息。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          content: { type: 'string', description: '要 pin 的内容' },
+          title: { type: 'string', description: '标题（可选，自动从内容提取）' },
+          category: { type: 'string', description: '分类（可选）' },
+          source: { type: 'string', description: '来源（可选，如项目名或会话 ID）' },
+        },
+        required: ['content'],
+      },
+    },
+    {
+      name: 'brain_highlights',
+      description: '查看所有 pinned highlights。',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    },
+    {
+      name: 'brain_procedures',
+      description: '列出所有可用的 Procedure（多步骤工作流）。',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    },
+    {
+      name: 'brain_procedure',
+      description: '获取指定 Procedure 的详情和执行计划。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Procedure 名称' },
+          input: { type: 'string', description: '输入内容（用于变量插值）' },
+        },
+        required: ['name'],
+      },
+    },
+    {
+      name: 'brain_learn',
+      description: '触发学习回路，从输入中学习并记录。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          input: { type: 'string', description: '要学习的内容' },
+          type: { type: 'string', description: '信号类型：Failure/Missing/Inefficiency/Suggestion/Discovery' },
+        },
+        required: ['input'],
+      },
+    },
+    {
+      name: 'brain_guide',
+      description: '获取下一步建议。读取当前状态，智能推荐下一步该做什么。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          context: { type: 'string', description: '当前上下文（可选，用于更精准的建议）' },
+        },
+      },
+    },
+    {
+      name: 'brain_status',
+      description: '查看 MindKeeper 的当前状态：observations、evidence、threads 等。',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    },
+    {
+      name: 'brain_bootstrap',
+      description: '任务启动入口。输入 repo + task，输出完整的 Working Set：规则、procedure、thread、风险点、建议文件、下一步。在开始任何任务前先调用这个。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          task: { type: 'string', description: '当前任务描述' },
+          repo: { type: 'string', description: '当前仓库路径' },
+          branch: { type: 'string', description: '当前 Git 分支' },
+          recentFiles: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '最近修改的文件路径',
+          },
+        },
+        required: ['task'],
       },
     },
   ],
@@ -270,6 +365,151 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: 'text', text }] };
       }
 
+      case 'brain_pin': {
+        const content = String(args.content);
+        const result = pinDirect(content, {
+          title: args.title ? String(args.title) : undefined,
+          category: args.category ? String(args.category) : undefined,
+          source: args.source ? String(args.source) : undefined,
+        });
+
+        if (!result.success) {
+          return { content: [{ type: 'text', text: `Pin 失败: ${result.error}` }], isError: true };
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: `📌 已 pin: **${result.entry!.title}**\n分类: ${result.entry!.category || 'Uncategorized'}\n日期: ${result.entry!.date}`,
+          }],
+        };
+      }
+
+      case 'brain_highlights': {
+        const highlights = loadHighlights();
+        return { content: [{ type: 'text', text: highlights }] };
+      }
+
+      case 'brain_procedures': {
+        const procedures = listProcedures();
+        if (procedures.length === 0) {
+          return { content: [{ type: 'text', text: '暂无可用的 Procedure。' }] };
+        }
+
+        const text = procedures.map(p =>
+          `- **${p.name}**: ${p.description || '无描述'}\n  触发词: ${Array.isArray(p.trigger) ? p.trigger.join(', ') : p.trigger || '无'}`
+        ).join('\n\n');
+
+        return { content: [{ type: 'text', text: `## 可用的 Procedure\n\n${text}` }] };
+      }
+
+      case 'brain_procedure': {
+        const name = String(args.name);
+        const procedure = loadProcedure(name);
+        if (!procedure) {
+          return { content: [{ type: 'text', text: `Procedure "${name}" 不存在。` }] };
+        }
+
+        const context: ExecutionContext = {
+          input: args.input ? String(args.input) : '',
+          results: {},
+          variables: {},
+        };
+
+        const plan = planExecution(procedure, context);
+
+        let text = `## Procedure: ${procedure.meta.name}\n\n`;
+        text += `${procedure.meta.description || ''}\n\n`;
+        text += `**默认模型**: ${procedure.meta.defaultModel || 'auto'}\n\n`;
+        text += `### 执行计划 (${plan.length} 步)\n\n`;
+
+        plan.forEach((step, i) => {
+          const prompt = formatStepPrompt(step, context);
+          text += `#### Step ${step.index}: ${step.name} (${step.model}${step.optional ? ', optional' : ''})\n\n`;
+          text += `${step.content.slice(0, 200)}${step.content.length > 200 ? '...' : ''}\n\n`;
+        });
+
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'brain_learn': {
+        const input = String(args.input);
+        const signalType = args.type ? String(args.type) : 'Discovery';
+
+        // 加载学习回路 Procedure
+        const procedure = loadProcedure('learning-loop');
+        if (!procedure) {
+          return { content: [{ type: 'text', text: '学习回路 Procedure 未找到，请先创建 learning-loop.md' }] };
+        }
+
+        const context: ExecutionContext = {
+          input,
+          results: {},
+          variables: { signalType },
+        };
+
+        const plan = planExecution(procedure, context);
+
+        // 返回第一步的 prompt（实际执行需要多轮调用）
+        const firstStep = plan[0];
+        if (!firstStep) {
+          return { content: [{ type: 'text', text: '学习回路无可执行步骤。' }] };
+        }
+
+        const prompt = formatStepPrompt(firstStep, context);
+
+        return {
+          content: [{
+            type: 'text',
+            text: `## 学习回路启动\n\n` +
+              `**输入**: ${input.slice(0, 100)}${input.length > 100 ? '...' : ''}\n` +
+              `**信号类型**: ${signalType}\n` +
+              `**计划步骤**: ${plan.length}\n\n` +
+              `---\n\n${prompt}`,
+          }],
+        };
+      }
+
+      case 'brain_guide': {
+        const contextStr = args.context ? String(args.context) : undefined;
+        const suggestion = guide(contextStr);
+        return { content: [{ type: 'text', text: `## MindKeeper，下一步？\n\n${suggestion}` }] };
+      }
+
+      case 'brain_status': {
+        const state = getContextState();
+        let text = `## MindKeeper 状态\n\n`;
+        text += `- **Observations**: ${state.recentObservations.length} 条最近\n`;
+        text += `- **Evidence**: ${state.recentEvidence.length} 条最近\n`;
+        text += `- **Threads**: ${state.activeThreads.length} 个活跃\n`;
+        text += `- **Procedures**: ${state.availableProcedures.length} 个可用\n`;
+
+        if (state.recentObservations.length > 0) {
+          text += `\n### 最近的 Observations\n`;
+          state.recentObservations.forEach(o => text += `- ${o}\n`);
+        }
+
+        if (state.availableProcedures.length > 0) {
+          text += `\n### 可用的 Procedures\n`;
+          state.availableProcedures.forEach(p => text += `- ${p}\n`);
+        }
+
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'brain_bootstrap': {
+        const taskDesc = String(args.task);
+        const ws = bootstrap({
+          task: taskDesc,
+          repo: args.repo ? String(args.repo) : undefined,
+          branch: args.branch ? String(args.branch) : undefined,
+          recentFiles: args.recentFiles as string[] | undefined,
+        });
+
+        const text = formatWorkingSet(ws);
+        return { content: [{ type: 'text', text }] };
+      }
+
       default:
         return { content: [{ type: 'text', text: `未知工具: ${name}` }] };
     }
@@ -285,7 +525,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('agents-brain MCP server started');
+  console.error('MindKeeper MCP server started');
   console.error(`Loaded ${index.units.length} knowledge units from index`);
 }
 

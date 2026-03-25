@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "zhiji": {
+      "command": "node",
+      "args": ["/Users/xin/auto-skills/CtriXin-repo/zhiji/dist/server.js"]
+    }
+  }
+}
