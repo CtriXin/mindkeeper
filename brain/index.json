@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "updated": "2026-03-25T08:09:46.662Z",
+  "units": [
+    {
+      "id": "example-tauri-ipc",
+      "triggers": [
+        "tauri",
+        "ipc",
+        "invoke",
+        "序列化",
+        "serialization",
+        "BigInt"
+      ],
+      "summary": "Tauri IPC 不能直接传 BigInt，需要转 string",
+      "project": "mms",
+      "created": "2026-03-25T00:00:00.000Z",
+      "accessCount": 1,
+      "confidence": 0.95,
+      "lastAccessed": "2026-03-25T08:09:46.661Z"
+    }
+  ]
+}
