@@ -1,4 +1,4 @@
-# zhiji (知己)
+# MindKeeper
 
 > **"One who truly knows you"**
 
@@ -6,9 +6,9 @@ Personal Cognitive Substrate — 跨 AI、跨设备的持续认知底座
 
 ---
 
-## What is zhiji?
+## What is MindKeeper?
 
-zhiji 不是另一个 memory plugin，而是一个 **Learning OS**：
+MindKeeper 不是另一个 memory plugin，而是一个 **Learning OS**：
 
 - **SCE** (Symbiotic Cognitive Entity) — 对外叙事，你的 AI 伙伴
 - **PCS** (Personal Cognitive Substrate) — 对内实现，持续演化的认知底座
@@ -16,7 +16,7 @@ zhiji 不是另一个 memory plugin，而是一个 **Learning OS**：
 ```
 传统 AI：  Session → Forget → Session → Forget
 Memory 插件：Session → Store → Recall → Session
-zhiji：   Session → Evolve → Cross-AI → Multi-Surface → 持续成长
+MindKeeper： Session → Evolve → Cross-AI → Multi-Surface → 持续成长
 ```
 
 ## Core Concepts
@@ -128,4 +128,4 @@ MIT
 
 ---
 
-*zhiji (知己) — 真正懂你的 AI*
+*MindKeeper — 真正懂你的 AI*

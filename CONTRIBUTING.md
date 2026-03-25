@@ -1,8 +1,8 @@
-# Contributing to zhiji
+# Contributing to MindKeeper
 
 ## 贡献方式
 
-zhiji 是开源项目，欢迎贡献！但为了保持项目质量和方向一致性，**所有贡献必须通过 Pull Request**。
+MindKeeper 是开源项目，欢迎贡献！但为了保持项目质量和方向一致性，**所有贡献必须通过 Pull Request**。
 
 ## PR 流程
 
@@ -53,4 +53,4 @@ chore: 杂项
 
 ---
 
-*zhiji — 知己，真正懂你的 AI*
+*MindKeeper — 真正懂你的 AI*

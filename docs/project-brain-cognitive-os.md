@@ -371,10 +371,10 @@ Interfaces
 event:
   id: event.commit.abc123
   kind: commit
-  project: agents-brain
+  project: mindkeeper
   occurred_at: 2026-03-25T10:00:00+08:00
   actor: xin
-  artifact_ref: repo://agents-brain
+  artifact_ref: repo://mindkeeper
   summary: add initial Project Brain architecture doc
   payload:
     files_changed:
@@ -582,10 +582,10 @@ reflection:
 
 ## 10. 推荐的仓库落地结构
 
-建议 `agents-brain` 仓库从一开始就分清“源数据、认知数据、视图、运行时”。
+建议 `mindkeeper` 仓库从一开始就分清“源数据、认知数据、视图、运行时”。
 
 ```text
-agents-brain/
+mindkeeper/
   README.md
   docs/
     project-brain-cognitive-os.md

@@ -29,7 +29,7 @@ document retrieval → belief-driven context compilation
 ### 2.1 当前 MVP 做了什么
 
 ```
-agents-brain/
+mindkeeper/
 ├── brain/
 │   ├── index.json      # 极简索引（<1KB，启动时唯一加载）
 │   └── units/*.md      # 知识单元（按需读取）
@@ -106,7 +106,7 @@ git log --since="30 days ago" --oneline brain/units/
 - 渲染时自动执行，发现过期知识
 - 可导出 HTML/PDF/Markdown
 
-**用在 agents-brain：**
+**用在 MindKeeper：**
 - `brain/units/*.qmd` 替代 `*.md`
 - 每个知识单元可以带验证脚本
 - CI 定期渲染，发现失效知识

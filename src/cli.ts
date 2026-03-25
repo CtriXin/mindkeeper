@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * agents-brain CLI
+ * MindKeeper CLI
  *
  * 人类友好的命令行界面
  *
@@ -24,22 +24,22 @@ const command = args[0];
 
 function printHelp() {
   console.log(`
-agents-brain CLI - 你的 AI 认知图书馆
+MindKeeper CLI - 你的 AI 认知图书馆
 
 用法:
-  brain list [--project=xxx]   列出所有知识
-  brain search <query>         搜索知识
-  brain show <id>              显示完整内容
-  brain add                    交互式添加知识
-  brain rm <id>                删除知识
-  brain stats                  统计信息
-  brain export [--format=md]   导出知识库
-  brain rebuild                从文件重建索引
+  mindkeeper list [--project=xxx]   列出所有知识
+  mindkeeper search <query>         搜索知识
+  mindkeeper show <id>              显示完整内容
+  mindkeeper add                    交互式添加知识
+  mindkeeper rm <id>                删除知识
+  mindkeeper stats                  统计信息
+  mindkeeper export [--format=md]   导出知识库
+  mindkeeper rebuild                从文件重建索引
 
 示例:
-  brain search "provider routing"
-  brain show tauri-ipc
-  brain list --project=mms
+  mindkeeper search "provider routing"
+  mindkeeper show tauri-ipc
+  mindkeeper list --project=mms
 `);
 }
 
@@ -201,7 +201,7 @@ async function main() {
       const projects = new Set(units.map(u => u.project).filter(Boolean));
       const totalAccess = units.reduce((sum, u) => sum + u.accessCount, 0);
 
-      console.log(`\nagents-brain 统计\n`);
+      console.log(`\nMindKeeper 统计\n`);
       console.log(`  知识总数: ${units.length}`);
       console.log(`  涉及项目: ${projects.size}`);
       console.log(`  总访问次数: ${totalAccess}`);
@@ -220,7 +220,7 @@ async function main() {
     }
 
     case 'export': {
-      console.log('# agents-brain 知识库导出\n');
+      console.log('# MindKeeper 知识库导出\n');
       console.log(`导出时间: ${new Date().toISOString()}\n`);
 
       for (const meta of index.units) {
