@@ -4,6 +4,13 @@ node_modules/
 
 # 运行时数据（不需要版本控制）
 .data/
+brain/
+
+# 本地 MCP 配置（含绝对路径）
+.mcp.json
+
+# Claude Code 项目配置
+.claude/
 
 # IDE
 .vscode/
