@@ -2,6 +2,10 @@
 
 > MindKeeper 的核心闭环：bootstrap 读 → 工作 → distill 写 → bootstrap 读
 
+> 当前状态（2026-03-26）：
+> 已实现 `brain_checkpoint`、`brain_bootstrap`、`brain_deep_context`，并支持 `thread id` 精确续接。
+> `/distill` skill、parent 链多层回溯、过期清理仍是后续项，不应按已交付能力使用。
+
 ## 要解决的问题
 
 1. **Token 爆炸** — session 越聊越长，每次请求带着全部历史，成本高、速度慢

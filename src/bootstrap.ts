@@ -18,8 +18,9 @@ import { homedir } from 'os';
 import { loadIndex } from './storage.js';
 import { search } from './router.js';
 import { listProcedures } from './procedure.js';
+import { getRealHome } from './env.js';
 
-const SCE_DIR = join(homedir(), '.sce');
+const SCE_DIR = join(getRealHome(), '.sce');
 
 // ── 类型 ──
 
@@ -53,6 +54,7 @@ export interface WorkingSet {
 export interface BootstrapInput {
   task: string;
   repo?: string;
+  thread?: string;
 }
 
 export interface ThreadSummary {
@@ -62,6 +64,7 @@ export interface ThreadSummary {
   status: string;
   path: string;
   createdAtMs: number;
+  branch?: string;
   parent?: string;
   ttl?: string;
 }
@@ -78,7 +81,7 @@ function git(cmd: string, cwd: string): string {
 }
 
 function readGitContext(repo: string): GitContext {
-  const branch = git('branch --show-current', repo) || git('rev-parse --short HEAD', repo) || 'unknown';
+  const branch = getCurrentBranch(repo);
 
   // uncommitted files (staged + unstaged + untracked)
   const statusRaw = git('status --porcelain', repo);
@@ -96,6 +99,10 @@ function readGitContext(repo: string): GitContext {
     recentCommits,
     hasUncommitted: uncommittedFiles.length > 0,
   };
+}
+
+function getCurrentBranch(repo: string): string {
+  return git('branch --show-current', repo) || git('rev-parse --short HEAD', repo) || 'unknown';
 }
 
 // ── 任务分类 ──
@@ -279,6 +286,7 @@ interface ThreadMeta {
   id?: string;
   repo?: string;
   task?: string;
+  branch?: string;
   parent?: string;
   ttl?: string;
   created?: string;
@@ -328,9 +336,33 @@ function resolveThreadCreatedAt(meta: ThreadMeta, fallbackMs: number): number {
   return Number.isFinite(createdAt) ? createdAt : fallbackMs;
 }
 
-export function listRecentThreads(repo?: string, limit: number = 2): ThreadSummary[] {
-  if (!repo) return [];
+function parseThreadFile(path: string, now: number): (ThreadSummary & { expired: boolean }) | undefined {
+  try {
+    const content = readFileSync(path, 'utf-8');
+    const mtime = statSync(path).mtime.getTime();
+    const meta = parseThreadFrontmatter(content);
+    const createdAtMs = resolveThreadCreatedAt(meta, mtime);
+    const ttlMs = parseTtl(meta.ttl || '7d');
 
+    return {
+      id: meta.id || basename(path, '.md'),
+      repo: meta.repo || '',
+      task: meta.task || basename(path, '.md'),
+      status: extractThreadStatus(content),
+      path,
+      createdAtMs,
+      branch: meta.branch,
+      parent: meta.parent,
+      ttl: meta.ttl,
+      expired: now - createdAtMs > ttlMs,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** 按 repo 过滤 thread；repo 为空时返回所有 */
+export function listRecentThreads(repo?: string, limit: number = 2): ThreadSummary[] {
   const threadsDir = join(SCE_DIR, 'threads');
   if (!existsSync(threadsDir)) return [];
 
@@ -339,33 +371,110 @@ export function listRecentThreads(repo?: string, limit: number = 2): ThreadSumma
 
     return readdirSync(threadsDir)
       .filter(f => f.endsWith('.md'))
-      .map(f => {
-        const path = join(threadsDir, f);
-        const content = readFileSync(path, 'utf-8');
-        const mtime = statSync(path).mtime.getTime();
-        const meta = parseThreadFrontmatter(content);
-        const createdAtMs = resolveThreadCreatedAt(meta, mtime);
-        const ttlMs = parseTtl(meta.ttl || '7d');
-
-        return {
-          id: meta.id || f,
-          repo: meta.repo || '',
-          task: meta.task || f,
-          status: extractThreadStatus(content),
-          path,
-          createdAtMs,
-          parent: meta.parent,
-          ttl: meta.ttl,
-          expired: now - createdAtMs > ttlMs,
-        };
-      })
-      .filter(t => t.repo === repo && !t.expired)
+      .map(f => parseThreadFile(join(threadsDir, f), now))
+      .filter((thread): thread is ThreadSummary & { expired: boolean } => Boolean(thread))
+      .filter(t => !t.expired && (!repo || t.repo === repo))
       .sort((a, b) => b.createdAtMs - a.createdAtMs)
       .slice(0, limit)
       .map(({ expired: _expired, ...thread }) => thread);
   } catch {
     return [];
   }
+}
+
+function normalizeTaskText(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function extractTaskKeywords(text: string): string[] {
+  const matches = normalizeTaskText(text).match(/[a-z0-9]+|[\u4e00-\u9fff]{2,}/g) || [];
+  return [...new Set(matches.filter(token => token.length >= 2))];
+}
+
+function isGenericResumeTask(task: string): boolean {
+  const normalized = normalizeTaskText(task);
+  return /^(继续|继续上次|接着|接着来|恢复|resume|continue)$/.test(normalized);
+}
+
+function scoreTaskSimilarity(task: string, candidate: string): number {
+  const a = normalizeTaskText(task);
+  const b = normalizeTaskText(candidate);
+  if (!a || !b) return 0;
+
+  let score = 0;
+  if (a === b) score += 10;
+  if (a.includes(b) || b.includes(a)) score += 6;
+
+  const aKeywords = extractTaskKeywords(a);
+  const bKeywords = extractTaskKeywords(b);
+  const shared = aKeywords.filter(token => bKeywords.includes(token));
+  score += shared.length * 3;
+
+  return score;
+}
+
+export function getThreadById(repo: string, threadId: string): ThreadSummary | undefined {
+  const threadsDir = join(SCE_DIR, 'threads');
+  if (!existsSync(threadsDir)) return undefined;
+
+  const now = Date.now();
+  const exactPath = join(threadsDir, `${threadId}.md`);
+  const exact = parseThreadFile(exactPath, now);
+  if (exact && exact.repo === repo) {
+    const { expired: _expired, ...thread } = exact;
+    return thread;
+  }
+
+  try {
+    for (const file of readdirSync(threadsDir)) {
+      if (!file.endsWith('.md') || file === `${threadId}.md`) continue;
+      const parsed = parseThreadFile(join(threadsDir, file), now);
+      if (parsed && parsed.id === threadId && parsed.repo === repo) {
+        const { expired: _expired, ...thread } = parsed;
+        return thread;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+export function findBestThread(
+  repo: string,
+  task: string,
+  options?: { branch?: string; minScore?: number },
+): ThreadSummary | undefined {
+  const minScore = options?.minScore ?? 4;
+  const candidates = listRecentThreads(repo, 50)
+    .map(thread => ({
+      thread,
+      score:
+        scoreTaskSimilarity(task, thread.task) +
+        (options?.branch && thread.branch === options.branch ? 2 : 0),
+    }))
+    .filter(item => item.score >= minScore)
+    .sort((a, b) => b.score - a.score || b.thread.createdAtMs - a.thread.createdAtMs);
+
+  return candidates[0]?.thread;
+}
+
+function resolveTargetThread(input: BootstrapInput, options?: { branch?: string }): ThreadSummary | undefined {
+  if (!input.repo) return undefined;
+
+  const requestedThread = input.thread || input.task.match(/dst-\d{8}-\w+/)?.[0];
+  if (requestedThread) {
+    return getThreadById(input.repo, requestedThread);
+  }
+
+  if (isGenericResumeTask(input.task)) {
+    return listRecentThreads(input.repo, 1)[0];
+  }
+
+  return findBestThread(input.repo, input.task, {
+    branch: options?.branch || getCurrentBranch(input.repo),
+  });
 }
 
 // ── 连续性恢复（TODO, plan, thread） ──
@@ -491,7 +600,111 @@ function generateNextAction(taskType: TaskType, task: string, gitCtx: GitContext
   }
 }
 
-// ── 核心函数 ──
+// ── 轻量启动（<100ms，只读 thread + 一句 next action） ──
+
+export interface QuickResume {
+  task: string;
+  /** 主 thread（最近的或指定的） */
+  activeThread?: {
+    id: string;
+    repo: string;
+    task: string;
+    status: string;
+    nextSteps: string[];
+    decisions: string[];
+  };
+  /** 其他可恢复的 thread */
+  otherThreads: { id: string; repo: string; task: string; status: string }[];
+}
+
+function extractThreadSection(content: string, header: string): string[] {
+  const lines = content.split('\n');
+  const idx = lines.findIndex(l => l.startsWith(`## ${header}`));
+  if (idx < 0) return [];
+  const items: string[] = [];
+  for (let i = idx + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.startsWith('## ')) break;
+    if (line.startsWith('- ')) items.push(line.slice(2).replace(/^\[\s*[xX ]?\]\s*/, ''));
+  }
+  return items;
+}
+
+function loadThreadDetails(t: ThreadSummary): { nextSteps: string[]; decisions: string[] } {
+  try {
+    const content = readFileSync(t.path, 'utf-8');
+    return {
+      nextSteps: extractThreadSection(content, '待续'),
+      decisions: extractThreadSection(content, '决策').slice(0, 3),
+    };
+  } catch {
+    return { nextSteps: [], decisions: [] };
+  }
+}
+
+export function bootstrapQuick(input: BootstrapInput): QuickResume {
+  const threads = listRecentThreads(input.repo, 5);
+
+  if (threads.length === 0) {
+    return { task: input.task, otherThreads: [] };
+  }
+
+  const target = resolveTargetThread(input);
+  if (!target) {
+    return { task: input.task, otherThreads: [] };
+  }
+
+  const details = loadThreadDetails(target);
+
+  return {
+    task: input.task,
+    activeThread: {
+      id: target.id,
+      repo: target.repo,
+      task: target.task,
+      status: target.status || '进行中',
+      nextSteps: details.nextSteps,
+      decisions: details.decisions,
+    },
+    otherThreads: threads
+      .filter(t => t.id !== target.id)
+      .map(t => ({ id: t.id, repo: t.repo, task: t.task, status: t.status || '' })),
+  };
+}
+
+export function formatQuickResume(qr: QuickResume): string {
+  if (!qr.activeThread) {
+    return `> **任务**: ${qr.task}\n\n新任务，直接开始。`;
+  }
+
+  const t = qr.activeThread;
+  const repoName = t.repo.split('/').pop() || t.repo;
+  let text = `> **恢复**: ${t.task} (${repoName})\n`;
+  text += `> **状态**: ${t.status}\n`;
+
+  if (t.nextSteps.length > 0) {
+    text += `\n**待续**:\n`;
+    t.nextSteps.forEach(s => text += `- ${s}\n`);
+  }
+
+  if (t.decisions.length > 0) {
+    text += `\n**关键决策**:\n`;
+    t.decisions.forEach(d => text += `- ${d}\n`);
+  }
+
+  // 同 repo 有其他 thread
+  if (qr.otherThreads.length > 0) {
+    text += `\n**同项目其他进度**（说 \`继续 <id>\` 切换）:\n`;
+    qr.otherThreads.forEach(o => {
+      const oRepo = o.repo.split('/').pop() || o.repo;
+      text += `- \`${o.id}\` (${oRepo}): ${o.task}${o.status ? ' — ' + o.status : ''}\n`;
+    });
+  }
+
+  return text;
+}
+
+// ── 深度上下文（按需调用，含 git/policies/files/knowledge） ──
 
 export function bootstrap(input: BootstrapInput): WorkingSet {
   const repo = input.repo;
@@ -501,6 +714,7 @@ export function bootstrap(input: BootstrapInput): WorkingSet {
   const gitCtx = repo ? readGitContext(repo) : {
     branch: 'unknown', uncommittedFiles: [], recentCommits: [], hasUncommitted: false,
   };
+  const targetThread = resolveTargetThread(input, { branch: gitCtx.branch });
 
   // 项目规则
   const policies = loadProjectPolicies(repo);
@@ -510,6 +724,9 @@ export function bootstrap(input: BootstrapInput): WorkingSet {
 
   // 连续性
   const continuity = loadContinuity(repo);
+  if (targetThread) {
+    continuity.unshift(`🧵 当前恢复目标: ${targetThread.id}: ${targetThread.task}${targetThread.status ? ' — ' + targetThread.status : ''}`.slice(0, 120));
+  }
 
   // 文件推荐
   const files = recommendFiles(input.task, taskType, gitCtx, repo);
