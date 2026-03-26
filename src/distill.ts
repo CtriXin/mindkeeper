@@ -174,11 +174,10 @@ export function checkpoint(input: DistillInput): DistillResult {
 
 export function formatDistillReceipt(result: DistillResult): string {
   const { threadId, parent, stats } = result;
-  let text = `💾 **已蒸馏** — \`${threadId}\`\n\n`;
+  let text = `已蒸馏 — ${stats.decisions}决策 ${stats.changes}变更 ${stats.findings}发现 ${stats.next}待续`;
   if (parent) {
-    text += `🔗 链接到上一个: \`${parent}\`\n`;
+    text += ` (链接: ${parent})`;
   }
-  text += `📊 ${stats.decisions} 条决策 | ${stats.changes} 个文件变更 | ${stats.findings} 个发现 | ${stats.next} 项待续\n\n`;
-  text += `\n下次恢复：发送 \`${threadId}\``;
+  text += `\n\n**恢复口令: \`${threadId}\`**`;
   return text;
 }

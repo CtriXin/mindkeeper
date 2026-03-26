@@ -11,7 +11,7 @@
  * 7. 更具体的 next action（不是泛文案）
  */
 
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, basename, relative } from 'path';
 import { execSync } from 'child_process';
 import { homedir } from 'os';
@@ -67,6 +67,7 @@ export interface ThreadSummary {
   branch?: string;
   parent?: string;
   ttl?: string;
+  resumed?: string;
 }
 
 // ── Git 上下文 ──
@@ -290,6 +291,7 @@ interface ThreadMeta {
   parent?: string;
   ttl?: string;
   created?: string;
+  resumed?: string;
 }
 
 function parseThreadFrontmatter(content: string): ThreadMeta {
@@ -354,11 +356,39 @@ function parseThreadFile(path: string, now: number): (ThreadSummary & { expired:
       branch: meta.branch,
       parent: meta.parent,
       ttl: meta.ttl,
+      resumed: meta.resumed,
       expired: now - createdAtMs > ttlMs,
     };
   } catch {
     return undefined;
   }
+}
+
+/** 标记 thread 已恢复：在 frontmatter 中插入 resumed 行 */
+function markThreadResumed(thread: ThreadSummary): void {
+  try {
+    const content = readFileSync(thread.path, 'utf-8');
+    if (content.includes('\nresumed:')) return; // 已标记
+    const timestamp = new Date().toISOString();
+    // 在 --- 结束行前插入 resumed
+    const updated = content.replace(/^(---\n)/, `$1resumed: ${timestamp}\n`);
+    if (updated !== content) {
+      // 插在第二个 --- 前
+      const lines = content.split('\n');
+      const result: string[] = [];
+      let fmCount = 0;
+      for (const line of lines) {
+        if (line === '---') {
+          fmCount++;
+          if (fmCount === 2) {
+            result.push(`resumed: ${timestamp}`);
+          }
+        }
+        result.push(line);
+      }
+      writeFileSync(thread.path, result.join('\n'), 'utf-8');
+    }
+  } catch { /* 静默失败 */ }
 }
 
 /** 按 repo 过滤 thread；repo 为空时返回所有 */
@@ -373,7 +403,7 @@ export function listRecentThreads(repo?: string, limit: number = 2): ThreadSumma
       .filter(f => f.endsWith('.md'))
       .map(f => parseThreadFile(join(threadsDir, f), now))
       .filter((thread): thread is ThreadSummary & { expired: boolean } => Boolean(thread))
-      .filter(t => !t.expired && (!repo || t.repo === repo))
+      .filter(t => !t.expired && !t.resumed && (!repo || t.repo === repo))
       .sort((a, b) => b.createdAtMs - a.createdAtMs)
       .slice(0, limit)
       .map(({ expired: _expired, ...thread }) => thread);
@@ -653,6 +683,9 @@ export function bootstrapQuick(input: BootstrapInput): QuickResume {
   if (!target) {
     return { task: input.task, otherThreads: [] };
   }
+
+  // 标记已恢复，sce-ls 不再显示
+  markThreadResumed(target);
 
   const details = loadThreadDetails(target);
 
