@@ -11,9 +11,9 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { homedir } from 'os';
+import { getRealHome } from './env.js';
 
-const SCE_DIR = join(homedir(), '.sce');
+const SCE_DIR = join(getRealHome(), '.sce');
 const HIGHLIGHTS_PATH = join(SCE_DIR, 'highlights', 'HIGHLIGHTS.md');
 
 /** Pin 触发词正则 */

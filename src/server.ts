@@ -22,7 +22,8 @@ import { search, recall, findRelated } from './router.js';
 import { isPinRequest, pin, pinDirect, loadHighlights } from './pin.js';
 import { listProcedures, loadProcedure, parseProcedure, planExecution, formatStepPrompt } from './procedure.js';
 import { guide, getContextState } from './guide.js';
-import { bootstrap, formatWorkingSet } from './bootstrap.js';
+import { bootstrapQuick, formatQuickResume, bootstrap, formatWorkingSet, getThreadById } from './bootstrap.js';
+import { checkpoint, formatDistillReceipt } from './distill.js';
 import type { BrainIndex, Unit } from './types.js';
 import type { ExecutionContext } from './procedure.js';
 
@@ -216,14 +217,59 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'brain_bootstrap',
-      description: '任务启动入口。输入 repo + task，输出完整的 Working Set：规则、风险、文件推荐、连续性恢复、procedure、下一步。v2 自动读取 Git 上下文和项目规则。',
+      description: '轻量启动入口（<100ms）。只读最近 thread 和一句 next action。每次 session 开始自动调用。需要深度上下文时改用 brain_deep_context。',
       inputSchema: {
         type: 'object',
         properties: {
           task: { type: 'string', description: '当前任务描述' },
-          repo: { type: 'string', description: '当前仓库路径（自动读取 Git 和项目规则）' },
+          repo: { type: 'string', description: '当前仓库路径' },
+          thread: { type: 'string', description: '指定恢复的 thread id（如 dst-20260326-xxxxxx）' },
         },
         required: ['task', 'repo'],
+      },
+    },
+    {
+      name: 'brain_deep_context',
+      description: '深度上下文加载。包含 Git 状态、项目规则、风险、文件推荐、知识检索、Procedure 推荐。按需调用，不要在 session 启动时自动调用。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          task: { type: 'string', description: '当前任务描述' },
+          repo: { type: 'string', description: '当前仓库路径' },
+          thread: { type: 'string', description: '指定加载的 thread id（如 dst-20260326-xxxxxx）' },
+        },
+        required: ['task', 'repo'],
+      },
+    },
+    {
+      name: 'brain_checkpoint',
+      description: '蒸馏当前工作状态，写入 thread 文件。用于保存工作进度，支持跨 session 恢复。distill 后可继续工作，也可 /clear 后自动恢复。',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: '当前仓库路径' },
+          task: { type: 'string', description: '当前任务描述' },
+          branch: { type: 'string', description: '当前分支' },
+          parent: { type: 'string', description: '显式指定 parent thread id，避免并行任务串线' },
+          decisions: {
+            type: 'array', items: { type: 'string' },
+            description: '做了什么决策（不超过 5 条）',
+          },
+          changes: {
+            type: 'array', items: { type: 'string' },
+            description: '改了哪些文件（文件路径 + 摘要）',
+          },
+          findings: {
+            type: 'array', items: { type: 'string' },
+            description: '过程中的发现和踩坑',
+          },
+          next: {
+            type: 'array', items: { type: 'string' },
+            description: '还没做完的、下一步要做的',
+          },
+          status: { type: 'string', description: '一句话总结当前状态' },
+        },
+        required: ['repo', 'task', 'status'],
       },
     },
   ],
@@ -499,7 +545,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'brain_bootstrap': {
         if (!args.repo) {
           return {
-            content: [{ type: 'text', text: 'brain_bootstrap 需要 repo 路径，用于读取 Git 上下文和按项目恢复 thread continuity。' }],
+            content: [{ type: 'text', text: 'brain_bootstrap 需要 repo 路径。' }],
+            isError: true,
+          };
+        }
+
+        if (args.thread && !getThreadById(String(args.repo), String(args.thread))) {
+          return {
+            content: [{ type: 'text', text: `thread 不存在或不属于当前 repo: ${String(args.thread)}` }],
+            isError: true,
+          };
+        }
+
+        const qr = bootstrapQuick({
+          task: String(args.task),
+          repo: String(args.repo),
+          thread: args.thread ? String(args.thread) : undefined,
+        });
+
+        const text = formatQuickResume(qr);
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'brain_deep_context': {
+        if (!args.repo) {
+          return {
+            content: [{ type: 'text', text: 'brain_deep_context 需要 repo 路径。' }],
+            isError: true,
+          };
+        }
+
+        if (args.thread && !getThreadById(String(args.repo), String(args.thread))) {
+          return {
+            content: [{ type: 'text', text: `thread 不存在或不属于当前 repo: ${String(args.thread)}` }],
             isError: true,
           };
         }
@@ -507,10 +585,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const ws = bootstrap({
           task: String(args.task),
           repo: String(args.repo),
+          thread: args.thread ? String(args.thread) : undefined,
         });
 
         const text = formatWorkingSet(ws);
         return { content: [{ type: 'text', text }] };
+      }
+
+      case 'brain_checkpoint': {
+        if (!args.repo || !args.task || !args.status) {
+          return {
+            content: [{ type: 'text', text: 'brain_checkpoint 需要 repo、task、status。' }],
+            isError: true,
+          };
+        }
+
+        const result = checkpoint({
+          repo: String(args.repo),
+          task: String(args.task),
+          branch: args.branch ? String(args.branch) : undefined,
+          parent: args.parent ? String(args.parent) : undefined,
+          decisions: (args.decisions as string[]) || [],
+          changes: (args.changes as string[]) || [],
+          findings: (args.findings as string[]) || [],
+          next: (args.next as string[]) || [],
+          status: String(args.status),
+        });
+
+        return { content: [{ type: 'text', text: formatDistillReceipt(result) }] };
       }
 
       default:

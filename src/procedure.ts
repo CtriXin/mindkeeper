@@ -25,9 +25,9 @@
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { getRealHome } from './env.js';
 
-const SCE_DIR = join(homedir(), '.sce');
+const SCE_DIR = join(getRealHome(), '.sce');
 const PROCEDURES_DIR = join(SCE_DIR, 'procedures');
 
 /** 模型层级 */

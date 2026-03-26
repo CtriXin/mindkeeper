@@ -102,6 +102,9 @@ pnpm cli search "provider routing"
 
 | 工具 | 用途 |
 |------|------|
+| `brain_bootstrap` | 轻量恢复当前 repo 的 thread continuity |
+| `brain_deep_context` | 加载完整 working set、规则、风险、推荐文件 |
+| `brain_checkpoint` | 写入当前工作 checkpoint，供后续 session 恢复 |
 | `brain_search` | 语义检索 |
 | `brain_store` | 存入新知识 |
 | `brain_recall` | 根据上下文自动召回 |

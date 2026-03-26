@@ -15,11 +15,11 @@
 
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { listProcedures } from './procedure.js';
 import { listRecentThreads } from './bootstrap.js';
+import { getRealHome } from './env.js';
 
-const SCE_DIR = join(homedir(), '.sce');
+const SCE_DIR = join(getRealHome(), '.sce');
 
 /** 建议类型 */
 export type SuggestionType =
