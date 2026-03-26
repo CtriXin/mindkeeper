@@ -17,6 +17,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { listProcedures } from './procedure.js';
+import { listRecentThreads } from './bootstrap.js';
 
 const SCE_DIR = join(homedir(), '.sce');
 
@@ -72,25 +73,28 @@ function readSummary(path: string, maxLines: number = 10): string {
 }
 
 /** 获取上下文状态 */
-export function getContextState(): {
+export function getContextState(repo?: string): {
   recentObservations: string[];
   recentEvidence: string[];
   activeThreads: string[];
+  activeThreadPaths: string[];
   pendingBeliefs: string[];
   availableProcedures: string[];
 } {
+  const threads = listRecentThreads(repo, 3);
   return {
     recentObservations: getRecentFiles(join(SCE_DIR, 'observations')),
     recentEvidence: getRecentFiles(join(SCE_DIR, 'evidence')),
-    activeThreads: getRecentFiles(join(SCE_DIR, 'threads')),
+    activeThreads: threads.map(t => `${t.id}: ${t.task}${t.status ? ' — ' + t.status : ''}`),
+    activeThreadPaths: threads.map(t => t.path),
     pendingBeliefs: [], // TODO: 实现待确认的 belief 列表
     availableProcedures: listProcedures().map(p => p.name),
   };
 }
 
 /** 生成建议 */
-export function generateSuggestion(context?: string): Suggestion {
-  const state = getContextState();
+export function generateSuggestion(context?: string, repo?: string): Suggestion {
+  const state = getContextState(repo);
 
   // 优先级 1：有未完成的 thread
   if (state.activeThreads.length > 0) {
@@ -98,7 +102,7 @@ export function generateSuggestion(context?: string): Suggestion {
       type: 'continue_thread',
       title: '继续未完成的 Thread',
       reason: `你有 ${state.activeThreads.length} 个未完成的 thread，最近的是 ${state.activeThreads[0]}`,
-      action: `查看 ~/.sce/threads/${state.activeThreads[0]}`,
+      action: state.activeThreadPaths[0] ? `查看 ${state.activeThreadPaths[0]}` : undefined,
       priority: 'high',
     };
   }
@@ -166,7 +170,7 @@ export function formatSuggestion(suggestion: Suggestion): string {
 }
 
 /** 快捷方法：获取下一步建议 */
-export function guide(context?: string): string {
-  const suggestion = generateSuggestion(context);
+export function guide(context?: string, repo?: string): string {
+  const suggestion = generateSuggestion(context, repo);
   return formatSuggestion(suggestion);
 }

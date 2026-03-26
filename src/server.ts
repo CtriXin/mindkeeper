@@ -200,6 +200,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: 'object',
         properties: {
           context: { type: 'string', description: '当前上下文（可选，用于更精准的建议）' },
+          repo: { type: 'string', description: '当前仓库路径（用于按 repo 过滤 thread continuity）' },
         },
       },
     },
@@ -208,7 +209,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description: '查看 MindKeeper 的当前状态：observations、evidence、threads 等。',
       inputSchema: {
         type: 'object',
-        properties: {},
+        properties: {
+          repo: { type: 'string', description: '当前仓库路径（用于按 repo 过滤 thread continuity）' },
+        },
       },
     },
     {
@@ -220,7 +223,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           task: { type: 'string', description: '当前任务描述' },
           repo: { type: 'string', description: '当前仓库路径（自动读取 Git 和项目规则）' },
         },
-        required: ['task'],
+        required: ['task', 'repo'],
       },
     },
   ],
@@ -466,12 +469,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'brain_guide': {
         const contextStr = args.context ? String(args.context) : undefined;
-        const suggestion = guide(contextStr);
+        const repo = args.repo ? String(args.repo) : undefined;
+        const suggestion = guide(contextStr, repo);
         return { content: [{ type: 'text', text: `## MindKeeper，下一步？\n\n${suggestion}` }] };
       }
 
       case 'brain_status': {
-        const state = getContextState();
+        const repo = args.repo ? String(args.repo) : undefined;
+        const state = getContextState(repo);
         let text = `## MindKeeper 状态\n\n`;
         text += `- **Observations**: ${state.recentObservations.length} 条最近\n`;
         text += `- **Evidence**: ${state.recentEvidence.length} 条最近\n`;
@@ -492,9 +497,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'brain_bootstrap': {
+        if (!args.repo) {
+          return {
+            content: [{ type: 'text', text: 'brain_bootstrap 需要 repo 路径，用于读取 Git 上下文和按项目恢复 thread continuity。' }],
+            isError: true,
+          };
+        }
+
         const ws = bootstrap({
           task: String(args.task),
-          repo: args.repo ? String(args.repo) : undefined,
+          repo: String(args.repo),
         });
 
         const text = formatWorkingSet(ws);
