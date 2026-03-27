@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# sce — MindKeeper CLI
+# dst — MindKeeper CLI (distill threads)
 #
 # 用法:
-#   sce                      列出 pending threads（等同 sce ls）
-#   sce ls [目录路径]         列出 pending threads
-#   sce show <id>            展开查看完整内容
-#   sce rm <id>              删除 thread
-#   sce archive <id>         归档（标记 resumed，列表不再显示）
+#   dst                      列出 pending threads（等同 dst ls）
+#   dst ls [目录路径]         列出 pending threads
+#   dst show <id>            展开查看完整内容
+#   dst rm <id>              删除 thread
+#   dst archive <id>         归档（标记 resumed，列表不再显示）
 
 set -euo pipefail
 export LC_ALL=en_US.UTF-8
@@ -58,7 +58,7 @@ cmd_show() {
   ' "$file"
 
   echo ""
-  echo "操作: sce rm $id | sce archive $id"
+  echo "操作: dst rm $id | dst archive $id"
 }
 
 # ── 子命令: rm ──
@@ -160,7 +160,7 @@ cmd_ls() {
       }
       if (status != "") printf "    └ %s\n", status
     }
-    END { print "\n共 " total " 条 | sce show <id> 查看 | sce rm <id> 删除 | sce archive <id> 归档" }
+    END { print "\n共 " total " 条 | dst show <id> 查看 | dst rm <id> 删除 | dst archive <id> 归档" }
   '
 }
 
@@ -170,26 +170,26 @@ case "${1:-}" in
     cmd_ls "${2:-}"
     ;;
   show)
-    [ -z "${2:-}" ] && echo "用法: sce show <thread-id>" && exit 1
+    [ -z "${2:-}" ] && echo "用法: dst show <thread-id>" && exit 1
     cmd_show "$2"
     ;;
   rm)
-    [ -z "${2:-}" ] && echo "用法: sce rm <thread-id>" && exit 1
+    [ -z "${2:-}" ] && echo "用法: dst rm <thread-id>" && exit 1
     cmd_rm "$2"
     ;;
   archive)
-    [ -z "${2:-}" ] && echo "用法: sce archive <thread-id>" && exit 1
+    [ -z "${2:-}" ] && echo "用法: dst archive <thread-id>" && exit 1
     cmd_archive "$2"
     ;;
   help|-h|--help)
-    echo "sce — MindKeeper CLI"
+    echo "dst — MindKeeper distill CLI"
     echo ""
     echo "用法:"
-    echo "  sce                  列出 pending threads"
-    echo "  sce ls [目录]        列出 pending threads"
-    echo "  sce show <id>        展开查看完整内容"
-    echo "  sce rm <id>          删除 thread"
-    echo "  sce archive <id>     归档（列表不再显示）"
+    echo "  dst                  列出 pending threads"
+    echo "  dst ls [目录]        列出 pending threads"
+    echo "  dst show <id>        展开查看完整内容"
+    echo "  dst rm <id>          删除 thread"
+    echo "  dst archive <id>     归档（列表不再显示）"
     ;;
   *)
     cmd_ls "${1:-}"
