@@ -8,7 +8,7 @@
  * 4. 未来可插入 embedding 增强
  */
 
-import type { BrainIndex, UnitMeta, SearchResult, Unit } from './types.js';
+import type { BrainIndex, UnitMeta, SearchResult } from './types.js';
 import { loadUnit, touchUnit } from './storage.js';
 
 /** 同义词映射（可扩展） */
@@ -123,67 +123,3 @@ export function search(
   return results.slice(0, limit);
 }
 
-/** 根据上下文自动召回（更智能的检索） */
-export function recall(
-  index: BrainIndex,
-  context: {
-    project?: string;
-    files?: string[];
-    errors?: string[];
-    recentQueries?: string[];
-  },
-  limit: number = 3
-): SearchResult[] {
-  const queryParts: string[] = [];
-
-  // 从项目名提取关键词
-  if (context.project) {
-    queryParts.push(context.project);
-  }
-
-  // 从文件名提取关键词
-  if (context.files) {
-    for (const file of context.files) {
-      // 提取文件名中的关键词
-      const name = file.split('/').pop()?.replace(/\.[^.]+$/, '') || '';
-      queryParts.push(...name.split(/[-_]/));
-    }
-  }
-
-  // 从错误信息提取关键词
-  if (context.errors) {
-    for (const error of context.errors) {
-      // 提取错误关键词
-      const keywords = error.match(/\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b/g) || [];
-      queryParts.push(...keywords.map(k => k.toLowerCase()));
-    }
-  }
-
-  // 最近查询
-  if (context.recentQueries) {
-    queryParts.push(...context.recentQueries);
-  }
-
-  if (queryParts.length === 0) return [];
-
-  // 去重并搜索
-  const query = [...new Set(queryParts)].join(' ');
-  return search(index, query, limit);
-}
-
-/** 查找相关单元 */
-export function findRelated(
-  index: BrainIndex,
-  unitId: string,
-  limit: number = 3
-): SearchResult[] {
-  const unit = loadUnit(unitId);
-  if (!unit) return [];
-
-  // 用当前单元的触发词搜索
-  const query = unit.triggers.join(' ');
-  const results = search(index, query, limit + 1);
-
-  // 排除自己
-  return results.filter(r => r.unit.id !== unitId).slice(0, limit);
-}
