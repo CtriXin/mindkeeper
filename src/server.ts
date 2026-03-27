@@ -12,7 +12,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { loadIndex, saveIndex, loadUnit, saveUnit, deleteUnit, metaFromUnit } from './storage.js';
+import { loadIndex, saveIndex, loadUnit, saveUnit, deleteUnit, metaFromUnit, touchUnits } from './storage.js';
 import { search } from './router.js';
 import { bootstrapQuick, formatQuickResume, getThreadById, listRecentThreads } from './bootstrap.js';
 import { checkpoint, formatDistillReceipt } from './distill.js';
@@ -168,6 +168,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (results.length === 0) {
           return { content: [{ type: 'text', text: '未找到相关知识。' }] };
         }
+        // 批量更新访问统计（一次写磁盘）
+        touchUnits(index, results.map(r => r.unit.id));
+
         const text = results.map((r, i) =>
           `## ${i + 1}. ${r.unit.summary} (score: ${r.score.toFixed(2)})\n\n` +
           `**触发词**: ${r.matchedTriggers.join(', ')}\n\n` +
@@ -244,6 +247,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         if (args.project) {
           units = units.filter(u => u.project === String(args.project));
+        }
+
+        if (args.tag) {
+          const tag = String(args.tag).toLowerCase();
+          units = units.filter(u => u.tags?.some(t => t.toLowerCase() === tag));
         }
 
         if (units.length === 0) {

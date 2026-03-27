@@ -9,7 +9,7 @@
  */
 
 import type { BrainIndex, UnitMeta, SearchResult } from './types.js';
-import { loadUnit, touchUnit } from './storage.js';
+import { loadUnit } from './storage.js';
 
 /** 同义词映射（可扩展） */
 const SYNONYMS: Record<string, string[]> = {
@@ -105,9 +105,6 @@ export function search(
       // 按需加载完整单元
       const unit = loadUnit(meta.id);
       if (unit) {
-        // 更新访问统计
-        touchUnit(index, meta.id);
-
         results.push({
           unit,
           score,
