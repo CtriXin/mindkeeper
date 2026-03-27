@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# sce-ls — 列出 / 查看 / 删除 / 归档 distill threads
+#
+# 用法:
+#   sce-ls [目录路径]         列出 pending threads
+#   sce-ls show <id>         展开查看完整内容
+#   sce-ls rm <id>           删除 thread
+#   sce-ls archive <id>      归档（标记 resumed，列表不再显示）
+
+set -euo pipefail
+export LC_ALL=en_US.UTF-8
+
+REAL_HOME="${ORIGINAL_HOME:-${REAL_HOME:-$(eval echo ~"$(whoami)")}}"
+THREADS_DIR="$REAL_HOME/.sce/threads"
+
+if [ ! -d "$THREADS_DIR" ]; then
+  echo "没有 thread。"
+  exit 0
+fi
+
+# ── 子命令: show ──
+cmd_show() {
+  local id="$1"
+  local file="$THREADS_DIR/${id}.md"
+  if [ ! -f "$file" ]; then
+    echo "thread 不存在: $id"
+    exit 1
+  fi
+
+  # 解析 frontmatter
+  awk '
+    BEGIN { in_fm=0; repo=""; task=""; created=""; branch=""; parent=""; resumed="" }
+    /^---$/ { if (!in_fm) { in_fm=1; next } else { in_fm=0; next } }
+    in_fm && /^repo:/ { sub(/^repo: */, ""); repo=$0 }
+    in_fm && /^task:/ { sub(/^task: */, ""); task=$0 }
+    in_fm && /^created:/ { sub(/^created: */, ""); created=$0 }
+    in_fm && /^branch:/ { sub(/^branch: */, ""); branch=$0 }
+    in_fm && /^parent:/ { sub(/^parent: */, ""); parent=$0 }
+    in_fm && /^resumed:/ { sub(/^resumed: */, ""); resumed=$0 }
+    END {
+      printf "╭─ %s\n", "'"$id"'"
+      printf "│ 任务: %s\n", task
+      printf "│ 仓库: %s\n", repo
+      if (branch != "") printf "│ 分支: %s\n", branch
+      if (parent != "") printf "│ 链接: %s\n", parent
+      printf "│ 创建: %s\n", created
+      if (resumed != "") printf "│ 已归档: %s\n", resumed
+      printf "╰─\n"
+    }
+  ' "$file"
+
+  # 输出 frontmatter 后的正文
+  awk '
+    BEGIN { fm_count=0 }
+    /^---$/ { fm_count++; next }
+    fm_count >= 2 { print }
+  ' "$file"
+
+  echo ""
+  echo "操作: sce-ls rm $id | sce-ls archive $id"
+}
+
+# ── 子命令: rm ──
+cmd_rm() {
+  local id="$1"
+  local file="$THREADS_DIR/${id}.md"
+  if [ ! -f "$file" ]; then
+    echo "thread 不存在: $id"
+    exit 1
+  fi
+  rm "$file"
+  echo "已删除: $id"
+}
+
+# ── 子命令: archive ──
+cmd_archive() {
+  local id="$1"
+  local file="$THREADS_DIR/${id}.md"
+  if [ ! -f "$file" ]; then
+    echo "thread 不存在: $id"
+    exit 1
+  fi
+
+  # 检查是否已归档
+  if grep -q '^resumed:' "$file"; then
+    echo "已归档: $id"
+    exit 0
+  fi
+
+  # 在第二个 --- 前插入 resumed 行
+  local timestamp
+  timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  awk -v ts="$timestamp" '
+    BEGIN { fm_count=0 }
+    /^---$/ {
+      fm_count++
+      if (fm_count == 2) print "resumed: " ts
+    }
+    { print }
+  ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+  echo "已归档: $id"
+}
+
+# ── 子命令: list（默认） ──
+cmd_list() {
+  local CWD="${1:-$(pwd)}"
+  local LIMIT=10
+  local TMPFILE
+  TMPFILE=$(mktemp)
+  trap 'rm -f "'"$TMPFILE"'"' EXIT
+
+  for f in "$THREADS_DIR"/dst-*.md; do
+    [ -f "$f" ] || continue
+    awk -v cwd="$CWD" -v home="$REAL_HOME" '
+      BEGIN { in_fm=0; repo=""; task=""; id=""; created=""; status=""; resumed="" }
+      /^---$/ { if (!in_fm) { in_fm=1; next } else { in_fm=0; next } }
+      in_fm && /^repo:/ { sub(/^repo: */, ""); repo=$0 }
+      in_fm && /^task:/ { sub(/^task: */, ""); task=$0 }
+      in_fm && /^id:/ { sub(/^id: */, ""); id=$0 }
+      in_fm && /^created:/ { sub(/^created: */, ""); created=$0 }
+      in_fm && /^resumed:/ { sub(/^resumed: */, ""); resumed=$0 }
+      /^## 当前状态/ { getline; status=$0 }
+      END {
+        if (id == "" || resumed != "") exit
+        split(created, d, "T"); sort_key = d[1]
+        is_local = 0
+        if (index(cwd, repo) == 1 || index(repo, cwd) == 1) is_local = 1
+        short_repo = repo
+        if (index(short_repo, home) == 1) short_repo = "~" substr(short_repo, length(home) + 1)
+        print is_local "\t" sort_key "\t" id "\t" task "\t" status "\t" short_repo
+      }
+    ' "$f"
+  done > "$TMPFILE"
+
+  local total
+  total=$(wc -l < "$TMPFILE" | tr -d ' ')
+
+  if [ "$total" -eq 0 ]; then
+    echo "没有 pending thread。"
+    exit 0
+  fi
+
+  sort -t$'\t' -k1,1rn -k2,2r "$TMPFILE" | head -n "$LIMIT" | \
+  awk -F'\t' -v home="$REAL_HOME" -v cwd="$CWD" '
+    BEGIN {
+      short_cwd = cwd
+      if (index(short_cwd, home) == 1) short_cwd = "~" substr(short_cwd, length(home) + 1)
+      prev_local = -1; total = 0
+    }
+    {
+      is_local = $1; id = $3; task = $4; status = $5; short_repo = $6
+      total++
+      if (is_local == 1 && prev_local != 1) { print "\n📂 " short_cwd; prev_local = 1 }
+      if (is_local == 0 && prev_local != 0) { if (prev_local == 1) print ""; print "📁 其他项目"; prev_local = 0 }
+      if (is_local == 1) {
+        printf "  %s  %s\n", id, task
+      } else {
+        printf "  %s  %s — %s\n", id, short_repo, task
+      }
+      if (status != "") printf "    └ %s\n", status
+    }
+    END { print "\n共 " total " 条 | show <id> 查看 | rm <id> 删除 | archive <id> 归档" }
+  '
+}
+
+# ── 路由 ──
+case "${1:-}" in
+  show)
+    [ -z "${2:-}" ] && echo "用法: sce-ls show <thread-id>" && exit 1
+    cmd_show "$2"
+    ;;
+  rm)
+    [ -z "${2:-}" ] && echo "用法: sce-ls rm <thread-id>" && exit 1
+    cmd_rm "$2"
+    ;;
+  archive)
+    [ -z "${2:-}" ] && echo "用法: sce-ls archive <thread-id>" && exit 1
+    cmd_archive "$2"
+    ;;
+  help|-h|--help)
+    echo "用法:"
+    echo "  sce-ls              列出 pending threads"
+    echo "  sce-ls show <id>    展开查看完整内容"
+    echo "  sce-ls rm <id>      删除 thread"
+    echo "  sce-ls archive <id> 归档（列表不再显示）"
+    ;;
+  *)
+    cmd_list "${1:-}"
+    ;;
+esac
