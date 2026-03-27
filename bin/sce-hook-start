@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# SessionStart hook: 输出 pending threads 作为 systemMessage
+set -euo pipefail
+export LC_ALL=en_US.UTF-8
+
+REAL_HOME="${ORIGINAL_HOME:-${REAL_HOME:-$(eval echo ~"$(whoami)")}}"
+THREADS_DIR="$REAL_HOME/.sce/threads"
+
+# 快速检查：没有 thread 文件就静默退出
+shopt -s nullglob
+files=("$THREADS_DIR"/dst-*.md)
+shopt -u nullglob
+[ ${#files[@]} -eq 0 ] && exit 0
+
+# 调用 sce ls 获取列表
+list=$(sce ls 2>/dev/null || true)
+[ -z "$list" ] && exit 0
+
+# 转义为 JSON string
+json_msg=$(printf '%s' "$list" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+
+echo "{\"systemMessage\": $json_msg}"

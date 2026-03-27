@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# sce-ls — 列出 / 查看 / 删除 / 归档 distill threads
+# sce — MindKeeper CLI
 #
 # 用法:
-#   sce-ls [目录路径]         列出 pending threads
-#   sce-ls show <id>         展开查看完整内容
-#   sce-ls rm <id>           删除 thread
-#   sce-ls archive <id>      归档（标记 resumed，列表不再显示）
+#   sce                      列出 pending threads（等同 sce ls）
+#   sce ls [目录路径]         列出 pending threads
+#   sce show <id>            展开查看完整内容
+#   sce rm <id>              删除 thread
+#   sce archive <id>         归档（标记 resumed，列表不再显示）
 
 set -euo pipefail
 export LC_ALL=en_US.UTF-8
@@ -57,7 +58,7 @@ cmd_show() {
   ' "$file"
 
   echo ""
-  echo "操作: sce-ls rm $id | sce-ls archive $id"
+  echo "操作: sce rm $id | sce archive $id"
 }
 
 # ── 子命令: rm ──
@@ -101,8 +102,8 @@ cmd_archive() {
   echo "已归档: $id"
 }
 
-# ── 子命令: list（默认） ──
-cmd_list() {
+# ── 子命令: ls（默认） ──
+cmd_ls() {
   local CWD="${1:-$(pwd)}"
   local LIMIT=10
   local TMPFILE
@@ -159,32 +160,38 @@ cmd_list() {
       }
       if (status != "") printf "    └ %s\n", status
     }
-    END { print "\n共 " total " 条 | show <id> 查看 | rm <id> 删除 | archive <id> 归档" }
+    END { print "\n共 " total " 条 | sce show <id> 查看 | sce rm <id> 删除 | sce archive <id> 归档" }
   '
 }
 
 # ── 路由 ──
 case "${1:-}" in
+  ls)
+    cmd_ls "${2:-}"
+    ;;
   show)
-    [ -z "${2:-}" ] && echo "用法: sce-ls show <thread-id>" && exit 1
+    [ -z "${2:-}" ] && echo "用法: sce show <thread-id>" && exit 1
     cmd_show "$2"
     ;;
   rm)
-    [ -z "${2:-}" ] && echo "用法: sce-ls rm <thread-id>" && exit 1
+    [ -z "${2:-}" ] && echo "用法: sce rm <thread-id>" && exit 1
     cmd_rm "$2"
     ;;
   archive)
-    [ -z "${2:-}" ] && echo "用法: sce-ls archive <thread-id>" && exit 1
+    [ -z "${2:-}" ] && echo "用法: sce archive <thread-id>" && exit 1
     cmd_archive "$2"
     ;;
   help|-h|--help)
+    echo "sce — MindKeeper CLI"
+    echo ""
     echo "用法:"
-    echo "  sce-ls              列出 pending threads"
-    echo "  sce-ls show <id>    展开查看完整内容"
-    echo "  sce-ls rm <id>      删除 thread"
-    echo "  sce-ls archive <id> 归档（列表不再显示）"
+    echo "  sce                  列出 pending threads"
+    echo "  sce ls [目录]        列出 pending threads"
+    echo "  sce show <id>        展开查看完整内容"
+    echo "  sce rm <id>          删除 thread"
+    echo "  sce archive <id>     归档（列表不再显示）"
     ;;
   *)
-    cmd_list "${1:-}"
+    cmd_ls "${1:-}"
     ;;
 esac
