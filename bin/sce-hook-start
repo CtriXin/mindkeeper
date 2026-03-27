@@ -12,8 +12,8 @@ files=("$THREADS_DIR"/dst-*.md)
 shopt -u nullglob
 [ ${#files[@]} -eq 0 ] && exit 0
 
-# 调用 sce ls 获取列表
-list=$(sce ls 2>/dev/null || true)
+# 调用 dst ls 获取列表
+list=$(dst ls 2>/dev/null || true)
 [ -z "$list" ] && exit 0
 
 # 转义为 JSON string
