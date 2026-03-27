@@ -8,12 +8,12 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
+import { getRealHome } from './env.js';
 import type { BrainIndex, Unit, UnitMeta } from './types.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const BRAIN_DIR = join(__dirname, '..', 'brain');
+const SCE_DIR = join(getRealHome(), '.sce');
+const BRAIN_DIR = join(SCE_DIR, 'brain');
 const INDEX_PATH = join(BRAIN_DIR, 'index.json');
 const UNITS_DIR = join(BRAIN_DIR, 'units');
 
@@ -113,19 +113,25 @@ export function deleteUnit(id: string): boolean {
   return true;
 }
 
-/** 更新访问统计 */
-export function touchUnit(index: BrainIndex, id: string): void {
-  const meta = index.units.find(u => u.id === id);
-  if (meta) {
-    meta.lastAccessed = new Date().toISOString();
-    meta.accessCount = (meta.accessCount || 0) + 1;
-    saveIndex(index);
+/** 批量更新访问统计（一次写磁盘） */
+export function touchUnits(index: BrainIndex, ids: string[]): void {
+  if (ids.length === 0) return;
+  const now = new Date().toISOString();
+  let changed = false;
+  for (const id of ids) {
+    const meta = index.units.find(u => u.id === id);
+    if (meta) {
+      meta.lastAccessed = now;
+      meta.accessCount = (meta.accessCount || 0) + 1;
+      changed = true;
+    }
   }
+  if (changed) saveIndex(index);
 }
 
 /** 从元数据生成索引条目 */
 export function metaFromUnit(unit: Unit): UnitMeta {
-  const { content, related, tags, ...meta } = unit;
+  const { content, related, ...meta } = unit;
   return meta;
 }
 

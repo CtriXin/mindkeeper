@@ -25,6 +25,8 @@ export interface UnitMeta {
   accessCount: number;
   /** 置信度 0-1 */
   confidence: number;
+  /** 标签 */
+  tags?: string[];
 }
 
 /** 完整知识单元（存在 units/*.md 中的 frontmatter） */
@@ -67,10 +69,10 @@ export const TOOLS = {
   FORGET: 'brain_forget',
   /** 列出所有主题 */
   LIST: 'brain_list',
-  /** 根据上下文自动召回 */
-  RECALL: 'brain_recall',
-  /** 📌 Pin 重要内容 */
-  PIN: 'brain_pin',
-  /** 查看 highlights */
-  HIGHLIGHTS: 'brain_highlights',
+  /** 轻量启动入口 */
+  BOOTSTRAP: 'brain_bootstrap',
+  /** 蒸馏 checkpoint */
+  CHECKPOINT: 'brain_checkpoint',
+  /** 列出 threads */
+  THREADS: 'brain_threads',
 } as const;
