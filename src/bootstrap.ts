@@ -111,19 +111,26 @@ function resolveThreadCreatedAt(meta: ThreadMeta, fallbackMs: number): number {
   return Number.isFinite(createdAt) ? createdAt : fallbackMs;
 }
 
+/** 状态驱动 TTL：有未完成待续 14d，其他取 frontmatter 或默认 7d */
+function deriveEffectiveTtl(content: string, metaTtl?: string): number {
+  if (/^- \[ \]/m.test(content)) return 14 * 86400000;
+  return parseTtl(metaTtl || '7d');
+}
+
 function parseThreadFile(path: string, now: number): (ThreadSummary & { expired: boolean }) | undefined {
   try {
     const content = readFileSync(path, 'utf-8');
     const mtime = statSync(path).mtime.getTime();
     const meta = parseThreadFrontmatter(content);
     const createdAtMs = resolveThreadCreatedAt(meta, mtime);
-    const ttlMs = parseTtl(meta.ttl || '7d');
+    const status = extractThreadStatus(content);
+    const ttlMs = deriveEffectiveTtl(content, meta.ttl);
 
     return {
       id: meta.id || basename(path, '.md'),
       repo: meta.repo || '',
       task: meta.task || basename(path, '.md'),
-      status: extractThreadStatus(content),
+      status,
       path,
       createdAtMs,
       branch: meta.branch,
@@ -266,7 +273,7 @@ export function findBestThread(
 function resolveTargetThread(input: BootstrapInput, options?: { branch?: string }): ThreadSummary | undefined {
   if (!input.repo) return undefined;
 
-  const requestedThread = input.thread || input.task.match(/dst-\d{8}-\w+/)?.[0];
+  const requestedThread = input.thread || input.task.match(/dst-\d{4,8}-\w+/)?.[0];
   if (requestedThread) {
     return getThreadById(input.repo, requestedThread);
   }
@@ -310,7 +317,7 @@ function extractThreadSection(content: string, header: string): string[] {
   return items;
 }
 
-function loadThreadDetails(t: ThreadSummary): { nextSteps: string[]; decisions: string[] } {
+export function loadThreadDetails(t: ThreadSummary): { nextSteps: string[]; decisions: string[] } {
   try {
     const content = readFileSync(t.path, 'utf-8');
     return {
