@@ -132,21 +132,15 @@ function splitCompoundToken(token: string): string[] {
   return [...new Set([...camelParts, ...kebabParts].map(s => s.toLowerCase()).filter(s => s.length >= 2))];
 }
 
-// ── Trigram 模糊匹配 ──
+// ── N-gram 模糊匹配（中文短词用 bigram，英文长词用 trigram） ──
 
-function toTrigrams(s: string): Set<string> {
-  const padded = `  ${s.toLowerCase()} `;
-  const grams = new Set<string>();
-  for (let i = 0; i < padded.length - 2; i++) {
-    grams.add(padded.slice(i, i + 3));
-  }
-  return grams;
-}
-
-function trigramSimilarity(a: string, b: string): number {
-  if (a.length < 3 || b.length < 3) return 0;
-  const aGrams = toTrigrams(a);
-  const bGrams = toTrigrams(b);
+/** n-gram 相似度：短字符串（中文双字词）用 bigram，长字符串用 trigram */
+function ngramSimilarity(a: string, b: string): number {
+  if (a.length < 2 || b.length < 2) return 0;
+  // 中文短词或短英文用 bigram
+  const n = (a.length <= 3 || b.length <= 3) ? 2 : 3;
+  const aGrams = toNgrams(a, n);
+  const bGrams = toNgrams(b, n);
   let intersection = 0;
   for (const g of aGrams) {
     if (bGrams.has(g)) intersection++;
@@ -154,10 +148,21 @@ function trigramSimilarity(a: string, b: string): number {
   return intersection / Math.max(aGrams.size, bGrams.size);
 }
 
+function toNgrams(s: string, n: number): Set<string> {
+  const padded = ' '.repeat(n - 1) + s.toLowerCase() + ' ';
+  const grams = new Set<string>();
+  for (let i = 0; i < padded.length - (n - 1); i++) {
+    grams.add(padded.slice(i, i + n));
+  }
+  return grams;
+}
+
 // ── 查询扩展 ──
 
 function expandQuery(query: string): string[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  // 用 extractKeywords 分词：英文按单词、中文按双字切分
+  // 修复：原来用 split(/\s+/) 导致中文整句变成一个 token，同义词扩展全部失效
+  const words = extractKeywords(query);
   const expanded = new Set<string>();
 
   for (const word of words) {
@@ -232,13 +237,13 @@ function calculateScore(
     }
   }
 
-  // 3. Trigram fallback（当精确/子串匹配为 0 时）
+  // 3. N-gram fuzzy fallback（当精确/子串匹配为 0 时）
   if (rawScore === 0) {
     for (const term of queryTerms) {
-      if (term.length < 3) continue;
+      if (term.length < 2) continue;
       for (const trigger of lowerTriggers) {
-        if (trigger.length < 3) continue;
-        const sim = trigramSimilarity(term, trigger);
+        if (trigger.length < 2) continue;
+        const sim = ngramSimilarity(term, trigger);
         if (sim > 0.4) {
           rawScore += 0.3 * sim;
           matched.push(`~${trigger}`);
@@ -249,8 +254,8 @@ function calculateScore(
 
   if (rawScore === 0) return { score: 0, matched: [] };
 
-  // 归一化
-  let score = rawScore / Math.max(queryTerms.length, triggers.length);
+  // 归一化：按查询词数归一，不惩罚触发词多的 recipe
+  let score = rawScore / Math.max(queryTerms.length, 1);
   score *= meta.confidence;
 
   // 访问频次 boost
