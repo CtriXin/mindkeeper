@@ -5,85 +5,24 @@
  * Knowledge: brain_learn / brain_recall / brain_list
  * Distill:   brain_bootstrap / brain_checkpoint / brain_threads
  * Board:     brain_board / brain_check
+ *
+ * 业务逻辑在 handlers.ts，此文件只负责 MCP 协议层和路由分发。
  */
 
-import { execSync } from 'child_process';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { loadIndex, saveIndex, loadRecipe, saveRecipe, recipeMetaFrom, touchRecipes } from './storage.js';
-import { searchRecipes } from './router.js';
-import { bootstrapQuick, formatQuickResume, getThreadById, listRecentThreads, findBestThread, loadThreadDetails } from './bootstrap.js';
-import { checkpoint, formatDistillReceipt } from './distill.js';
+import { loadIndex } from './storage.js';
 import {
-  loadBoard, createBoard, addBoardItem, updateBoardItem,
-  addBoardMemo, checkBoards, listBoardSummaries, archiveStaleItems,
-  saveBoard, listBoardSlugs,
-  checkRecipeStaleness, deprecateStaleRecipes, getRecipeHealthSummary,
-  findMatchingBoardItems,
-} from './storage.js';
-import type { BrainIndex, Recipe, RecipeFile, ChangelogEntry, QuadrantKey, Board, BoardSignal } from './types.js';
-import { QUADRANT_KEYS, QUADRANT_LABELS } from './types.js';
-import { getRealHome } from './env.js';
+  handleLearn, handleRecall, handleList,
+  handleBootstrap, handleCheckpoint, handleThreads,
+  handleBoard, handleCheck,
+} from './handlers.js';
 
-// ── 可选集成: 飞书推送 ──
-
-const FEISHU_CONFIG_PATH = join(getRealHome(), '.sce', 'feishu.json');
-
-/** 读取 ~/.sce/feishu.json 的推送目标，返回 { type, id } 或空 */
-function readFeishuTarget(): { type: 'chat' | 'user'; id: string } | null {
-  try {
-    if (!existsSync(FEISHU_CONFIG_PATH)) return null;
-    const cfg = JSON.parse(readFileSync(FEISHU_CONFIG_PATH, 'utf-8'));
-    if (cfg.user_id) return { type: 'user', id: cfg.user_id };
-    if (cfg.chat_id) return { type: 'chat', id: cfg.chat_id };
-    return null;
-  } catch { return null; }
-}
-
-/** 查找 lark-cli，不存在则返回空 */
-function findLarkCli(): string {
-  // 显式路径
-  const explicit = process.env.LARK_CLI_PATH;
-  if (explicit && existsSync(explicit)) return explicit;
-  // 常见路径
-  const candidates = [
-    '/usr/local/bin/lark-cli',
-    join(getRealHome(), '.nvm/versions/node/v22.19.0/bin/lark-cli'),
-    join(getRealHome(), '.nvm/versions/node/v20.18.0/bin/lark-cli'),
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) return p;
-  }
-  // which fallback
-  try {
-    return execSync('which lark-cli', { encoding: 'utf-8', timeout: 2000 }).trim();
-  } catch { return ''; }
-}
-
-let index: BrainIndex = loadIndex();
-
-/** 自动生成 recipe ID: rcp-项目尾段-3位递增编号 */
-function generateRecipeId(idx: BrainIndex, project?: string): string {
-  const prefix = project
-    ? project.split(/[_\-/]/).filter(Boolean).pop()!.toLowerCase()
-    : 'mk';
-
-  // 找同前缀最大编号（兼容新旧格式）
-  const pattern = new RegExp(`^(?:rcp-)?${prefix}-(\\d+)$`);
-  let max = 0;
-  for (const r of idx.recipes) {
-    const m = r.id.match(pattern);
-    if (m) max = Math.max(max, Number(m[1]));
-  }
-
-  return `rcp-${prefix}-${String(max + 1).padStart(3, '0')}`;
-}
+const index = loadIndex();
 
 const server = new Server(
   { name: 'mindkeeper', version: '2.1.0' },
@@ -119,11 +58,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             description: '触发词（中英文皆可，如 ["广告延迟加载", "ad lazy load"]）',
           },
           summary: { type: 'string', description: '一句话摘要' },
-          // recipe 字段
-          steps: {
-            type: 'array', items: { type: 'string' },
-            description: 'recipe: 实现步骤（有序）',
-          },
+          steps: { type: 'array', items: { type: 'string' }, description: 'recipe: 实现步骤（有序）' },
           files: {
             type: 'array',
             items: {
@@ -136,19 +71,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             },
             description: 'recipe: 涉及的文件及各自改动说明',
           },
-          gotchas: {
-            type: 'array', items: { type: 'string' },
-            description: '已知坑点和注意事项',
-          },
-          corrections: {
-            type: 'array', items: { type: 'string' },
-            description: '用户纠正过的错误（最有价值的知识）',
-          },
-          // insight 字段
+          gotchas: { type: 'array', items: { type: 'string' }, description: '已知坑点和注意事项' },
+          corrections: { type: 'array', items: { type: 'string' }, description: '用户纠正过的错误（最有价值的知识）' },
           conclusion: { type: 'string', description: 'insight: 核心结论' },
           why: { type: 'string', description: 'insight: 为什么得出这个结论' },
           when_to_apply: { type: 'string', description: 'insight: 什么场景下应用这个认知' },
-          // 通用字段
           repo: { type: 'string', description: '来源仓库完整路径' },
           branch: { type: 'string', description: '来源分支' },
           framework: { type: 'string', description: '框架/版本标签（如 vue3, react18, nuxt3）' },
@@ -252,10 +179,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             enum: ['read', 'write', 'add_item', 'update_item', 'add_memo', 'list', 'archive'],
             description: '操作类型',
           },
-          data: {
-            type: 'object',
-            description: 'write 时的完整 board 数据',
-          },
+          data: { type: 'object', description: 'write 时的完整 board 数据' },
           title: { type: 'string', description: 'add_item 时的标题' },
           quadrant: {
             type: 'string',
@@ -304,7 +228,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
-// ── 工具处理 ──
+// ── 工具路由 ──
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: rawArgs } = request.params;
@@ -312,600 +236,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     switch (name) {
-      // ── brain_learn ──
-      case 'brain_learn': {
-        const knowledgeType = (args.type as string) === 'insight' ? 'insight' as const : 'recipe' as const;
-        const triggers = (args.triggers as string[]) || [];
-        const summary = String(args.summary);
-        const steps = (args.steps as string[]) || [];
-        const files = ((args.files as any[]) || []).map((f: any): RecipeFile => ({
-          path: String(f.path),
-          description: String(f.description || ''),
-        }));
-        const gotchas = (args.gotchas as string[]) || [];
-        const corrections = (args.corrections as string[]) || [];
-        const conclusion = args.conclusion ? String(args.conclusion) : undefined;
-        const why = args.why ? String(args.why) : undefined;
-        const when_to_apply = args.when_to_apply ? String(args.when_to_apply) : undefined;
-        const repo = args.repo ? String(args.repo) : undefined;
-        const branch = args.branch ? String(args.branch) : undefined;
-        const framework = args.framework ? String(args.framework) : undefined;
-        const project = args.project ? String(args.project) : undefined;
-        const tags = (args.tags as string[]) || undefined;
-        const confidence = Number(args.confidence) || 0.9;
-        const changelogNote = args.changelog_note ? String(args.changelog_note) : undefined;
-
-        // ID: 传了就用，没传自动生成（项目尾段+递增编号）
-        const id = args.id ? String(args.id) : generateRecipeId(index, project);
-
-        const existing = loadRecipe(id);
-        const now = new Date().toISOString().slice(0, 10);
-
-        if (existing) {
-          // 覆盖主体 + 追加 changelog
-          existing.type = knowledgeType;
-          existing.triggers = triggers;
-          existing.summary = summary;
-          existing.steps = steps;
-          existing.files = files;
-          existing.gotchas = gotchas;
-          existing.corrections = corrections;
-          existing.conclusion = conclusion;
-          existing.why = why;
-          existing.when_to_apply = when_to_apply;
-          if (repo) existing.repo = repo;
-          if (branch) existing.branch = branch;
-          if (framework) existing.framework = framework;
-          if (project) existing.project = project;
-          if (tags) existing.tags = tags;
-          existing.confidence = confidence;
-          existing.updated = new Date().toISOString();
-          existing.changelog.push({
-            date: now,
-            description: changelogNote || '更新',
-          });
-
-          saveRecipe(existing);
-
-          const metaIdx = index.recipes.findIndex(r => r.id === id);
-          if (metaIdx >= 0) {
-            index.recipes[metaIdx] = recipeMetaFrom(existing);
-          }
-          saveIndex(index);
-
-          return {
-            content: [{
-              type: 'text',
-              text: `已更新 recipe: ${id}\n` +
-                `步骤: ${steps.length} | 文件: ${files.length} | 坑点: ${gotchas.length} | 纠正: ${corrections.length}\n` +
-                `Changelog: +1 (共 ${existing.changelog.length} 条)`,
-            }],
-          };
-        }
-
-        // 新建
-        const recipe: Recipe = {
-          id,
-          type: knowledgeType,
-          triggers,
-          summary,
-          repo,
-          branch,
-          steps,
-          files,
-          gotchas,
-          corrections,
-          conclusion,
-          why,
-          when_to_apply,
-          framework,
-          project,
-          tags,
-          confidence,
-          created: new Date().toISOString(),
-          updated: new Date().toISOString(),
-          accessCount: 0,
-          changelog: [{ date: now, description: changelogNote || '首次记录' }],
-        };
-
-        // 自动关联 board item
-        const boardMatches = findMatchingBoardItems(summary + ' ' + triggers.join(' '));
-        if (boardMatches.length > 0) {
-          recipe.boardItemId = boardMatches[0].itemId;
-        }
-
-        saveRecipe(recipe);
-        // 去重：确保 index 中没有同 ID 条目
-        index.recipes = index.recipes.filter(r => r.id !== id);
-        index.recipes.push(recipeMetaFrom(recipe));
-        saveIndex(index);
-
-        const typeLabel = knowledgeType === 'insight' ? 'insight' : 'recipe';
-        let learnText = `已存入 ${typeLabel}: ${id}\n` +
-          `触发词: ${triggers.join(', ')}`;
-        if (knowledgeType === 'insight') {
-          learnText += `\n结论: ${conclusion || '-'} | 原因: ${why ? '✓' : '-'} | 适用场景: ${when_to_apply ? '✓' : '-'}`;
-        } else {
-          learnText += `\n步骤: ${steps.length} | 文件: ${files.length} | 坑点: ${gotchas.length} | 纠正: ${corrections.length}`;
-        }
-        if (recipe.boardItemId) {
-          const match = boardMatches[0];
-          learnText += `\n📌 已关联看板: [${match.project}] ${match.title}`;
-        }
-
-        return {
-          content: [{ type: 'text', text: learnText }],
-        };
-      }
-
-      // ── brain_recall ──
-      case 'brain_recall': {
-        const query = String(args.query || '');
-        const limit = Number(args.limit) || 3;
-        const results = searchRecipes(index, query, limit);
-
-        if (results.length === 0) {
-          return { content: [{ type: 'text', text: '未找到相关 recipe。' }] };
-        }
-
-        touchRecipes(index, results.map(r => r.recipe.id));
-
-        // 检测过时
-        const recallStaleSignals = checkRecipeStaleness(index);
-        const recallStaleMap = new Map(recallStaleSignals.map(s => [s.recipeId, s.reasons]));
-
-        const text = results.map((r, i) => {
-          const rec = r.recipe;
-          const parts: string[] = [];
-
-          const typeLabel = rec.type === 'insight' ? '💡 insight' : '📋 recipe';
-          parts.push(`## ${i + 1}. ${rec.summary} [${typeLabel}] (score: ${r.score.toFixed(2)})`);
-          parts.push(`**ID**: ${rec.id} | **框架**: ${rec.framework || '通用'} | **项目**: ${rec.project || '-'}`);
-          if (rec.repo || rec.branch) {
-            const repoShort = rec.repo?.replace(/^\/Users\/[^/]+\//, '~/') || '-';
-            parts.push(`**源码位置**: ${repoShort} @ \`${rec.branch || 'main'}\``);
-          }
-          parts.push(`**触发词匹配**: ${r.matchedTriggers.join(', ')}`);
-
-          // Insight 专用段
-          if (rec.conclusion) {
-            parts.push('');
-            parts.push('### 结论');
-            parts.push(rec.conclusion);
-          }
-          if (rec.why) {
-            parts.push('');
-            parts.push('### 原因');
-            parts.push(rec.why);
-          }
-          if (rec.when_to_apply) {
-            parts.push('');
-            parts.push('### 适用场景');
-            parts.push(rec.when_to_apply);
-          }
-
-          // Recipe 段
-          const steps = Array.isArray(rec.steps) ? rec.steps : [];
-          const files = Array.isArray(rec.files) ? rec.files : [];
-          const gotchas = Array.isArray(rec.gotchas) ? rec.gotchas : [];
-          const corrections = Array.isArray(rec.corrections) ? rec.corrections : [];
-          const changelog = Array.isArray(rec.changelog) ? rec.changelog : [];
-
-          if (steps.length > 0) {
-            parts.push('');
-            parts.push('### 实现步骤');
-            steps.forEach((s, j) => parts.push(`${j + 1}. ${s}`));
-          }
-
-          if (files.length > 0) {
-            parts.push('');
-            parts.push('### 涉及文件');
-            files.forEach(f => parts.push(`- \`${f.path}\` — ${f.description}`));
-          }
-
-          if (gotchas.length > 0) {
-            parts.push('');
-            parts.push('### 已知坑点');
-            gotchas.forEach(g => parts.push(`- ⚠️ ${g}`));
-          }
-
-          if (corrections.length > 0) {
-            parts.push('');
-            parts.push('### 用户纠正');
-            corrections.forEach(c => parts.push(`- 🔴 ${c}`));
-          }
-
-          if (changelog.length > 0) {
-            parts.push('');
-            parts.push('### Changelog');
-            changelog.forEach(e => parts.push(`- ${e.date}: ${e.description}`));
-          }
-
-          // 过时提示
-          const staleReasons = recallStaleMap.get(rec.id);
-          if (staleReasons) {
-            parts.push('');
-            parts.push(`> ⚠️ 注意: 此 recipe 可能过时 — ${staleReasons.join(', ')}`);
-          }
-
-          return parts.join('\n');
-        }).join('\n\n---\n\n');
-
-        return { content: [{ type: 'text', text }] };
-      }
-
-      // ── brain_list ──
-      case 'brain_list': {
-        let recipes = index.recipes;
-
-        if (args.project) {
-          recipes = recipes.filter(r => r.project === String(args.project));
-        }
-        if (args.tag) {
-          const tag = String(args.tag).toLowerCase();
-          recipes = recipes.filter(r => r.tags?.some(t => t.toLowerCase() === tag));
-        }
-        if (args.framework) {
-          const fw = String(args.framework).toLowerCase();
-          recipes = recipes.filter(r => r.framework?.toLowerCase() === fw);
-        }
-
-        if (recipes.length === 0) {
-          return { content: [{ type: 'text', text: 'Recipe 库为空。' }] };
-        }
-
-        // 检测过时 recipe
-        const staleSignals = checkRecipeStaleness(index);
-        const staleMap = new Map(staleSignals.map(s => [s.recipeId, s.reasons]));
-
-        const text = recipes.map(r => {
-          const typeIcon = r.type === 'insight' ? '💡' : '📋';
-          const fw = r.framework ? `[${r.framework}]` : '';
-          const proj = r.project ? `(${r.project})` : '';
-          const staleTag = staleMap.has(r.id) ? ` ⚠️[${staleMap.get(r.id)!.join(', ')}]` : '';
-          return `- ${typeIcon} **${r.id}**: ${r.summary} ${fw} ${proj} — ${r.triggers.slice(0, 3).join(', ')}${staleTag}`;
-        }).join('\n');
-
-        // 健康摘要
-        const health = getRecipeHealthSummary(index);
-        const healthLine = `\n---\n**健康**: ${health.total} recipes — ${health.active} 活跃, ${health.stale} 过时, ${health.deprecated} 已降权`;
-
-        return { content: [{ type: 'text', text: `共 ${recipes.length} 个 recipe:\n\n${text}${healthLine}` }] };
-      }
-
-      // ── brain_bootstrap ──
-      case 'brain_bootstrap': {
-        if (!args.repo) {
-          return { content: [{ type: 'text', text: 'brain_bootstrap 需要 repo 路径。' }], isError: true };
-        }
-
-        // 有 thread 参数 → 恢复具体对话（原有行为）
-        if (args.thread) {
-          if (!getThreadById(String(args.repo), String(args.thread))) {
-            return {
-              content: [{ type: 'text', text: `thread 不存在或不属于当前 repo: ${String(args.thread)}` }],
-              isError: true,
-            };
-          }
-
-          const qr = bootstrapQuick({
-            task: String(args.task),
-            repo: String(args.repo),
-            thread: String(args.thread),
-          });
-
-          return { content: [{ type: 'text', text: formatQuickResume(qr) }] };
-        }
-
-        // 无 thread → 项目级视图：board 信号 + 最近 thread 详情 + recipe 推送
-        const signals = checkBoards();
-        const threads = listRecentThreads(String(args.repo), 5);
-
-        const lines: string[] = [];
-        lines.push(`> **任务**: ${String(args.task)}`);
-
-        // 自动推送匹配的 recipe（不更新访问统计，避免污染衰减信号）
-        const recallHints = searchRecipes(index, String(args.task), 3)
-          .filter(r => r.score > 0.5);
-        if (recallHints.length > 0) {
-          lines.push('\n**相关经验**');
-          for (const r of recallHints) {
-            lines.push(`  - \`${r.recipe.id}\` — ${r.recipe.summary}`);
-          }
-        }
-
-        // Board 信号
-        if (signals.length > 0) {
-          lines.push('\n**项目看板**');
-          for (const s of signals.slice(0, 5)) {
-            const icon = s.type === 'overdue' ? '🔴' : s.type === 'deadline_soon' ? '🟡' : s.type === 'stale' ? '⚠️' : '📋';
-            lines.push(`  ${icon} **${s.project}** — ${s.message}`);
-          }
-        }
-
-        // 最近 thread 详情（恢复对话内容）
-        const bestThread = findBestThread(
-          String(args.repo),
-          String(args.task),
-        );
-
-        if (bestThread) {
-          // 恢复 thread 详情，但不标记 resumed（下次还能看到）
-          const details = loadThreadDetails(bestThread);
-          const repoName = bestThread.repo.split('/').pop() || bestThread.repo;
-
-          lines.push(`\n**上次进度** (${repoName})`);
-          lines.push(`  \`${bestThread.id}\` — ${bestThread.task}`);
-          if (details.nextSteps.length > 0) {
-            lines.push('  待续:');
-            details.nextSteps.forEach(s => lines.push(`    - ${s}`));
-          }
-          if (details.decisions.length > 0) {
-            lines.push('  决策:');
-            details.decisions.forEach(d => lines.push(`    - ${d}`));
-          }
-        } else if (threads.length > 0) {
-          // 没有匹配的 thread，显示列表
-          lines.push('\n**最近对话**');
-          const grouped = new Map<string, typeof threads>();
-          for (const t of threads) {
-            const key = t.repo.split('/').pop() || t.repo;
-            if (!grouped.has(key)) grouped.set(key, []);
-            grouped.get(key)!.push(t);
-          }
-          for (const [repoName, repoThreads] of grouped) {
-            const ids = repoThreads.map(t => t.id).join('  ');
-            lines.push(`  ${repoName}/  ${ids}`);
-          }
-          lines.push('');
-        } else if (signals.length === 0) {
-          lines.push('\n新任务，直接开始。');
-        }
-
-        return { content: [{ type: 'text', text: lines.join('\n') }] };
-      }
-
-      // ── brain_checkpoint ──
-      case 'brain_checkpoint': {
-        if (!args.repo || !args.task || !args.status) {
-          return {
-            content: [{ type: 'text', text: 'brain_checkpoint 需要 repo、task、status。' }],
-            isError: true,
-          };
-        }
-
-        const result = checkpoint({
-          repo: String(args.repo),
-          task: String(args.task),
-          branch: args.branch ? String(args.branch) : undefined,
-          parent: args.parent ? String(args.parent) : undefined,
-          decisions: (args.decisions as string[]) || [],
-          changes: (args.changes as string[]) || [],
-          findings: (args.findings as string[]) || [],
-          next: (args.next as string[]) || [],
-          status: String(args.status),
-        });
-
-        const receipt = formatDistillReceipt(result);
-
-        // 推送蒸馏回执到飞书（可选，静默，不阻塞）
-        // 依赖: lark-cli + MINDKEEPER_FEISHU_CHAT env 或 ~/.sce/feishu.json
-        try {
-          const envChat = process.env.MINDKEEPER_FEISHU_CHAT;
-          const target = envChat ? { type: 'chat' as const, id: envChat } : readFeishuTarget();
-          if (target) {
-            const larkBin = findLarkCli();
-            if (larkBin) {
-              const repoName = String(args.repo).split('/').pop() || '';
-              const msg = `**MindKeeper** · ${repoName}\\n${String(args.status)}\\n${result.threadId}`;
-              const targetFlag = target.type === 'user' ? `--user-id "${target.id}"` : `--chat-id "${target.id}"`;
-              execSync(
-                `printf '${msg.replace(/'/g, "'\\''")}' | xargs -0 ${larkBin} im +messages-send ${targetFlag} --as bot --markdown`,
-                { timeout: 5000, stdio: 'ignore', shell: '/bin/bash' },
-              );
-            }
-          }
-        } catch { /* 推送失败不影响蒸馏 */ }
-
-        return { content: [{ type: 'text', text: receipt }] };
-      }
-
-      // ── brain_threads ──
-      case 'brain_threads': {
-        const repo = args.repo ? String(args.repo) : undefined;
-        const threads = listRecentThreads(repo, 50);
-
-        if (threads.length === 0) {
-          return { content: [{ type: 'text', text: repo ? `${repo} 没有待恢复的 thread。` : '没有待恢复的 thread。' }] };
-        }
-
-        const grouped = new Map<string, typeof threads>();
-        for (const t of threads) {
-          const key = t.repo || '(unknown)';
-          if (!grouped.has(key)) grouped.set(key, []);
-          grouped.get(key)!.push(t);
-        }
-
-        const lines: string[] = [`共 ${threads.length} 个待恢复 thread:\n`];
-        for (const [repoName, repoThreads] of grouped) {
-          const short = repoName.replace(/^\/Users\/[^/]+\//, '~/');
-          lines.push(`**${short}**`);
-          for (const t of repoThreads) {
-            const age = Math.round((Date.now() - t.createdAtMs) / 86400000);
-            const ageStr = age === 0 ? '今天' : `${age}天前`;
-            lines.push(`  \`${t.id}\` ${ageStr} — ${t.task.slice(0, 60)}`);
-          }
-          lines.push('');
-        }
-
-        lines.push('恢复方式：发送 thread id（如 `dst-20260326-xxx`）');
-        return { content: [{ type: 'text', text: lines.join('\n') }] };
-      }
-
-      // ── brain_board ──
-      case 'brain_board': {
-        const project = String(args.project || '');
-        const action = String(args.action || 'read');
-
-        switch (action) {
-          case 'list': {
-            const summaries = listBoardSummaries();
-            if (summaries.length === 0) {
-              return { content: [{ type: 'text', text: '没有项目看板。用 brain_board 添加第一个项目。' }] };
-            }
-            const lines = [`共 ${summaries.length} 个项目看板:\n`];
-            for (const s of summaries) {
-              const statusIcon = s.activeCount === 0 ? '✅' : '📋';
-              lines.push(`  ${statusIcon} **${s.project}** — ${s.activeCount} 项待办 (更新: ${s.lastUpdated})`);
-            }
-            return { content: [{ type: 'text', text: lines.join('\n') }] };
-          }
-
-          case 'read': {
-            const board = loadBoard(project);
-            if (!board) {
-              return { content: [{ type: 'text', text: `项目 "${project}" 的看板不存在。用 action="write" 创建。` }] };
-            }
-            const lines = formatBoard(board);
-            return { content: [{ type: 'text', text: lines.join('\n') }] };
-          }
-
-          case 'write': {
-            const data = args.data as Record<string, any>;
-            if (!data) {
-              return { content: [{ type: 'text', text: 'action="write" 需要 data 参数。' }], isError: true };
-            }
-            const board = createBoard(data.project || project, data.repo, data.stale_warning_days);
-            board.quadrants = data.quadrants || board.quadrants;
-            board.memos = data.memos || board.memos;
-            saveBoard(board);
-            return { content: [{ type: 'text', text: `已创建/更新项目看板: ${board.project}` }] };
-          }
-
-          case 'add_item': {
-            const title = String(args.title || '');
-            const quadrant = (args.quadrant as QuadrantKey) || 'q2';
-            const item = addBoardItem(project, title, quadrant, {
-              deadline: args.deadline ? String(args.deadline) : undefined,
-              assignee: args.assignee ? String(args.assignee) : undefined,
-              source: args.source ? String(args.source) : undefined,
-              source_ref: args.source_ref ? String(args.source_ref) : undefined,
-            });
-            if (!item) {
-              return { content: [{ type: 'text', text: '添加失败。' }], isError: true };
-            }
-            return {
-              content: [{
-                type: 'text',
-                text: `已添加到 ${QUADRANT_LABELS[quadrant]}: [${item.id}] ${item.title}${item.deadline ? ` (截止: ${item.deadline})` : ''}`,
-              }],
-            };
-          }
-
-          case 'update_item': {
-            const itemId = String(args.item_id || '');
-            const changes = (args.changes || {}) as Record<string, any>;
-            const item = updateBoardItem(project, itemId, changes);
-            if (!item) {
-              return { content: [{ type: 'text', text: `未找到条目: ${itemId}` }], isError: true };
-            }
-            const changeDesc = Object.entries(changes).map(([k, v]) => `${k}=${v}`).join(', ');
-            let resultText = `已更新 [${itemId}]: ${changeDesc}`;
-            // 完成时提示提取 recipe
-            if (changes.status === 'done') {
-              resultText += '\n\n💡 如果这项工作有可复用模式，考虑用 brain_learn 提取 recipe。';
-            }
-            return { content: [{ type: 'text', text: resultText }] };
-          }
-
-          case 'add_memo': {
-            const text = String(args.text || '');
-            if (!text) {
-              return { content: [{ type: 'text', text: 'add_memo 需要 text 参数。' }], isError: true };
-            }
-            const memo = addBoardMemo(project, text, args.source ? String(args.source) : undefined);
-            if (!memo) {
-              return { content: [{ type: 'text', text: '添加备忘失败。' }], isError: true };
-            }
-            return { content: [{ type: 'text', text: `已添加备忘: ${text}` }] };
-          }
-
-          case 'archive': {
-            const count = archiveStaleItems(project);
-            return { content: [{ type: 'text', text: count > 0 ? `已归档 ${count} 个过期条目。` : '没有需要归档的条目。' }] };
-          }
-
-          default:
-            return { content: [{ type: 'text', text: `未知操作: ${action}` }], isError: true };
-        }
-      }
-
-      // ── brain_check ──
-      case 'brain_check': {
-        const deadlineDays = Number(args.deadline_days) || undefined;
-        const signals = checkBoards({ deadlineDays });
-
-        // 自动降权过时 recipe
-        const deprecation = deprecateStaleRecipes(index);
-
-        const lines: string[] = [];
-
-        if (signals.length > 0) {
-          // 按项目分组，只保留最重要的信号
-          const projectSignals = new Map<string, BoardSignal>();
-          for (const s of signals) {
-            const existing = projectSignals.get(s.project);
-            // 优先级：overdue > deadline_soon > stale > stale_item > active
-            const priorityMap: Record<string, number> = { overdue: 0, deadline_soon: 1, stale: 2, stale_item: 3, active: 4 };
-            const priority = priorityMap[s.type] ?? 5;
-            const existingPriority = existing ? (priorityMap[existing.type] ?? 5) : 99;
-            if (priority < existingPriority) {
-              projectSignals.set(s.project, s);
-            }
-          }
-
-          lines.push('**项目看板**\n');
-          for (const [_project, signal] of projectSignals) {
-            const icon = signal.type === 'overdue' ? '🔴' : signal.type === 'deadline_soon' ? '🟡' : signal.type === 'stale' ? '⚠️' : signal.type === 'stale_item' ? '💤' : '📋';
-            lines.push(`  ${icon} **${signal.project}** — ${signal.message}`);
-          }
-
-          // 额外的紧急信号
-          const urgentSignals = signals.filter(s => s.type === 'overdue' || s.type === 'deadline_soon');
-          if (urgentSignals.length > 1) {
-            lines.push('\n紧急事项:');
-            for (const s of urgentSignals) {
-              const icon = s.type === 'overdue' ? '🔴' : '🟡';
-              lines.push(`  ${icon} [${s.project}] ${s.message}`);
-            }
-          }
-        }
-
-        // Recipe 健康
-        const recipeStaleSignals = checkRecipeStaleness(index);
-        if (recipeStaleSignals.length > 0 || deprecation.deprecated.length > 0) {
-          lines.push('\n**Recipe 健康**');
-          lines.push(`  ${deprecation.total} 个 — ${deprecation.active} 活跃, ${deprecation.stale} 过时, ${deprecation.deprecatedCount} 已降权`);
-
-          if (deprecation.deprecated.length > 0) {
-            lines.push(`  🔻 本次降权: ${deprecation.deprecated.join(', ')}`);
-          }
-
-          const topStale = recipeStaleSignals.slice(0, 3);
-          for (const s of topStale) {
-            lines.push(`  ⚠️ ${s.recipeId}: ${s.reasons.join(', ')}`);
-          }
-        }
-
-        if (lines.length === 0) {
-          return { content: [{ type: 'text', text: '所有项目状态正常，无信号。' }] };
-        }
-
-        return { content: [{ type: 'text', text: lines.join('\n') }] };
-      }
-
+      case 'brain_learn':     return handleLearn(args, index);
+      case 'brain_recall':    return handleRecall(args, index);
+      case 'brain_list':      return handleList(args, index);
+      case 'brain_bootstrap': return handleBootstrap(args, index);
+      case 'brain_checkpoint': return handleCheckpoint(args);
+      case 'brain_threads':   return handleThreads(args);
+      case 'brain_board':     return handleBoard(args);
+      case 'brain_check':     return handleCheck(args, index);
       default:
-        return { content: [{ type: 'text', text: `未知工具: ${name}` }] };
+        return { content: [{ type: 'text', text: `未知工具: ${name}` }], isError: true };
     }
   } catch (error) {
     return {
@@ -915,48 +255,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-function formatBoard(board: Board): string[] {
-  const lines: string[] = [];
-  lines.push(`# ${board.project}`);
-  if (board.repo) lines.push(`repo: ${board.repo}`);
-  lines.push(`更新: ${board.last_updated} | stale 警告: ${board.stale_warning_days || 14} 天`);
-
-  const icons = ['🔴', '🟡', '🟢', '⚪'] as const;
-
-  for (let i = 0; i < QUADRANT_KEYS.length; i++) {
-    const qk = QUADRANT_KEYS[i];
-    const items = board.quadrants[qk].filter(item => item.status !== 'archived');
-    lines.push(`\n${icons[i]} ${QUADRANT_LABELS[qk]}`);
-
-    if (items.length === 0) {
-      lines.push('  (空)');
-      continue;
-    }
-
-    for (const item of items) {
-      const statusMark = item.status === 'done' ? '~~' : '';
-      let line = `  - [${item.id}] ${statusMark}${item.title}${statusMark}`;
-      if (item.deadline) line += ` (${item.deadline})`;
-      if (item.assignee) line += ` @${item.assignee}`;
-      if (item.status === 'done') line += ' ✓';
-      lines.push(line);
-    }
-  }
-
-  if (board.memos.length > 0) {
-    lines.push('\n📝 备忘');
-    for (const m of board.memos) {
-      lines.push(`  - ${m.text} (${m.created})`);
-    }
-  }
-
-  return lines;
-}
+// ── 启动 ──
 
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('MindKeeper MCP server v2.0 started');
+  console.error('MindKeeper MCP server v2.1 started');
   console.error(`Loaded ${index.recipes.length} recipes from index`);
 }
 

@@ -34,7 +34,7 @@ describe('distill checkpoint', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.threadId).toMatch(/^dst-\d{8}-[a-z0-9]+$/);
+    expect(result.threadId).toMatch(/^dst-\d{4}-[a-z0-9]+$/);
     expect(result.stats.decisions).toBe(1);
     expect(result.stats.changes).toBe(1);
     expect(result.stats.findings).toBe(1);

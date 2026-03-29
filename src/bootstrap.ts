@@ -15,6 +15,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from '
 import { join, basename } from 'path';
 import { execSync } from 'child_process';
 import { getRealHome } from './env.js';
+import { extractKeywords } from './utils.js';
 
 const SCE_DIR = join(getRealHome(), '.sce');
 
@@ -196,10 +197,7 @@ function normalizeTaskText(text: string): string {
   return text.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-function extractTaskKeywords(text: string): string[] {
-  const matches = normalizeTaskText(text).match(/[a-z0-9]+|[\u4e00-\u9fff]{2,}/g) || [];
-  return [...new Set(matches.filter(token => token.length >= 2))];
-}
+// extractKeywords 已统一为 extractKeywords (utils.ts)
 
 function isGenericResumeTask(task: string): boolean {
   const normalized = normalizeTaskText(task);
@@ -215,8 +213,8 @@ function scoreTaskSimilarity(task: string, candidate: string): number {
   if (a === b) score += 10;
   if (a.includes(b) || b.includes(a)) score += 6;
 
-  const aKeywords = extractTaskKeywords(a);
-  const bKeywords = extractTaskKeywords(b);
+  const aKeywords = extractKeywords(a);
+  const bKeywords = extractKeywords(b);
   const shared = aKeywords.filter(token => bKeywords.includes(token));
   score += shared.length * 3;
 

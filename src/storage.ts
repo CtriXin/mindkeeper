@@ -10,6 +10,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync, statSync } from 'fs';
 import { join } from 'path';
 import { getRealHome } from './env.js';
+import { extractKeywords } from './utils.js';
 import type { BrainIndex, Recipe, RecipeMeta, RecipeFile, ChangelogEntry, Unit, UnitMeta, Board, BoardItem, BoardMemo, BoardSignal, QuadrantKey, RecipeStalenessSignal } from './types.js';
 import { QUADRANT_KEYS } from './types.js';
 
@@ -775,21 +776,8 @@ export function deprecateStaleRecipes(index: BrainIndex): { deprecated: string[]
     saveIndex(index);
   }
 
-  // 健康统计
-  let active = 0, stale = 0, deprecatedCount = 0;
-  for (const meta of index.recipes) {
-    if (meta.confidence < 0.7) {
-      deprecatedCount++;
-    } else if (meta.lastAccessed) {
-      const days = Math.floor((now - new Date(meta.lastAccessed).getTime()) / DAY_MS);
-      if (days >= 90) stale++;
-      else active++;
-    } else {
-      active++;
-    }
-  }
-
-  return { deprecated, total: index.recipes.length, active, stale, deprecatedCount };
+  const health = getRecipeHealthSummary(index);
+  return { deprecated, total: health.total, active: health.active, stale: health.stale, deprecatedCount: health.deprecated };
 }
 
 /** 获取 recipe 健康摘要 */
@@ -816,16 +804,9 @@ export function getRecipeHealthSummary(index: BrainIndex): { total: number; acti
 
 // ── Board-Recipe 关联 ──
 
-/** 从文本中提取关键词（简单版，不依赖 router） */
-function extractSimpleKeywords(text: string): string[] {
-  return [...new Set(
-    text.toLowerCase().match(/[a-z0-9]+|[\u4e00-\u9fff]{2,}/g)?.filter(t => t.length >= 2) || []
-  )];
-}
-
 /** 查找与任务文本匹配的活跃 board items */
 export function findMatchingBoardItems(taskText: string): Array<{ project: string; itemId: string; title: string }> {
-  const keywords = extractSimpleKeywords(taskText);
+  const keywords = extractKeywords(taskText);
   if (keywords.length === 0) return [];
 
   const matches: Array<{ project: string; itemId: string; title: string; overlap: number }> = [];
@@ -837,7 +818,7 @@ export function findMatchingBoardItems(taskText: string): Array<{ project: strin
     for (const qk of QUADRANT_KEYS) {
       for (const item of board.quadrants[qk]) {
         if (item.status !== 'active') continue;
-        const itemKeywords = extractSimpleKeywords(item.title);
+        const itemKeywords = extractKeywords(item.title);
         const overlap = keywords.filter(k => itemKeywords.includes(k)).length;
         if (overlap >= 2) {
           matches.push({ project: board.project, itemId: item.id, title: item.title, overlap });

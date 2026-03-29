@@ -11,6 +11,7 @@
 
 import type { BrainIndex, RecipeMeta, RecipeSearchResult } from './types.js';
 import { loadRecipe } from './storage.js';
+import { extractKeywords } from './utils.js';
 
 // ── 同义词映射（按领域分类） ──
 
@@ -118,13 +119,8 @@ const ABBREVIATIONS: Record<string, string[]> = {
   'val': ['validate', '校验'],
 };
 
-// ── 导出的关键词提取（供 bootstrap/distill/storage 复用） ──
-
-export function extractKeywords(text: string): string[] {
-  return [...new Set(
-    text.toLowerCase().match(/[a-z0-9]+|[\u4e00-\u9fff]{2,}/g)?.filter(t => t.length >= 2) || []
-  )];
-}
+// extractKeywords 已迁移到 utils.ts，此处重新导出保持兼容
+export { extractKeywords } from './utils.js';
 
 // ── CamelCase / kebab-case 拆分 ──
 
@@ -297,7 +293,7 @@ export function searchRecipes(
 
   // Related recipe boost: 如果命中的 recipe 有 related 字段，boost 关联 recipe
   for (const result of results) {
-    const related = (result.recipe as any).related as string[] | undefined;
+    const related = result.recipe.related;
     if (!related) continue;
     for (const relatedId of related) {
       const relatedResult = results.find(r => r.recipe.id === relatedId);
