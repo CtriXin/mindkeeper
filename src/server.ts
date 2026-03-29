@@ -35,13 +35,15 @@ import { getRealHome } from './env.js';
 
 const FEISHU_CONFIG_PATH = join(getRealHome(), '.sce', 'feishu.json');
 
-/** 读取 ~/.sce/feishu.json 的 chat_id，不存在则返回空 */
-function readFeishuConfig(): string {
+/** 读取 ~/.sce/feishu.json 的推送目标，返回 { type, id } 或空 */
+function readFeishuTarget(): { type: 'chat' | 'user'; id: string } | null {
   try {
-    if (!existsSync(FEISHU_CONFIG_PATH)) return '';
+    if (!existsSync(FEISHU_CONFIG_PATH)) return null;
     const cfg = JSON.parse(readFileSync(FEISHU_CONFIG_PATH, 'utf-8'));
-    return cfg.chat_id || '';
-  } catch { return ''; }
+    if (cfg.user_id) return { type: 'user', id: cfg.user_id };
+    if (cfg.chat_id) return { type: 'chat', id: cfg.chat_id };
+    return null;
+  } catch { return null; }
 }
 
 /** 查找 lark-cli，不存在则返回空 */
@@ -689,14 +691,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // 推送蒸馏回执到飞书（可选，静默，不阻塞）
         // 依赖: lark-cli + MINDKEEPER_FEISHU_CHAT env 或 ~/.sce/feishu.json
         try {
-          const chatId = process.env.MINDKEEPER_FEISHU_CHAT || readFeishuConfig();
-          if (chatId) {
+          const envChat = process.env.MINDKEEPER_FEISHU_CHAT;
+          const target = envChat ? { type: 'chat' as const, id: envChat } : readFeishuTarget();
+          if (target) {
             const larkBin = findLarkCli();
             if (larkBin) {
               const repoName = String(args.repo).split('/').pop() || '';
               const msg = `**MindKeeper** · ${repoName}\\n${String(args.status)}\\n${result.threadId}`;
+              const targetFlag = target.type === 'user' ? `--user-id "${target.id}"` : `--chat-id "${target.id}"`;
               execSync(
-                `printf '${msg.replace(/'/g, "'\\''")}' | xargs -0 ${larkBin} im +messages-send --chat-id "${chatId}" --as bot --markdown`,
+                `printf '${msg.replace(/'/g, "'\\''")}' | xargs -0 ${larkBin} im +messages-send ${targetFlag} --as bot --markdown`,
                 { timeout: 5000, stdio: 'ignore', shell: '/bin/bash' },
               );
             }
