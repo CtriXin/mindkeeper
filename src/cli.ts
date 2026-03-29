@@ -235,18 +235,15 @@ function cmdRecipe() {
   const sub = args[1];
   const index = loadIndex();
 
-  // mk recipe [all] — 列表
+  // mk rcp — 列表（全部）
   if (!sub || sub === 'all') {
     if (index.recipes.length === 0) { console.log('Recipe 库为空'); return; }
-    const show = sub === 'all' ? index.recipes : index.recipes.slice(0, DEFAULT_LIMIT);
-    const more = index.recipes.length - show.length;
-    for (const r of show) {
+    for (const r of index.recipes) {
       const icon = r.type === 'insight' ? '💡' : '📋';
       const fw = r.framework ? c.gray(` [${r.framework}]`) : '';
       const proj = r.project ? c.green(` (${r.project})`) : '';
       console.log(`${icon} ${c.cyan(r.id)}: ${r.summary}${fw}${proj}`);
     }
-    if (more > 0) console.log(c.gray(`… +${more} 条 (mk recipe all)`));
     return;
   }
 
@@ -298,16 +295,13 @@ function cmdRecipe() {
 function cmdBoard() {
   const sub = args[1];
 
-  // mk board [all] — 列表
+  // mk bd — 列表（全部）
   if (!sub || sub === 'all') {
     const all = listBoardSummaries().filter(s => s.activeCount > 0);
     if (all.length === 0) { console.log('没有看板（或全部已完成）'); return; }
-    const show = sub === 'all' ? all : all.slice(0, DEFAULT_LIMIT);
-    const more = all.length - show.length;
-    for (const s of show) {
+    for (const s of all) {
       console.log(`📌 ${c.cyan('bd-' + s.slug)} ${c.yellow(`${s.activeCount} 待办`)} ${c.gray(s.lastUpdated)}`);
     }
-    if (more > 0) console.log(c.gray(`… +${more} 个 (mk board all)`));
     return;
   }
 
@@ -374,39 +368,24 @@ function cmdThread() {
   const sub = args[1];
   const showAllItems = sub === 'all';
 
-  // mk thread [all] — 按 repo 聚合列表
+  // mk dst — 按 repo 聚合列表（全部）
   if (!sub || showAllItems) {
-    const all = listRecentThreads(undefined, showAllItems ? 100 : 50);
+    const all = listRecentThreads(undefined, 100);
     if (all.length === 0) { console.log('没有 thread'); return; }
 
     const cwd = process.cwd();
     const { local, other } = groupThreadsByRepo(all, cwd);
 
-    const localTotal = local.reduce((n, g) => n + g.threads.length, 0);
-
-    let localLimit: number;
-    let otherLimit: number;
-    if (showAllItems) {
-      localLimit = Infinity;
-      otherLimit = Infinity;
-    } else {
-      localLimit = Math.min(localTotal, 5);
-      otherLimit = 5 - localLimit;
-      if (localLimit < localTotal) {
-        localLimit = Math.min(localTotal, 8);
-      }
-    }
-
     let localPrinted = 0;
     if (local.length > 0) {
       console.log(c.bold(`▸ 当前`));
-      localPrinted = printThreadGroups(local, localLimit, false);
+      localPrinted = printThreadGroups(local, Infinity, false);
     }
 
-    if (other.length > 0 && otherLimit > 0) {
+    if (other.length > 0) {
       if (localPrinted > 0) console.log('');
       console.log(c.gray(`▹ 其他`));
-      printThreadGroups(other, otherLimit, true);
+      printThreadGroups(other, Infinity, true);
     }
     return;
   }
