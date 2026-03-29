@@ -1,10 +1,11 @@
 {
   "name": "mindkeeper",
-  "version": "0.1.0",
+  "version": "2.1.0",
   "description": "MindKeeper — Personal Cognitive Substrate that truly knows you",
   "type": "module",
   "main": "dist/server.js",
   "bin": {
+    "mk": "dist/cli.js",
     "mindkeeper": "dist/cli.js"
   },
   "scripts": {
