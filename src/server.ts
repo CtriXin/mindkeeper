@@ -8,6 +8,8 @@
  */
 
 import { execSync } from 'child_process';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -27,6 +29,40 @@ import {
 } from './storage.js';
 import type { BrainIndex, Recipe, RecipeFile, ChangelogEntry, QuadrantKey, Board, BoardSignal } from './types.js';
 import { QUADRANT_KEYS, QUADRANT_LABELS } from './types.js';
+import { getRealHome } from './env.js';
+
+// ── 可选集成: 飞书推送 ──
+
+const FEISHU_CONFIG_PATH = join(getRealHome(), '.sce', 'feishu.json');
+
+/** 读取 ~/.sce/feishu.json 的 chat_id，不存在则返回空 */
+function readFeishuConfig(): string {
+  try {
+    if (!existsSync(FEISHU_CONFIG_PATH)) return '';
+    const cfg = JSON.parse(readFileSync(FEISHU_CONFIG_PATH, 'utf-8'));
+    return cfg.chat_id || '';
+  } catch { return ''; }
+}
+
+/** 查找 lark-cli，不存在则返回空 */
+function findLarkCli(): string {
+  // 显式路径
+  const explicit = process.env.LARK_CLI_PATH;
+  if (explicit && existsSync(explicit)) return explicit;
+  // 常见路径
+  const candidates = [
+    '/usr/local/bin/lark-cli',
+    join(getRealHome(), '.nvm/versions/node/v22.19.0/bin/lark-cli'),
+    join(getRealHome(), '.nvm/versions/node/v20.18.0/bin/lark-cli'),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  // which fallback
+  try {
+    return execSync('which lark-cli', { encoding: 'utf-8', timeout: 2000 }).trim();
+  } catch { return ''; }
+}
 
 let index: BrainIndex = loadIndex();
 
@@ -650,15 +686,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const receipt = formatDistillReceipt(result);
 
-        // 推送蒸馏回执到飞书（静默，不阻塞）
+        // 推送蒸馏回执到飞书（可选，静默，不阻塞）
+        // 依赖: lark-cli + MINDKEEPER_FEISHU_CHAT env 或 ~/.sce/feishu.json
         try {
-          const repoName = String(args.repo).split('/').pop() || '';
-          const msg = `**MindKeeper** · ${repoName}\\n${String(args.status)}\\n${result.threadId}`;
-          const larkBin = process.env.LARK_CLI_PATH || '/Users/xin/.nvm/versions/node/v22.19.0/bin/lark-cli';
-          execSync(
-            `printf '${msg.replace(/'/g, "'\\''")}' | xargs -0 ${larkBin} im +messages-send --chat-id "oc_f7597f473db3fb959f979a9400abc2f2" --as bot --markdown`,
-            { timeout: 5000, stdio: 'ignore', shell: '/bin/bash' },
-          );
+          const chatId = process.env.MINDKEEPER_FEISHU_CHAT || readFeishuConfig();
+          if (chatId) {
+            const larkBin = findLarkCli();
+            if (larkBin) {
+              const repoName = String(args.repo).split('/').pop() || '';
+              const msg = `**MindKeeper** · ${repoName}\\n${String(args.status)}\\n${result.threadId}`;
+              execSync(
+                `printf '${msg.replace(/'/g, "'\\''")}' | xargs -0 ${larkBin} im +messages-send --chat-id "${chatId}" --as bot --markdown`,
+                { timeout: 5000, stdio: 'ignore', shell: '/bin/bash' },
+              );
+            }
+          }
         } catch { /* 推送失败不影响蒸馏 */ }
 
         return { content: [{ type: 'text', text: receipt }] };
