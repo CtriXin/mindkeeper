@@ -2,87 +2,25 @@
 
 > **"One who truly knows you"**
 
-Personal Cognitive Substrate — 跨 AI、跨设备的持续认知底座
+Personal Cognitive Substrate — 跨项目、跨 session 的第二大脑
 
 ---
 
 ## What is MindKeeper?
 
-MindKeeper 不是另一个 memory plugin，而是一个 **Learning OS**：
-
-- **SCE** (Symbiotic Cognitive Entity) — 对外叙事，你的 AI 伙伴
-- **PCS** (Personal Cognitive Substrate) — 对内实现，持续演化的认知底座
+MindKeeper 是一个 MCP server，为 AI coding agent 提供持久化的知识层：
 
 ```
 传统 AI：  Session → Forget → Session → Forget
-Memory 插件：Session → Store → Recall → Session
-MindKeeper： Session → Evolve → Cross-AI → Multi-Surface → 持续成长
+Memory：  Session → Store → Recall → Session
+MindKeeper： Session → Learn → Cross-Project Recall → Evolve
 ```
 
-## Core Concepts
-
-### 6 类认知对象
-
-| 对象 | 含义 |
-|------|------|
-| **Evidence** | 原始来源（对话、命令输出、commit） |
-| **Observation** | 结构化观察（"用户三次偏好先执行"） |
-| **Belief** | 中层认知（"改 bridge 前必须声明影响面"） |
-| **Procedure** | 可执行模式（debug 步骤） |
-| **Policy** | 强约束红线（"不允许静默改 protected file"） |
-| **Thread Capsule** | 当前任务的 subgoal-scoped 工作集 |
-
-### 7 段学习回路
-
-```
-Capture → Distill → Reflect → Promote → Compile → Act → Maintain
-```
-
-### Continuity Contract
-
-**承诺**：memory / thread / project / policy / cross-surface continuity
-
-**不承诺**：完整人格恒定、情绪连续、所有模型输出一致
-
-## Architecture
-
-```
-Participants / Surfaces
-  ├── Human reflection surface
-  ├── Claude avatar
-  ├── Codex avatar
-  └── Bot surface
-
-PCS Control Plane
-  ├── identity anchor
-  ├── sync / orchestration
-  └── policy injection
-
-Knowledge Planes
-  ├── Evidence Ledger
-  ├── Belief Ledger
-  └── Policy Store
-
-Runtime Plane
-  ├── Thread Capsules
-  ├── Working Set Compiler
-  └── Preheater
-
-Evolution Plane
-  ├── Reflection Engine
-  ├── Promotion Pipeline
-  └── Maintenance Loops
-```
-
-## Key Insight
-
-> "只要拼够多 memory 项目就能得到真正生命？**不对。**"
-
-真正的范式转换：
-- 从 `memory store` → `learning substrate`
-- 从 `retrieval` → `compilation`
-- 从 `static notes` → `living cognitive objects`
-- 从 `single-agent memory` → `cross-surface continuity`
+核心差异化价值：
+- **Recipe** — 结构化的实现经验，带触发词匹配，跨项目复用
+- **Board** — 四象限看板 + 备忘，项目级任务管理
+- **Thread** — 上下文蒸馏，跨 session 恢复工作状态
+- **主动推送** — bootstrap 时自动匹配相关经验，不需手动查询
 
 ## Quick Start
 
@@ -90,45 +28,161 @@ Evolution Plane
 # Install
 pnpm install
 
-# Run MCP server
+# Build
+pnpm build
+
+# Run MCP server (stdio)
 pnpm dev
 
 # CLI
 pnpm cli list
-pnpm cli search "provider routing"
+pnpm cli search "广告延迟加载"
 ```
 
-## MCP Tools
+### Claude Code 集成
+
+在 `.mcp.json` 或 `~/.claude/settings.json` 中添加：
+
+```json
+{
+  "mcpServers": {
+    "mindkeeper": {
+      "command": "pnpm",
+      "args": ["--dir", "/path/to/mindkeeper", "exec", "tsx", "src/server.ts"]
+    }
+  }
+}
+```
+
+## MCP Tools (8 个)
+
+### Knowledge — 知识管理
 
 | 工具 | 用途 |
 |------|------|
-| `brain_bootstrap` | 轻量恢复当前 repo 的 thread continuity |
-| `brain_deep_context` | 加载完整 working set、规则、风险、推荐文件 |
-| `brain_checkpoint` | 写入当前工作 checkpoint，供后续 session 恢复 |
-| `brain_search` | 语义检索 |
-| `brain_store` | 存入新知识 |
-| `brain_recall` | 根据上下文自动召回 |
-| `brain_related` | 查找相关知识 |
+| `brain_learn` | 从完成的任务中提取可复用 recipe，持久化到知识库 |
+| `brain_recall` | 根据任务描述查找相关 recipe，返回步骤/文件/坑点 |
+| `brain_list` | 列出所有 recipe 摘要（支持按 project/tag/framework 过滤） |
 
-## Research Foundation
+### Distill — 上下文蒸馏
 
-基于以下研究与实践：
+| 工具 | 用途 |
+|------|------|
+| `brain_bootstrap` | 轻量启动入口 — board 信号 + thread 恢复 + recipe 自动推送 |
+| `brain_checkpoint` | 蒸馏当前工作状态，写入 thread 文件供跨 session 恢复 |
+| `brain_threads` | 列出所有未过期的 thread，按 repo 分组 |
 
-- Licklider, Man-Computer Symbiosis (1960)
-- Generative Agents (arXiv:2304.03442)
-- CoALA (arXiv:2309.02427)
-- MemGPT / Letta
-- HiAgent, A-MEM, MemBench, MIRIX
+### Board — 项目看板
 
-以及 10 个开源 memory 项目的综合分析：
-- self-improving-agent, claude-meta, self-learning-claude
-- claude-mem, openclaw-mem, MemOS-Cloud, memory-lancedb-pro
-- MindOS, autoresearch, Context-Gateway
+| 工具 | 用途 |
+|------|------|
+| `brain_board` | 读写项目四象限看板（紧急/重要矩阵）+ 备忘 |
+| `brain_check` | 扫描所有项目信号（deadline/overdue/stale）+ recipe 健康 |
+
+## Storage
+
+所有数据存储在 `~/.sce/` 下：
+
+```
+~/.sce/
+├── brain/
+│   ├── index.json          # Recipe 索引（快速查找）
+│   └── recipes/*.md        # Recipe 文件（frontmatter + markdown）
+├── threads/                # Thread 蒸馏文件（dst-YYYYMMDD-*.md）
+└── boards/                 # Board JSON 文件（每个项目一个）
+```
+
+### Recipe 格式
+
+```markdown
+---
+id: ad-lazy-load
+triggers: ["广告延迟加载", "ad lazy load"]
+summary: Vue3 广告延迟加载 hook
+framework: vue3
+project: ptc_ssr_crypto
+confidence: 0.9
+tags: ["ads", "intersection-observer"]
+---
+## 实现步骤
+1. 创建 useAdLazyLoad composable
+2. ...
+
+## 涉及文件
+- `src/composables/useAdLazyLoad.ts` — 核心 hook
+
+## 已知坑点
+- iOS Safari IntersectionObserver 需要 polyfill
+
+## Changelog
+- 2026-03-27: 首次记录
+```
+
+### Thread 格式
+
+```markdown
+---
+id: dst-20260327-abc123
+repo: /Users/xin/my-project
+task: 修复登录Bug
+branch: fix/login
+parent: dst-20260326-xyz789
+created: 2026-03-27T15:08:38.729Z
+ttl: 7d
+---
+## 决策
+- 用 JWT 替换 session cookie
+
+## 变更
+- auth.ts
+- middleware.ts
+
+## 待续
+- [ ] 部署验证
+
+## 当前状态
+JWT 替换完成，待部署
+```
+
+## Key Features (v2.1)
+
+### Recall 语义匹配
+- 55+ 同义词组（前端/后端/DevOps/通用）
+- Trigram 模糊匹配（精确匹配失败时 fallback）
+- Tags 参与评分
+- CamelCase/kebab-case 自动拆分 + 30+ 缩写展开
+
+### Bootstrap 自动推送
+- `brain_bootstrap` 冷启动时自动用 task 描述匹配 recipe
+- 输出 ≤3 条摘要提示，不需手动调 `brain_recall`
+- 不更新访问统计，避免污染衰减信号
+
+### Recipe 衰减 & 遗忘
+- 90+ 天未访问 / confidence < 0.7 / 框架过时 → 标记 ⚠️
+- `brain_check` 时自动降权：accessCount=0 且 180+ 天 → confidence=0.3
+- `brain_list` 显示健康摘要（活跃/过时/已降权）
+
+### Board-Thread-Recipe 三域关联
+- `brain_checkpoint` 回执显示关联 board items
+- Board item 标 done 时提示提取 recipe
+- `brain_learn` 自动关联匹配的 board item
+
+### Board 僵尸检测
+- active 但 90+ 天未更新的 item → `brain_check` 中显示 💤 信号
+
+## Architecture
+
+```
+src/
+├── server.ts      # MCP server 入口 + 8 个 tool handler
+├── router.ts      # 语义路由（同义词/trigram/tags 匹配）
+├── storage.ts     # 文件 I/O（recipe/board CRUD + 衰减/关联）
+├── bootstrap.ts   # Thread 解析/恢复/列表
+├── distill.ts     # Checkpoint 蒸馏 pipeline
+├── types.ts       # 所有 TypeScript 类型定义
+└── env.ts         # 环境检测（MMS bridge session → 真实 HOME）
+```
 
 ## License
 
 MIT
-
----
-
-*MindKeeper — 真正懂你的 AI*

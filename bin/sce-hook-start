@@ -1,22 +1,95 @@
 #!/usr/bin/env bash
-# SessionStart hook: 输出 pending threads 作为 systemMessage
+# SessionStart hook: 输出 threads + recipes + board 信号作为 systemMessage
+# 纯展示，不消耗 token（注入到 system context）
 set -euo pipefail
 export LC_ALL=en_US.UTF-8
 
 REAL_HOME="${ORIGINAL_HOME:-${REAL_HOME:-$(eval echo ~"$(whoami)")}}"
 THREADS_DIR="$REAL_HOME/.sce/threads"
+RECIPES_DIR="$REAL_HOME/.sce/brain/recipes"
+INDEX_FILE="$REAL_HOME/.sce/brain/index.json"
+BOARDS_DIR="$REAL_HOME/.sce/boards"
 
-# 快速检查：没有 thread 文件就静默退出
-shopt -s nullglob
-files=("$THREADS_DIR"/dst-*.md)
-shopt -u nullglob
-[ ${#files[@]} -eq 0 ] && exit 0
+output=""
 
-# 调用 dst ls 获取列表
-list=$(dst ls 2>/dev/null || true)
-[ -z "$list" ] && exit 0
+# ── 1. Threads（最多 5 条）──
+thread_list=$(dst ls 2>/dev/null || true)
+if [ -n "$thread_list" ]; then
+  output+="$thread_list"
+fi
+
+# ── 2. Recipes（最多 5 条摘要）──
+if [ -f "$INDEX_FILE" ]; then
+  recipe_list=$(python3 -c "
+import json, sys
+try:
+    idx = json.load(open('$INDEX_FILE'))
+    recipes = idx.get('recipes', [])
+    if not recipes:
+        sys.exit(0)
+    # 按 updated 降序，取最近 5 条
+    recipes.sort(key=lambda r: r.get('updated', ''), reverse=True)
+    print()
+    print('📋 最近 Recipe (%d 条)' % len(recipes[:5]))
+    for r in recipes[:5]:
+        icon = '💡' if r.get('type') == 'insight' else '📋'
+        fw = ' [%s]' % r['framework'] if r.get('framework') else ''
+        print('  %s %s: %s%s' % (icon, r['id'], r['summary'][:60], fw))
+except Exception:
+    pass
+" 2>/dev/null || true)
+  if [ -n "$recipe_list" ]; then
+    output+="$recipe_list"
+  fi
+fi
+
+# ── 3. Board 信号（overdue / deadline_soon）──
+if [ -d "$BOARDS_DIR" ]; then
+  board_signals=$(python3 -c "
+import json, os, sys
+from datetime import datetime, timedelta
+
+boards_dir = '$BOARDS_DIR'
+now = datetime.now()
+signals = []
+
+for f in os.listdir(boards_dir):
+    if not f.endswith('.json'):
+        continue
+    try:
+        board = json.load(open(os.path.join(boards_dir, f)))
+        project = board.get('project', f.replace('.json', ''))
+        for qk in ['q1', 'q2', 'q3', 'q4']:
+            for item in board.get('quadrants', {}).get(qk, []):
+                if item.get('status') != 'active' or not item.get('deadline'):
+                    continue
+                try:
+                    dl = datetime.strptime(item['deadline'], '%Y-%m-%d')
+                except ValueError:
+                    continue
+                days = (dl - now).days
+                if days < 0:
+                    signals.append('  🔴 %s › %s（过期 %d 天）' % (project, item['title'][:40], -days))
+                elif days <= 7:
+                    signals.append('  🟡 %s › %s（%d 天后截止）' % (project, item['title'][:40], days))
+    except Exception:
+        continue
+
+if signals:
+    print()
+    print('⚠️  看板信号')
+    for s in signals[:5]:
+        print(s)
+" 2>/dev/null || true)
+  if [ -n "$board_signals" ]; then
+    output+="$board_signals"
+  fi
+fi
+
+# 没有任何输出就静默退出
+[ -z "$output" ] && exit 0
 
 # 转义为 JSON string
-json_msg=$(printf '%s' "$list" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
+json_msg=$(printf '%s' "$output" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')
 
 echo "{\"systemMessage\": $json_msg}"

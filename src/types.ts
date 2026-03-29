@@ -1,73 +1,124 @@
 /**
  * MindKeeper 核心类型定义
  *
- * 设计哲学：
- * 1. 每个知识单元是自描述的（Self-Describing）
- * 2. 索引只存触发词，不存内容（Zero-Load）
- * 3. 文件即知识，Git 即版本控制（Never Lose）
+ * v2 — Recipe 驱动
+ * 知识不再是自由 markdown，而是结构化 Recipe：
+ * steps / files / gotchas / corrections + changelog
  */
 
-/** 知识单元元数据（存在 index.json 中） */
-export interface UnitMeta {
-  /** 唯一标识符 */
+// ── Recipe（核心） ──
+
+/** Recipe 文件条目 */
+export interface RecipeFile {
+  path: string;
+  description: string;
+}
+
+/** Changelog 条目 */
+export interface ChangelogEntry {
+  date: string;
+  description: string;
+}
+
+/** 知识类型：recipe（实现经验）或 insight（产品/设计认知） */
+export type KnowledgeType = 'recipe' | 'insight';
+
+/** Recipe 元数据（存在 index.json 中） */
+export interface RecipeMeta {
   id: string;
-  /** 触发词列表（语义路由用） */
+  /** 知识类型，默认 recipe */
+  type?: KnowledgeType;
   triggers: string[];
-  /** 一句话摘要 */
   summary: string;
-  /** 来源项目 */
+  /** 来源仓库完整路径（LLM 回溯代码用） */
+  repo?: string;
+  /** 来源分支 */
+  branch?: string;
   project?: string;
-  /** 创建时间 */
+  framework?: string;
   created: string;
-  /** 最后访问时间 */
-  lastAccessed?: string;
-  /** 访问次数 */
-  accessCount: number;
-  /** 置信度 0-1 */
-  confidence: number;
-  /** 标签 */
-  tags?: string[];
-}
-
-/** 完整知识单元（存在 units/*.md 中的 frontmatter） */
-export interface Unit extends UnitMeta {
-  /** 完整内容（Markdown） */
-  content: string;
-  /** 相关单元 ID */
-  related?: string[];
-  /** 标签 */
-  tags?: string[];
-}
-
-/** 极简索引（启动时唯一加载的文件） */
-export interface BrainIndex {
-  version: string;
-  /** 最后更新时间 */
   updated: string;
-  /** 单元元数据列表 */
-  units: UnitMeta[];
+  lastAccessed?: string;
+  accessCount: number;
+  confidence: number;
+  tags?: string[];
+  /** 上次人工验证日期 */
+  lastVerified?: string;
+  /** 关联的 board item ID */
+  boardItemId?: string;
+  /** 关联的 recipe IDs（经常一起使用的） */
+  related?: string[];
 }
 
-/** 检索结果 */
-export interface SearchResult {
-  unit: Unit;
-  /** 匹配得分 0-1 */
+/** 完整 Recipe（元数据 + 内容） */
+export interface Recipe extends RecipeMeta {
+  steps: string[];
+  files: RecipeFile[];
+  gotchas: string[];
+  corrections: string[];
+  changelog: ChangelogEntry[];
+  /** insight 类型专用：核心结论 */
+  conclusion?: string;
+  /** insight 类型专用：为什么得出这个结论 */
+  why?: string;
+  /** insight 类型专用：什么场景下应用 */
+  when_to_apply?: string;
+}
+
+/** Recipe 检索结果 */
+export interface RecipeSearchResult {
+  recipe: Recipe;
   score: number;
-  /** 匹配的触发词 */
   matchedTriggers: string[];
 }
 
-/** MCP 工具定义 */
+// ── 索引 ──
+
+export interface BrainIndex {
+  version: string;
+  updated: string;
+  recipes: RecipeMeta[];
+  /** @deprecated 旧 units，保留兼容 */
+  units?: UnitMeta[];
+}
+
+// ── 旧 Unit 类型（保留兼容） ──
+
+/** @deprecated 用 RecipeMeta 代替 */
+export interface UnitMeta {
+  id: string;
+  triggers: string[];
+  summary: string;
+  project?: string;
+  created: string;
+  lastAccessed?: string;
+  accessCount: number;
+  confidence: number;
+  tags?: string[];
+}
+
+/** @deprecated 用 Recipe 代替 */
+export interface Unit extends UnitMeta {
+  content: string;
+  related?: string[];
+  tags?: string[];
+}
+
+/** @deprecated */
+export interface SearchResult {
+  unit: Unit;
+  score: number;
+  matchedTriggers: string[];
+}
+
+// ── 工具名 ──
+
 export const TOOLS = {
-  /** 语义检索 */
-  SEARCH: 'brain_search',
-  /** 存入新知识 */
-  STORE: 'brain_store',
-  /** 更新已有知识 */
-  UPDATE: 'brain_update',
-  /** 删除知识 */
-  FORGET: 'brain_forget',
-  /** 列出所有主题 */
+  /** 任务完成后提取 recipe */
+  LEARN: 'brain_learn',
+  /** 根据任务描述召回 recipe */
+  RECALL: 'brain_recall',
+  /** 列出所有 recipe */
   LIST: 'brain_list',
   /** 轻量启动入口 */
   BOOTSTRAP: 'brain_bootstrap',
@@ -75,4 +126,68 @@ export const TOOLS = {
   CHECKPOINT: 'brain_checkpoint',
   /** 列出 threads */
   THREADS: 'brain_threads',
+  /** 读写项目看板 */
+  BOARD: 'brain_board',
+  /** 扫描项目信号 */
+  CHECK: 'brain_check',
 } as const;
+
+// ── Board（项目看板） ──
+
+export const QUADRANT_KEYS = ['q1', 'q2', 'q3', 'q4'] as const;
+export type QuadrantKey = typeof QUADRANT_KEYS[number];
+
+export const QUADRANT_LABELS: Record<QuadrantKey, string> = {
+  q1: '紧急+重要',
+  q2: '重要+不紧急',
+  q3: '紧急+不重要',
+  q4: '不紧急+不重要',
+};
+
+export interface BoardItem {
+  id: string;
+  title: string;
+  deadline?: string;
+  status: 'active' | 'done' | 'archived';
+  quadrant: QuadrantKey;
+  assignee?: string;
+  repo?: string;
+  created: string;
+  updated?: string;
+  source?: string;
+  source_ref?: string;
+}
+
+export interface BoardMemo {
+  text: string;
+  created: string;
+  source?: string;
+}
+
+export interface Board {
+  project: string;
+  description?: string;
+  repo?: string;
+  aliases?: string[];
+  sub_projects?: Record<string, { repo?: string; description?: string }>;
+  last_updated: string;
+  stale_warning_days?: number;
+  quadrants: Record<QuadrantKey, BoardItem[]>;
+  memos: BoardMemo[];
+}
+
+/** brain_check 信号 */
+export interface BoardSignal {
+  project: string;
+  type: 'deadline_soon' | 'overdue' | 'stale' | 'active' | 'stale_item';
+  message: string;
+  days?: number;
+  item_count?: number;
+}
+
+/** Recipe 过时信号 */
+export interface RecipeStalenessSignal {
+  recipeId: string;
+  summary: string;
+  reasons: string[];
+}
