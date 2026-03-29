@@ -14,6 +14,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { loadIndex } from './storage.js';
 import {
@@ -26,7 +28,7 @@ const index = loadIndex();
 
 const server = new Server(
   { name: 'mindkeeper', version: '2.1.0' },
-  { capabilities: { tools: {} } }
+  { capabilities: { tools: {}, resources: {} } }
 );
 
 // ── 工具定义 ──
@@ -227,6 +229,58 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
   ],
 }));
+
+// ── Resources（AI 自动拉取，无需调 tool） ──
+
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+  resources: [
+    {
+      uri: 'mindkeeper://recipes',
+      name: 'Recipe 知识库摘要',
+      description: '所有已存储 recipe/insight 的 ID、触发词和一句话摘要。AI 可据此判断是否需要 brain_recall 获取详情。',
+      mimeType: 'text/plain',
+    },
+  ],
+}));
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const { uri } = request.params;
+
+  if (uri === 'mindkeeper://recipes') {
+    const recipes = index.recipes;
+    if (recipes.length === 0) {
+      return {
+        contents: [{
+          uri,
+          mimeType: 'text/plain',
+          text: 'Recipe 库为空。',
+        }],
+      };
+    }
+
+    const lines = recipes.map(r => {
+      const icon = r.type === 'insight' ? '💡' : '📋';
+      const triggers = r.triggers.slice(0, 3).join('/');
+      return `${icon} ${r.id}: ${r.summary} [${triggers}]`;
+    });
+
+    return {
+      contents: [{
+        uri,
+        mimeType: 'text/plain',
+        text: `MindKeeper 知识库 (${recipes.length} 条):\n${lines.join('\n')}`,
+      }],
+    };
+  }
+
+  return {
+    contents: [{
+      uri,
+      mimeType: 'text/plain',
+      text: `未知资源: ${uri}`,
+    }],
+  };
+});
 
 // ── 工具路由 ──
 
