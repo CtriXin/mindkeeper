@@ -1,0 +1,144 @@
+  - `python3 -m py_compile scripts/crs_openai_account_migrate.py` ✅
+  - `export --ssh root@82.156.121.141 --platform claude --account-name fish` 成功导出 Claude OAuth bundle ✅
+  - `migrate --platform both --all --force-account-type dedicated --compress --dry-run` 成功生成 `OpenAI + Claude` 双平台计划并写出 `/tmp/crs-both-migrate-test.json.gz` ✅
+
+## 2026-03-30 01:17 +0800
+- agent: Codex
+- landed commit/tag/release: none (uncommitted)
+- changed file scope:
+  - `scripts/diagnose_newapi_crs_cache.py`
+  - `.ai/agent-release-notes.md`
+- landed summary:
+  - 新增 `diagnose_newapi_crs_cache.py`，用于把 `direct CRS` vs `newapi -> CRS` 的 Responses API 行为一次性打成 JSON 报告。
+  - 报告覆盖：`/v1/models` 探测、请求指纹（`session_id` / `x-session-id` / `prompt_cache_key` / `sha256`）、SSE `response.completed` 字段、usage/cache 指标，以及自动 summary。
+  - 脚本默认跑 `small / medium / large` 三组场景，适合明天在公司机器直接跑完后把 JSON 回传分析。
+- reusable release-note bullets:
+  - 这个脚本的目标不是 smoke pass/fail，而是拿足够证据判断到底是 cache identity、header/body 映射，还是环境配置差异。
+  - 输出已经包含 `previous_response_id`、`prompt_cache_key` echo、`service_tier`、`safety_identifier`，避免“字段不够无法下结论”。
+  - 本地小规模验证时，脚本已经能抓到 `large` 场景下 `direct=[0,0]`、`relay=[0,1408]` 这类差异，说明格式和 summary 可用。
+- validation run and result:
+  - `python3 -m py_compile scripts/diagnose_newapi_crs_cache.py` ✅
+  - `python3 scripts/diagnose_newapi_crs_cache.py --help` ✅
+  - 真实运行：输出 `/tmp/diag-newapi-crs-test.json` 成功 ✅
+  - 输出结构校验：包含 `models_probe / scenarios / summary`，单轮结果含 `request / http / events_preview / response / raw_error_body` ✅
+
+## 2026-03-30 14:39 +0800
+- agent: Codex
+- landed commit/tag/release: none (uncommitted)
+- changed file scope:
+  - `.ai/plan/TODO.md`
+  - `.ai/plan/current.md`
+  - `docs/archive/todo-archive-2026-03.md`
+- landed summary:
+  - 将当前 TODO 收敛为仅保留未完成项，并按四象限补入一版 `MMS vNext` 升级路线。
+  - 新增 `.ai/plan/current.md`，冻结本轮产品升级的目标、非目标、Phase 1/2/3 和验证口径。
+  - 把 TODO 中已完成项补归档到 `docs/archive/todo-archive-2026-03.md`，减少计划与历史混杂。
+- reusable release-note bullets:
+  - 已形成 `MMS vNext` 的分阶段升级清单，优先顺序是 `profile/preset`、`activate/env`、`debug trace`。
+  - 本轮明确不把 MMS 改造成 `server-first` 或 `Claude-centric router`，仍保持多 CLI control plane 定位。
+  - 计划文件已补充受保护面边界和验证口径，便于后续按最小风险落地。
+- validation run and result:
+  - 计划/文档更新，无运行时代码变更 ✅
+
+## 2026-03-30 18:15 +0800
+- agent: Codex
+- landed commit/tag/release: none (uncommitted)
+- changed file scope:
+  - `docs/MMS_CRS_NAMING_STANDARD.md`
+  - `.ai/agent-release-notes.md`
+- landed summary:
+  - 只读核查了 `hive / MindKeeper / MMS / Sparkring` 对 provider 与 key 的引用边界，确认本轮若仅修改显示名与说明，不改 `provider.id` 和 key secret，则不会影响现有主链。
+  - 新增中文命名规范文档，统一 `MMS provider`、`CRS account`、`CRS api key`、`relay/newapi` 的命名口径和实施边界。
+  - 文档同时给出当前环境的推荐映射、风险动作清单和分阶段落地顺序，便于后续按最小风险执行。
+- reusable release-note bullets:
+  - 现网稳定依赖主要落在 `provider.id`、`model-routes.json`、真实 `api_key secret`，不是显示名。
+  - 这轮推荐先做“安全版重整”：只改 `name / note / description / tags / enabled`，不做 id 与 secret 级别变更。
+  - 命名规范已固定 `oauth / direct / crs / relay / legacy / company / xin` 前缀语义，可直接作为后续改名准则。
+- validation run and result:
+  - `rg` 核查本地 `MMS` 与仓库中对 `provider_id` 的引用 ✅
+  - 核查个人 `CRS` 的 `api_keys / groups / accounts` 结构与实际命名现状 ✅
+  - 结论：仅改显示名不会影响现有 `hive / MindKeeper / Sparkring` 使用边界 ✅
+
+## 2026-03-30 18:42 +0800
+- agent: Codex
+- landed commit/tag/release: none (uncommitted)
+- changed file scope:
+  - `/Users/xin/.config/mms/config.toml`
+  - `/Users/xin/.config/mms/speed-stats.json`
+  - `/Users/xin/.config/mms/usage.json`
+  - `/Users/xin/.config/mms/health_check.json`
+  - `docs/MMS_CRS_NAMING_STANDARD.md`
+- landed summary:
+  - 完成 `MMS` 安全版命名收口：统一 provider 显示名与 note，禁用历史 provider，移除失效 `alex-codex` 入口。
+  - 完成个人 `CRS` 账户与 API Key 的显示名重整，不改 key secret，不改 provider id。
+  - 完成个人 `newapi` 静态 channel/token 的显示名重整；仅修改静态入口与静态 token，不触碰 `provision:*` 动态 token。
+  - 同步重写本地 `speed/usage/health` 缓存中的旧显示名，避免界面继续混用旧标签。
+- reusable release-note bullets:
+  - 本轮修改范围限定在显示名、note、enabled 状态，不涉及 `provider.id`、`api key secret`、`base_url`、`route`。
+  - `newapi` 仅整理静态入口：`minimax-direct / bailian-direct / kimi-direct / glm-direct / relay-op-main-xin / relay-cl-main-xin` 等。
+  - `CRS` 当前统一后的关键名字为：`relay-main`、`crs-cl-b2`、`crs-cl-fish`、`crs-op-turkey`。
+- validation run and result:
+  - `python3` 解析 `/Users/xin/.config/mms/config.toml` 成功 ✅
+  - 个人 `CRS` admin API 回查账户名与 key 名已更新 ✅
+  - 个人 `newapi` PostgreSQL 回查静态 `channels/tokens` 名称已更新 ✅
+  - `speed-stats.json / usage.json / health_check.json` 均能重新解析为合法 JSON ✅
+
+## 2026-03-30 22:59 +0800
+- agent: Codex
+- landed commit/tag/release: none (uncommitted)
+- changed file scope:
+  - `AGENTS.md`
+  - `.ai/agent-release-notes.md`
+  - `/Users/xin/.codex/skills/distill/SKILL.md` (global skill)
+- landed summary:
+  - 收紧全局 `distill` skill：明确把字面量 `/distill` 视为 trigger，且 `repo` 必须优先由 `git rev-parse --show-toplevel` 解析。
+  - 为失败回执补充硬要求：若 `brain_checkpoint` 失败，必须回报实际尝试过的绝对路径与 fallback，而不是只说 `repo not found`。
+  - 在仓库本地规则中新增 `Local Slash Triggers`，让本仓库里的 `Codex` 对 `/distill` 采用固定处理流程。
+- reusable release-note bullets:
+  - 本轮不涉及 `TUI -> core -> launcher -> bridge` 主链，仅调整 agent 行为规则与全局 skill 提示。
+  - `/distill` 现在在本仓库中被明确视为显式蒸馏请求，不再依赖模糊语义匹配。
+  - 后续若再失败，回执应直接给出绝对路径，便于判断是 git root 解析失败还是 `mindkeeper` 参数问题。
+- validation run and result:
+  - `git rev-parse --show-toplevel` 返回 `/Users/xin/auto-skills/CtriXin-repo/multi-model-switch` ✅
+  - 规则落点核查：`AGENTS.md` 与全局 `distill` skill 已包含 `/distill` trigger 和 `repo` 解析约束 ✅
+  - `mindkeeper.brain_checkpoint` 在当前仓库以 git root 作为 `repo` 调用成功 ✅
+
+## 2026-03-30 23:20 +0800
+- agent: Codex
+- landed commit/tag/release: none (uncommitted)
+- changed file scope:
+  - `AGENTS.md`
+  - `mms_bridge.py`
+  - `.ai/agent-release-notes.md`
+- landed summary:
+  - 为仓库本地规则补充 `Local Slash Triggers`，明确 `/distill` 与 `repo` 解析的固定处理方式。
+  - 在 gateway bridge 的 Anthropic Messages 转发链路中，对非 `claude-*` 模型统一剥离 `cache_control`，避免国产模型网关因 prompt caching 字段报错。
+  - 这轮不改 `OpenAI Responses bridge`，其分支仍在非 Claude 路径处理前直接返回。
+- reusable release-note bullets:
+  - `/distill` 现在在本仓库被明确视为显式蒸馏请求，失败时必须回报实际绝对路径。
+  - 非 Claude 模型经 Anthropic Messages 路径转发时，会先清理 `cache_control`，减少上游不兼容字段。
+  - 这轮仅收敛 bridge 请求体兼容性，不改变默认 launcher 选择和 runtime 决策。
+- validation run and result:
+  - `python3 -m py_compile mms_bridge.py` ✅
+  - `git diff -- AGENTS.md mms_bridge.py` 人工核查 scope ✅
+  - `python3 mms test --provider xin --cli codex` ❌ `provider not found`（当前本地配置缺少 `xin`，未形成有效 smoke）
+
+## 2026-03-30 23:35 +0800
+- agent: Codex
+- landed commit/tag/release: none (uncommitted)
+- changed file scope:
+  - `mms_core.py`
+  - `.ai/plan/TODO.md`
+  - `.ai/agent-release-notes.md`
+- landed summary:
+  - 完成 `Phase 1 debug-trace`：`--trace` 现在会在 launch 前打印最终 `cli/provider/account/model/bridge/runtime`，并标出每个值的来源。
+  - 将 `_choose_runtime_source()` 的最终 runtime 决策收口到 trace 里，覆盖 `single option`、`default(no-tty)`、`provider/account override` 等路径。
+  - 补齐 TUI `provider browse / load balance / last used / family` 以及 `custom` 路径的 trace 打点，不改 launcher 和 bridge 语义。
+- reusable release-note bullets:
+  - 这轮只碰 `mms_core.py` 的选择链与诊断输出，不改变默认 launch 路径。
+  - `trace` 的解释优先显示显式来源，例如 `preset`、`CLI target`、`manual select`，runtime 类字段再回落到 `runtime resolve`。
+  - 账号模式下 `account` 现在会正确显示 runtime 的真实 account id，不再只对 provider runtime 有效。
+- validation run and result:
+  - `python3 -m py_compile mms_core.py` ✅
+  - Python stub 验证 `_print_trace()`：provider runtime 与 oauth runtime 的来源展示符合预期 ✅
+  - Python stub 验证 `_choose_runtime_source()`：会写入 `runtime resolve` trace 记录，覆盖 `single option` 分支 ✅
