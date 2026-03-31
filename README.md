@@ -10,7 +10,9 @@ Personal Cognitive Substrate — 跨项目、跨 session 的第二大脑
 curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash
 ```
 
-**Or ask your AI agent to do it** — paste this into Claude Code / Cursor / Codex:
+## Install via AI Agent
+
+Paste this single line into **Claude Code / Cursor / Codex** — the agent will handle the rest:
 
 ```
 Install MindKeeper MCP server by running: curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash — it handles everything including MCP config. Restart the client after install.
@@ -298,16 +300,6 @@ pnpm cli search "广告延迟加载"
 
 # Tests
 pnpm test
-```
-
----
-
-## Agent Setup Prompt
-
-> Paste this into Claude Code / Cursor / Codex to auto-install:
-
-```
-Install MindKeeper MCP server by running: curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash — it handles everything including MCP config. Restart the client after install.
 ```
 
 ---
