@@ -305,60 +305,12 @@ pnpm test
 
 ## Agent Setup Prompt
 
-> Copy the block below into **Claude Code, Cursor, Codex, or any AI coding agent** to install and configure MindKeeper automatically.
+> Paste this into Claude Code / Cursor / Codex to auto-install:
 
-<!-- AGENT-READABLE-BLOCK-START -->
-
-```text
-Install and configure the MindKeeper MCP server by following these instructions.
-
-1. ENVIRONMENT DETECTION
-   Determine the real user home directory. If the current HOME matches
-   the pattern /Users/<user>/.config/mms/*-gateway/s/*, you are inside
-   an MMS isolated sandbox — extract the real home as /Users/<user>.
-   Otherwise use HOME as-is. All paths below use REAL_HOME.
-
-2. INSTALL
-   INSTALL_DIR="$REAL_HOME/.local/share/mindkeeper"
-
-   If INSTALL_DIR already exists:
-     cd "$INSTALL_DIR" && git pull --ff-only && npm install --production
-
-   Otherwise:
-     git clone --depth 1 https://github.com/CtriXin/mindkeeper.git "$INSTALL_DIR"
-     cd "$INSTALL_DIR" && npm install --production
-
-   IMPORTANT: use npm, NOT pnpm — pnpm symlinks break in sandboxed environments.
-
-3. VERIFY
-   Confirm "$INSTALL_DIR/dist/server.js" exists (pre-built in repo).
-   If missing: npm install && npx tsc
-
-4. CONFIGURE MCP
-   Read the user's MCP settings file. For Claude Code it is
-   ~/.claude/settings.json (use the REAL home path, not the sandbox path).
-   Merge in this entry (do NOT overwrite existing mcpServers keys):
-
-   {
-     "mcpServers": {
-       "mindkeeper": {
-         "command": "node",
-         "args": ["INSTALL_DIR/dist/server.js"]
-       }
-     }
-   }
-
-   Replace INSTALL_DIR with the resolved absolute path.
-
-5. DONE
-   Tell the user:
-   - Installed at INSTALL_DIR
-   - MCP config updated — restart the AI client to load the server
-   - 8 tools available: brain_bootstrap, brain_checkpoint, brain_recall,
-     brain_learn, brain_list, brain_check, brain_board, brain_threads
 ```
-
-<!-- AGENT-READABLE-BLOCK-END -->
+Run: curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash
+Then add the MCP config from its output to my settings file.
+```
 
 ---
 
