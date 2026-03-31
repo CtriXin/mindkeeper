@@ -4,6 +4,19 @@
 
 Personal Cognitive Substrate — 跨项目、跨 session 的第二大脑
 
+## Quick Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash
+```
+
+**Or ask your AI agent to do it** — paste this into Claude Code / Cursor / Codex:
+
+```
+Install MindKeeper: curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash
+Then add the MCP config it prints to my settings. Use the absolute path it outputs.
+```
+
 ---
 
 ## What is MindKeeper?
@@ -292,68 +305,60 @@ pnpm test
 
 ## Agent Setup Prompt
 
-> **For AI agents**: Copy the prompt below into Claude Code, Cursor, Codex, or any MCP-compatible agent to install and configure MindKeeper automatically.
+> Copy the block below into **Claude Code, Cursor, Codex, or any AI coding agent** to install and configure MindKeeper automatically.
 
-<details>
-<summary>Click to expand full agent setup prompt</summary>
+<!-- AGENT-READABLE-BLOCK-START -->
 
 ```text
-Install and configure MindKeeper MCP server. Follow these steps exactly:
+Install and configure the MindKeeper MCP server by following these instructions.
 
-## Step 1: Detect Environment
+1. ENVIRONMENT DETECTION
+   Determine the real user home directory. If the current HOME matches
+   the pattern /Users/<user>/.config/mms/*-gateway/s/*, you are inside
+   an MMS isolated sandbox — extract the real home as /Users/<user>.
+   Otherwise use HOME as-is. All paths below use REAL_HOME.
 
-Check if running in an MMS isolated environment:
-- If HOME matches pattern /Users/<user>/.config/mms/*-gateway/s/*, extract the real home as /Users/<user>
-- Otherwise, use HOME as-is
-- Set INSTALL_DIR to <REAL_HOME>/.local/share/mindkeeper
+2. INSTALL
+   INSTALL_DIR="$REAL_HOME/.local/share/mindkeeper"
 
-## Step 2: Install
+   If INSTALL_DIR already exists:
+     cd "$INSTALL_DIR" && git pull --ff-only && npm install --production
 
-Run these commands:
-  git clone --depth 1 https://github.com/CtriXin/mindkeeper.git <INSTALL_DIR>
-  cd <INSTALL_DIR>
-  npm install --production
+   Otherwise:
+     git clone --depth 1 https://github.com/CtriXin/mindkeeper.git "$INSTALL_DIR"
+     cd "$INSTALL_DIR" && npm install --production
 
-If the directory already exists, update instead:
-  cd <INSTALL_DIR> && git pull --ff-only && npm install --production
+   IMPORTANT: use npm, NOT pnpm — pnpm symlinks break in sandboxed environments.
 
-IMPORTANT: Use npm, NOT pnpm. pnpm uses symlinks which may not work in isolated environments.
+3. VERIFY
+   Confirm "$INSTALL_DIR/dist/server.js" exists (pre-built in repo).
+   If missing: npm install && npx tsc
 
-## Step 3: Verify
+4. CONFIGURE MCP
+   Read the user's MCP settings file. For Claude Code it is
+   ~/.claude/settings.json (use the REAL home path, not the sandbox path).
+   Merge in this entry (do NOT overwrite existing mcpServers keys):
 
-Check that <INSTALL_DIR>/dist/server.js exists. The dist/ directory is pre-built in the repository.
+   {
+     "mcpServers": {
+       "mindkeeper": {
+         "command": "node",
+         "args": ["INSTALL_DIR/dist/server.js"]
+       }
+     }
+   }
 
-## Step 4: Configure MCP
+   Replace INSTALL_DIR with the resolved absolute path.
 
-Add to the user's MCP configuration file (e.g., ~/.claude/settings.json):
-
-{
-  "mcpServers": {
-    "mindkeeper": {
-      "command": "node",
-      "args": ["<INSTALL_DIR>/dist/server.js"]
-    }
-  }
-}
-
-Replace <INSTALL_DIR> with the actual absolute path (e.g., /Users/xin/.local/share/mindkeeper).
-
-## Step 5: Confirm
-
-Tell the user:
-- MindKeeper is installed at <INSTALL_DIR>
-- MCP config has been added
-- They need to restart their AI client for the MCP server to load
-- Available tools: brain_bootstrap, brain_checkpoint, brain_recall, brain_learn, brain_list, brain_check, brain_board, brain_threads
-
-## Troubleshooting
-
-- If symlink errors occur: run `echo 'node-linker=hoisted' >> <INSTALL_DIR>/.npmrc` then `cd <INSTALL_DIR> && pnpm install`
-- If dist/server.js is missing: run `cd <INSTALL_DIR> && npm install && npx tsc`
-- If HOME is wrong (MMS): the install detects /Users/<user>/.config/mms/*-gateway/s/* and resolves to /Users/<user>
+5. DONE
+   Tell the user:
+   - Installed at INSTALL_DIR
+   - MCP config updated — restart the AI client to load the server
+   - 8 tools available: brain_bootstrap, brain_checkpoint, brain_recall,
+     brain_learn, brain_list, brain_check, brain_board, brain_threads
 ```
 
-</details>
+<!-- AGENT-READABLE-BLOCK-END -->
 
 ---
 
