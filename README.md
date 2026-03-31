@@ -13,8 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh 
 **Or ask your AI agent to do it** — paste this into Claude Code / Cursor / Codex:
 
 ```
-Install MindKeeper: curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash
-Then add the MCP config it prints to my settings. Use the absolute path it outputs.
+Install MindKeeper MCP server by running: curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash — it handles everything including MCP config. Restart the client after install.
 ```
 
 ---
@@ -308,8 +307,7 @@ pnpm test
 > Paste this into Claude Code / Cursor / Codex to auto-install:
 
 ```
-Run: curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash
-Then add the MCP config from its output to my settings file.
+Install MindKeeper MCP server by running: curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash — it handles everything including MCP config. Restart the client after install.
 ```
 
 ---
