@@ -26,6 +26,7 @@ MindKeeper 是开源项目，欢迎贡献！但为了保持项目质量和方向
 - 架构改动
 - 新增依赖
 - API 变更
+- 大规模 recipe 重组或命名规范调整
 
 ❌ **不接受**：
 - 直接 push 到 main
@@ -44,6 +45,22 @@ refactor: 重构
 test: 测试
 chore: 杂项
 ```
+
+## Recipe 贡献约定
+
+新增或整理 recipe 时，默认遵循下面的边界：
+
+- 高频、跨项目、稳定复用的经验，可以新建独立 recipe
+- 同一主题下的小补充，应优先并入现有 recipe，避免知识碎片化
+- 项目专属经验应放进项目 recipe，不应塞进全局工具 recipe
+- 只服务于一次任务的上下文，优先留在 thread / board，不要过早提升成 recipe
+
+推荐命名：
+
+- `rcp-mindkeeper-*`：MindKeeper 自身与跨项目规则
+- `rcp-lark-*`：Feishu / `lark-cli`
+- `rcp-mms-env-*`：隔离环境 / `HOME` / 启动问题
+- `rcp-<project>-*`：项目专属经验
 
 ## 行为准则
 
