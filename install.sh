@@ -1,11 +1,10 @@
 #!/bin/bash
 # MindKeeper Install Script
-# Works in standard and MMS isolated environments
+# Fully automated — installs, configures MCP, handles edge cases.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash
-#   bash install.sh              # fresh install
-#   bash install.sh --update     # update existing installation
+#   bash install.sh --update
 
 set -euo pipefail
 
@@ -13,108 +12,132 @@ set -euo pipefail
 REAL_HOME="$HOME"
 if [[ "$HOME" =~ ^(/Users/[^/]+)/\.config/mms/ ]]; then
   REAL_HOME="${BASH_REMATCH[1]}"
-  echo "🔍 MMS isolated environment detected"
-  echo "   Isolated HOME: $HOME"
-  echo "   Real HOME:     $REAL_HOME"
+  echo "MMS sandbox detected — using real HOME: $REAL_HOME"
 fi
 
 INSTALL_DIR="$REAL_HOME/.local/share/mindkeeper"
 REPO_URL="https://github.com/CtriXin/mindkeeper.git"
 UPDATE_MODE=false
-
-if [[ "${1:-}" == "--update" ]]; then
-  UPDATE_MODE=true
-fi
+[[ "${1:-}" == "--update" ]] && UPDATE_MODE=true
 
 echo ""
 echo "━━━ MindKeeper Installer ━━━"
 echo ""
 
-# ── Prerequisites check ──
+# ── Prerequisites ──
 for cmd in git node npm; do
   if ! command -v "$cmd" &>/dev/null; then
-    echo "❌ Required command not found: $cmd"
-    echo "   Please install Node.js (>=18) and git first."
+    echo "ERROR: $cmd not found. Install Node.js (>=18) and git first."
     exit 1
   fi
 done
 
 NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
 if (( NODE_VERSION < 18 )); then
-  echo "❌ Node.js >= 18 required (found: $(node -v))"
+  echo "ERROR: Node.js >= 18 required (found: $(node -v))"
   exit 1
 fi
 
 # ── Clone or update ──
 if [ -d "$INSTALL_DIR/.git" ]; then
   if $UPDATE_MODE; then
-    echo "📦 Updating existing installation..."
+    echo "Updating existing installation..."
     cd "$INSTALL_DIR"
     git pull --ff-only
   else
-    echo "📦 Installation already exists at $INSTALL_DIR"
-    echo "   Run with --update to update, or remove and re-run."
-    echo ""
-    echo "   To update:  bash install.sh --update"
-    echo "   To remove:  rm -rf $INSTALL_DIR"
+    echo "Already installed at $INSTALL_DIR"
+    echo "Use --update to update."
     exit 0
   fi
 else
-  echo "📦 Cloning MindKeeper..."
+  echo "Cloning MindKeeper..."
   mkdir -p "$(dirname "$INSTALL_DIR")"
   git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
   cd "$INSTALL_DIR"
 fi
 
-# ── Install dependencies ──
-# Use npm (not pnpm) to avoid symlink issues in MMS environments
-echo "📦 Installing dependencies..."
+# ── Install deps (npm avoids pnpm symlink issues in sandboxed envs) ──
+echo "Installing dependencies..."
 npm install --production --ignore-scripts 2>/dev/null
 
-# ── Verify ──
-if [ ! -f "$INSTALL_DIR/dist/server.js" ]; then
-  echo "❌ dist/server.js not found. Build may be required."
-  echo "   Run: cd $INSTALL_DIR && npm install && npx tsc"
-  exit 1
+# ── Handle pnpm symlink fallback ──
+if [ -f "$INSTALL_DIR/pnpm-lock.yaml" ] && ! [ -f "$INSTALL_DIR/.npmrc" ]; then
+  echo 'node-linker=hoisted' > "$INSTALL_DIR/.npmrc"
 fi
 
-echo ""
-echo "✅ MindKeeper installed to: $INSTALL_DIR"
-echo ""
+# ── Verify build ──
+if [ ! -f "$INSTALL_DIR/dist/server.js" ]; then
+  echo "dist/ missing — building from source..."
+  cd "$INSTALL_DIR"
+  npm install --ignore-scripts 2>/dev/null
+  npx tsc
+fi
 
-# ── Output MCP configuration ──
-cat <<EOF
-━━━ MCP Configuration ━━━
+# ── Auto-configure MCP (Claude Code) ──
+SETTINGS_FILE="$REAL_HOME/.claude/settings.json"
+SERVER_PATH="$INSTALL_DIR/dist/server.js"
 
-Add the following to your MCP config file:
+configure_mcp() {
+  local file="$1"
+  mkdir -p "$(dirname "$file")"
 
-  Claude Code:  ~/.claude/settings.json
-  Cursor:       .cursor/mcp.json
-  Windsurf:     .windsurfrules/mcp.json
-
+  if [ ! -f "$file" ]; then
+    # Create new settings file
+    cat > "$file" <<MCPEOF
 {
   "mcpServers": {
     "mindkeeper": {
       "command": "node",
-      "args": ["$INSTALL_DIR/dist/server.js"]
+      "args": ["$SERVER_PATH"]
     }
   }
 }
+MCPEOF
+    echo "Created $file with MindKeeper MCP config."
+    return
+  fi
 
-━━━ Verify ━━━
+  # Check if mindkeeper is already configured
+  if grep -q '"mindkeeper"' "$file" 2>/dev/null; then
+    echo "MCP config already exists in $file — skipped."
+    return
+  fi
 
-  node $INSTALL_DIR/dist/server.js
+  # Insert into existing mcpServers block
+  if grep -q '"mcpServers"' "$file" 2>/dev/null; then
+    # Use node to merge JSON safely
+    node -e "
+      const fs = require('fs');
+      const f = '$file';
+      const cfg = JSON.parse(fs.readFileSync(f, 'utf8'));
+      cfg.mcpServers = cfg.mcpServers || {};
+      cfg.mcpServers.mindkeeper = { command: 'node', args: ['$SERVER_PATH'] };
+      fs.writeFileSync(f, JSON.stringify(cfg, null, 2) + '\n');
+    " 2>/dev/null && echo "Added MindKeeper to $file" && return
+  fi
 
-The server communicates via stdio (MCP protocol).
-If no errors appear, the installation is working.
+  # No mcpServers key — add it
+  node -e "
+    const fs = require('fs');
+    const f = '$file';
+    const cfg = JSON.parse(fs.readFileSync(f, 'utf8'));
+    cfg.mcpServers = { mindkeeper: { command: 'node', args: ['$SERVER_PATH'] } };
+    fs.writeFileSync(f, JSON.stringify(cfg, null, 2) + '\n');
+  " 2>/dev/null && echo "Added MindKeeper to $file" && return
 
-━━━ Symlink Note (MMS users) ━━━
+  echo "Could not auto-configure $file — add manually:"
+  echo '  "mindkeeper": { "command": "node", "args": ["'"$SERVER_PATH"'"] }'
+}
 
-If you use pnpm and encounter symlink errors, set:
+configure_mcp "$SETTINGS_FILE"
 
-  echo 'node-linker=hoisted' >> $INSTALL_DIR/.npmrc
-  cd $INSTALL_DIR && pnpm install
-
-Or simply use npm (this script already does).
-
-EOF
+echo ""
+echo "━━━ Done ━━━"
+echo ""
+echo "Installed:  $INSTALL_DIR"
+echo "MCP config: $SETTINGS_FILE"
+echo ""
+echo "Restart your AI client to load MindKeeper."
+echo "Tools: brain_bootstrap, brain_checkpoint, brain_recall, brain_learn,"
+echo "       brain_list, brain_check, brain_board, brain_threads"
+echo ""
