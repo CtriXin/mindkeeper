@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 1080px; height: 1350px; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; background: linear-gradient(180deg, #0f172a, #1e293b); color: #fff; padding: 50px; display: flex; flex-direction: column; }
+  h1 { font-size: 44px; font-weight: 800; text-align: center; margin-bottom: 8px; }
+  .sub { text-align: center; color: #94a3b8; font-size: 20px; margin-bottom: 40px; }
+  .cols { display: flex; gap: 20px; flex: 1; }
+  .col { flex: 1; border-radius: 20px; padding: 28px; display: flex; flex-direction: column; gap: 14px; }
+  .col-bad { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); }
+  .col-good { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.25); }
+  .col-title { font-size: 24px; font-weight: 700; text-align: center; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .col-bad .col-title { color: #fca5a5; }
+  .col-good .col-title { color: #86efac; }
+  .row { background: rgba(255,255,255,0.04); border-radius: 12px; padding: 18px; }
+  .row .time { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .col-bad .time { color: #f87171; }
+  .col-good .time { color: #4ade80; }
+  .row .action { font-size: 17px; color: #e2e8f0; margin-bottom: 4px; }
+  .row .quote { font-size: 14px; color: #94a3b8; font-style: italic; }
+  .col-good .quote { color: #86efac; font-style: normal; }
+  .result { border-radius: 14px; padding: 18px; text-align: center; margin-top: auto; }
+  .col-bad .result { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); }
+  .col-good .result { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); }
+  .result .big { font-size: 22px; font-weight: 700; }
+  .col-bad .result .big { color: #fca5a5; }
+  .col-good .result .big { color: #86efac; }
+  .result .small { font-size: 15px; color: #94a3b8; margin-top: 4px; }
+  .footer { text-align: center; color: #475569; font-size: 15px; margin-top: 24px; }
+</style>
+</head>
+<body>
+  <h1>AI 编程助手的一天</h1>
+  <div class="sub">没有 MindKeeper vs 有 MindKeeper</div>
+  <div class="cols">
+    <div class="col col-bad">
+      <div class="col-title">没有 MindKeeper</div>
+      <div class="row"><div class="time">09:00</div><div class="action">开始新功能</div><div class="quote">"上次做过类似的...但忘了怎么做的"</div></div>
+      <div class="row"><div class="time">10:30</div><div class="action">切换项目修 Bug</div><div class="quote">"这个坑上次踩过...又踩了一遍"</div></div>
+      <div class="row"><div class="time">14:00</div><div class="action">继续上午的功能</div><div class="quote">"做到哪了？改了哪些文件？"</div></div>
+      <div class="row"><div class="time">16:00</div><div class="action">Review 同事代码</div><div class="quote">"这个模块的设计决策在哪？"</div></div>
+      <div class="row"><div class="time">17:30</div><div class="action">下班前想记录进度</div><div class="quote">"算了太麻烦了，明天再说"</div></div>
+      <div class="result"><div class="big">重复踩坑 + 上下文丢失</div><div class="small">每天浪费 2-3 小时</div></div>
+    </div>
+    <div class="col col-good">
+      <div class="col-title">有 MindKeeper</div>
+      <div class="row"><div class="time">09:00</div><div class="action">开始新功能</div><div class="quote">Recipe 自动推送已有方案</div></div>
+      <div class="row"><div class="time">10:30</div><div class="action">切换项目修 Bug</div><div class="quote">Recall 命中: 坑的解法在这里</div></div>
+      <div class="row"><div class="time">14:00</div><div class="action">继续上午的功能</div><div class="quote">Bootstrap 恢复: 30 秒就位</div></div>
+      <div class="row"><div class="time">16:00</div><div class="action">Review 同事代码</div><div class="quote">Board 看板: 历史决策一目了然</div></div>
+      <div class="row"><div class="time">17:30</div><div class="action">下班前</div><div class="quote">Checkpoint 一键蒸馏，明天无缝继续</div></div>
+      <div class="result"><div class="big">经验复用 + 无缝衔接</div><div class="small">专注创造，不重复劳动</div></div>
+    </div>
+  </div>
+  <div class="footer">github.com/CtriXin/mindkeeper · MIT 开源</div>
+</body>
+</html>
