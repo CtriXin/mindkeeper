@@ -169,7 +169,12 @@ function detectReposFromChanges(
       const absPath = resolveAbsPath(filePath, fallbackRepo);
       if (absPath) {
         const root = gitRepoRoot(absPath);
-        if (root) repo = root;
+        // 只在 git root 不是 fallbackRepo 的严格祖先时才采用
+        // 否则说明 fallbackRepo 目录本身没有 .git，git 向上找到了更高层的 repo
+        // 此时 fallbackRepo 更精确，应保留
+        if (root && !fallbackRepo.startsWith(root + '/')) {
+          repo = root;
+        }
       }
     }
 
