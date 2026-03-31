@@ -4,6 +4,8 @@
 
 Personal Cognitive Substrate — 跨项目、跨 session 的第二大脑
 
+![MindKeeper Overview](docs/mindkeeper-overview-cn.png)
+
 ## Quick Install
 
 ```bash
