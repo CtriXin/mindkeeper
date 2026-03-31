@@ -11,7 +11,7 @@
  * 7. 更具体的 next action（不是泛文案）
  */
 
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, unlinkSync } from 'fs';
 import { join, basename } from 'path';
 import { execSync } from 'child_process';
 import { getRealHome } from './env.js';
@@ -191,6 +191,37 @@ export function listRecentThreads(repo?: string, limit: number = 2): ThreadSumma
   } catch {
     return [];
   }
+}
+
+const GC_GRACE_DAYS = 30;
+
+/** 清理过期 thread 文件：TTL 过期后再宽限 30 天删除 */
+export function gcThreads(): number {
+  const threadsDir = join(SCE_DIR, 'threads');
+  if (!existsSync(threadsDir)) return 0;
+
+  const now = Date.now();
+  const graceMs = GC_GRACE_DAYS * 86400000;
+  let deleted = 0;
+
+  try {
+    for (const f of readdirSync(threadsDir)) {
+      if (!f.endsWith('.md')) continue;
+      const filePath = join(threadsDir, f);
+      const parsed = parseThreadFile(filePath, now);
+      if (!parsed) continue;
+      if (!parsed.expired) continue;
+
+      const ttlMs = parseTtl(parsed.ttl || '7d');
+      const deadSince = parsed.createdAtMs + ttlMs;
+      if (now - deadSince >= graceMs) {
+        unlinkSync(filePath);
+        deleted++;
+      }
+    }
+  } catch { /* GC 失败不影响主流程 */ }
+
+  return deleted;
 }
 
 function normalizeTaskText(text: string): string {
