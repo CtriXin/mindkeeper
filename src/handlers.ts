@@ -116,6 +116,14 @@ function formatBoard(board: Board): string[] {
 // ── Tool Handlers ──
 
 export function handleLearn(args: Record<string, unknown>, index: BrainIndex): ToolResponse {
+  // Unpack compressed meta and files params
+  if (args.meta && typeof args.meta === 'string') {
+    try { Object.assign(args, JSON.parse(args.meta)); } catch { /* ignore malformed meta */ }
+  }
+  if (args.files && typeof args.files === 'string') {
+    try { args.files = JSON.parse(args.files); } catch { args.files = []; }
+  }
+
   const knowledgeType = (args.type as string) === 'insight' ? 'insight' as const : 'recipe' as const;
   const triggers = (args.triggers as string[]) || [];
   const summary = String(args.summary);
@@ -167,6 +175,8 @@ export function handleLearn(args: Record<string, unknown>, index: BrainIndex): T
     const metaIdx = index.recipes.findIndex(r => r.id === id);
     if (metaIdx >= 0) {
       index.recipes[metaIdx] = recipeMetaFrom(existing);
+    } else {
+      index.recipes.push(recipeMetaFrom(existing));
     }
     saveIndex(index);
 
@@ -407,7 +417,51 @@ export function handleCheckpoint(args: Record<string, unknown>): ToolResponse {
     status: String(args.status),
   });
 
-  const receipt = formatDistillReceipt(result);
+  // 自动提取 recipe：findings ≥ 3 触发，增量追加
+  const recipeHint = result.hints?.find(h => h.type === 'recipe_candidate');
+  let autoRecipeNote = '';
+  if (recipeHint) {
+    try {
+      const index = loadIndex();
+      const repoStr = String(args.repo);
+      const projectName = repoStr.split('/').filter(Boolean).pop() || 'unknown';
+      const newFindings = (recipeHint.data?.findings as string[]) || [];
+      const newDecisions = (args.decisions as string[]) || [];
+      const autoId = `rcp-${projectName.split(/[_\-/]/).filter(Boolean).pop()!.toLowerCase()}-001`;
+      const existing = loadRecipe(autoId);
+
+      // 增量：合并已有内容，去重
+      const mergedSteps = existing
+        ? [...existing.steps, ...newDecisions.filter(d => !existing.steps.includes(d))]
+        : newDecisions;
+      const mergedGotchas = existing
+        ? [...existing.gotchas, ...newFindings.filter(f => !existing.gotchas.includes(f))]
+        : newFindings;
+      const mergedTriggers = existing
+        ? [...new Set([...existing.triggers, String(args.task)])]
+        : [String(args.task)];
+
+      const autoResult = handleLearn({
+        id: autoId,
+        triggers: mergedTriggers,
+        summary: existing
+          ? existing.summary
+          : `${projectName} 自动提取经验`,
+        steps: mergedSteps,
+        gotchas: mergedGotchas,
+        repo: repoStr,
+        branch: args.branch,
+        project: projectName,
+        confidence: 0.6,
+        changelog_note: `distill 自动追加 (${result.threadId})`,
+      }, index);
+      if (autoResult.content?.[0]?.type === 'text') {
+        autoRecipeNote = '\n\n**[auto-recipe]** ' + (autoResult.content[0] as { text: string }).text;
+      }
+    } catch { /* 自动提取失败不影响蒸馏 */ }
+  }
+
+  const receipt = formatDistillReceipt(result) + autoRecipeNote;
 
   // 推送飞书（可选，静默）
   try {
@@ -488,7 +542,11 @@ export function handleBoard(args: Record<string, unknown>): ToolResponse {
     }
 
     case 'write': {
-      const data = args.data as Record<string, unknown>;
+      let rawData = args.data;
+      if (typeof rawData === 'string') {
+        try { rawData = JSON.parse(rawData); } catch { return err('action="write" 的 data 参数 JSON 解析失败。'); }
+      }
+      const data = rawData as Record<string, unknown>;
       if (!data) {
         return err('action="write" 需要 data 参数。');
       }
@@ -516,7 +574,11 @@ export function handleBoard(args: Record<string, unknown>): ToolResponse {
 
     case 'update_item': {
       const itemId = String(args.item_id || '');
-      const changes = (args.changes || {}) as Record<string, unknown>;
+      let rawChanges = args.changes;
+      if (typeof rawChanges === 'string') {
+        try { rawChanges = JSON.parse(rawChanges); } catch { rawChanges = {}; }
+      }
+      const changes = (rawChanges || {}) as Record<string, unknown>;
       const item = updateBoardItem(project, itemId, changes as Parameters<typeof updateBoardItem>[2]);
       if (!item) {
         return err(`未找到条目: ${itemId}`);

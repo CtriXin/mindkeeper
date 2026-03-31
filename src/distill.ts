@@ -11,7 +11,7 @@
 import { writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, resolve, dirname } from 'path';
 import { execSync } from 'child_process';
-import { findBestThread, getThreadById } from './bootstrap.js';
+import { findBestThread, getThreadById, gcThreads } from './bootstrap.js';
 import { findMatchingBoardItems } from './storage.js';
 import { getRealHome } from './env.js';
 
@@ -308,6 +308,9 @@ export function checkpoint(input: DistillInput): DistillResult {
   const relatedBoardItems = findMatchingBoardItems(task);
   const hints = detectHints({ status, findings, next, decisions }, relatedBoardItems);
 
+  // 顺便 GC 过期 thread
+  gcThreads();
+
   return {
     success: true,
     threadId: primary.threadId,
@@ -322,7 +325,6 @@ export function checkpoint(input: DistillInput): DistillResult {
 
 // ── 后处理提示检测 ──
 
-const RECIPE_KEYWORDS = /坑|gotcha|fix|踩|注意|关键|trick|workaround|解决|方案|原来|发现/i;
 const DONE_KEYWORDS = /完成|done|搞定|finished|已实现|shipped|merged/i;
 
 function detectHints(
@@ -331,13 +333,12 @@ function detectHints(
 ): DistillHint[] {
   const hints: DistillHint[] = [];
 
-  // 1. Recipe 提炼提示：findings 中有可复用模式
-  const recipeFindings = ctx.findings.filter(f => RECIPE_KEYWORDS.test(f));
-  if (recipeFindings.length >= 2) {
+  // 1. Recipe 提炼提示：findings ≥ 3 条即触发
+  if (ctx.findings.length >= 3) {
     hints.push({
       type: 'recipe_candidate',
-      message: `检测到 ${recipeFindings.length} 条可复用发现，建议存为 recipe`,
-      data: { findings: recipeFindings },
+      message: `检测到 ${ctx.findings.length} 条发现，建议存为 recipe`,
+      data: { findings: ctx.findings },
     });
   }
 
