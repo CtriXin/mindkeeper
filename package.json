@@ -10,10 +10,24 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepare": "tsc",
     "dev": "tsx src/server.ts",
     "cli": "tsx src/cli.ts",
     "test": "vitest run"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CtriXin/mindkeeper.git"
+  },
+  "homepage": "https://github.com/CtriXin/mindkeeper",
+  "license": "MIT",
+  "files": [
+    "dist/",
+    "bin/",
+    "install.sh",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
