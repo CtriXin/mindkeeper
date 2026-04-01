@@ -14,6 +14,32 @@ import { checkpoint, formatDistillReceipt } from './distill.js';
 import { loadBoard, createBoard, addBoardItem, updateBoardItem, addBoardMemo, checkBoards, listBoardSummaries, archiveStaleItems, saveBoard, checkRecipeStaleness, deprecateStaleRecipes, getRecipeHealthSummary, findMatchingBoardItems, } from './storage.js';
 import { QUADRANT_KEYS, QUADRANT_LABELS } from './types.js';
 import { getRealHome } from './env.js';
+// ── 自动检测 cli/model ──
+function detectCli() {
+    // MMS 环境：HOME 路径包含 gateway 类型
+    const home = process.env.HOME || '';
+    const mmsMatch = home.match(/\/([^/]+)-gateway\/s\//);
+    if (mmsMatch) {
+        const gateway = mmsMatch[1]; // claude, codex, cursor 等
+        return `${gateway}-code`;
+    }
+    // 非 MMS：检查常见环境变量
+    if (process.env.CLAUDE_CODE_ENTRYPOINT)
+        return 'claude-code';
+    if (process.env.CURSOR_SESSION_ID)
+        return 'cursor';
+    return undefined;
+}
+function detectModel() {
+    // MMS 环境注入的模型变量
+    const model = process.env.ANTHROPIC_MODEL
+        || process.env.OPENAI_MODEL
+        || process.env.MMS_MODEL;
+    if (!model)
+        return undefined;
+    // 去掉尾部的 context window 标记 [1m] 等
+    return model.replace(/\[[\w]+\]$/, '');
+}
 function ok(text) {
     return { content: [{ type: 'text', text }] };
 }
@@ -375,8 +401,8 @@ export function handleCheckpoint(args) {
         task: String(args.task),
         branch: args.branch ? String(args.branch) : undefined,
         parent: args.parent ? String(args.parent) : undefined,
-        cli: args.cli ? String(args.cli) : undefined,
-        model: args.model ? String(args.model) : undefined,
+        cli: args.cli ? String(args.cli) : detectCli(),
+        model: args.model ? String(args.model) : detectModel(),
         decisions: args.decisions || [],
         changes: args.changes || [],
         findings: args.findings || [],
