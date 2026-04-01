@@ -410,6 +410,8 @@ export function handleCheckpoint(args: Record<string, unknown>): ToolResponse {
     task: String(args.task),
     branch: args.branch ? String(args.branch) : undefined,
     parent: args.parent ? String(args.parent) : undefined,
+    cli: args.cli ? String(args.cli) : undefined,
+    model: args.model ? String(args.model) : undefined,
     decisions: (args.decisions as string[]) || [],
     changes: (args.changes as string[]) || [],
     findings: (args.findings as string[]) || [],
