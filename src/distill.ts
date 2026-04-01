@@ -96,7 +96,10 @@ function sanitizeList(items: string[], limit: number): string[] {
 function resolveParent(input: DistillInput): string | undefined {
   if (input.parent) {
     const exact = getThreadById(input.repo, input.parent);
-    // 找不到也不阻断 checkpoint，降级为无 parent
+    if (!exact) {
+      // debug: parent 指定了但找不到，降级为无 parent
+      console.error(`[mindkeeper] resolveParent: parent "${input.parent}" not found, skipping`);
+    }
     return exact?.id;
   }
 
@@ -200,7 +203,12 @@ function extractFolder(changes: string[]): string | undefined {
     return parts.length > 1 ? parts.slice(0, -1).join('/') : '';
   }).filter(Boolean);
 
+  // 所有文件都在根目录，无公共子目录
   if (dirs.length === 0) return undefined;
+
+  // 路径分散度检查：如果顶层目录超过 3 个不同的，说明太分散，不推断
+  const topDirs = new Set(dirs.map(d => d.split('/')[0]));
+  if (topDirs.size > 3) return undefined;
 
   // 找公共前缀目录
   const first = dirs[0].split('/');
