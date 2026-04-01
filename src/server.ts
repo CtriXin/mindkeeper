@@ -60,6 +60,8 @@ const CORE_TOOLS = [
         task: { type: 'string', description: '当前任务描述' },
         branch: { type: 'string', description: '当前分支' },
         parent: { type: 'string', description: '显式指定 parent thread id' },
+        cli: { type: 'string', description: '调用来源客户端（如 claude-code, cursor, codex）' },
+        model: { type: 'string', description: '当前使用的模型（如 opus-4, kimi-k2.5）' },
         decisions: { type: 'array', items: { type: 'string' }, description: '决策（≤5）' },
         changes: { type: 'array', items: { type: 'string' }, description: '变更文件' },
         findings: { type: 'array', items: { type: 'string' }, description: '发现和踩坑' },
