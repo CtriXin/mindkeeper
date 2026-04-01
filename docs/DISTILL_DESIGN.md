@@ -23,7 +23,7 @@
 ---
 id: dst-20260326-a1b2c3
 project: multi-model-switch
-repo: /Users/xin/auto-skills/CtriXin-repo/multi-model-switch
+repo: /path/to/your-project
 branch: main
 task: 修 provider routing bug
 parent: dst-20260325-x9y8z7    # 上一个 thread（形成链路）

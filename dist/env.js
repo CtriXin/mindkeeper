@@ -10,10 +10,10 @@ export function getRealHome() {
     if (_realHome)
         return _realHome;
     const home = homedir();
-    // MMS bridge 特征：HOME 被改成 /Users/xxx/.config/mms/<agent>-gateway/s/xxxxx
+    // MMS bridge 特征：HOME 被改成 /Users/<user>/.config/mms/<agent>-gateway/s/<session>
     // 例如：
-    // - /Users/xin/.config/mms/claude-gateway/s/12345
-    // - /Users/xin/.config/mms/codex-gateway/s/67890
+    // - /Users/<user>/.config/mms/claude-gateway/s/12345
+    // - /Users/<user>/.config/mms/codex-gateway/s/67890
     const mmsGatewayMatch = home.match(/^(\/Users\/[^/]+)\/\.config\/mms\/[^/]+-gateway\/s\/[^/]+/);
     if (mmsGatewayMatch) {
         _realHome = mmsGatewayMatch[1];

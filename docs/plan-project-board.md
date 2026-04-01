@@ -16,7 +16,7 @@
 
 ```yaml
 project: mindkeeper          # 项目名
-repo: /Users/xin/xxx/mindkeeper  # 可选，关联 repo
+repo: /path/to/mindkeeper  # 可选，关联 repo
 last_updated: 2026-03-27
 stale_warning_days: 14
 

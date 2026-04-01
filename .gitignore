@@ -23,5 +23,14 @@ docs/cards/*.png
 docs/cards/*.html
 docs/xiaohongshu/
 
+# 内部文档（本地保留，不入库）
+docs/discuss-*.md
+docs/claude-practical-brain.md
+docs/project-brain-cognitive-os.md
+docs/sce-learning-synthesis.md
+docs/self-evolving-sce.md
+docs/mindkeeper-overview-cn.png
+docs/mindkeeper-overview-en.png
+
 # 系统文件
 .DS_Store

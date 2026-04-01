@@ -13,6 +13,15 @@
 
 这些文件只保留在本地，通过 `.gitignore` 隔离。如果误提交，必须立即从 git history 中清除。
 
+### Commit 前必检
+
+每次 commit 前必须 grep 检查以下关键词，发现即删或替换，**不得推送**：
+
+- `/Users/xin` — 硬编码个人路径（注释中的通用示例用 `/Users/<user>` 替代）
+- 内部 IP（如 `82.156.x.x`）
+- `xiaohongshu`、`social/` — 营销内容
+- `discuss-round` — 内部跨模型讨论记录
+
 ### 代码规范
 
 - 保持 zero-load 原则：不加重运行时依赖
