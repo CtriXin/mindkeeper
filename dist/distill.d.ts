@@ -12,6 +12,8 @@ export interface DistillInput {
     task: string;
     branch?: string;
     parent?: string;
+    cli?: string;
+    model?: string;
     decisions: string[];
     changes: string[];
     findings: string[];

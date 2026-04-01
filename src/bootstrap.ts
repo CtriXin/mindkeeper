@@ -38,6 +38,9 @@ export interface ThreadSummary {
   parent?: string;
   ttl?: string;
   resumed?: string;
+  cli?: string;
+  model?: string;
+  folder?: string;
 }
 
 // ── Git 上下文 ──
@@ -66,6 +69,9 @@ interface ThreadMeta {
   ttl?: string;
   created?: string;
   resumed?: string;
+  cli?: string;
+  model?: string;
+  folder?: string;
 }
 
 function parseThreadFrontmatter(content: string): ThreadMeta {
@@ -138,6 +144,9 @@ function parseThreadFile(path: string, now: number): (ThreadSummary & { expired:
       parent: meta.parent,
       ttl: meta.ttl,
       resumed: meta.resumed,
+      cli: meta.cli,
+      model: meta.model,
+      folder: meta.folder,
       expired: now - createdAtMs > ttlMs,
     };
   } catch {
@@ -259,16 +268,18 @@ export function getThreadById(repo: string, threadId: string): ThreadSummary | u
   const now = Date.now();
   const exactPath = join(threadsDir, `${threadId}.md`);
   const exact = parseThreadFile(exactPath, now);
-  if (exact && exact.repo === repo) {
+  if (exact && !exact.expired) {
+    // 优先匹配 repo，但不强制 — 支持任意位置恢复
     const { expired: _expired, ...thread } = exact;
     return thread;
   }
 
+  // fallback: 扫描所有文件按 ID 查找（ID 可能和文件名不同）
   try {
     for (const file of readdirSync(threadsDir)) {
       if (!file.endsWith('.md') || file === `${threadId}.md`) continue;
       const parsed = parseThreadFile(join(threadsDir, file), now);
-      if (parsed && parsed.id === threadId && parsed.repo === repo) {
+      if (parsed && parsed.id === threadId && !parsed.expired) {
         const { expired: _expired, ...thread } = parsed;
         return thread;
       }

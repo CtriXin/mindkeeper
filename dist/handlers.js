@@ -375,6 +375,8 @@ export function handleCheckpoint(args) {
         task: String(args.task),
         branch: args.branch ? String(args.branch) : undefined,
         parent: args.parent ? String(args.parent) : undefined,
+        cli: args.cli ? String(args.cli) : undefined,
+        model: args.model ? String(args.model) : undefined,
         decisions: args.decisions || [],
         changes: args.changes || [],
         findings: args.findings || [],

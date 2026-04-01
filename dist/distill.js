@@ -42,10 +42,8 @@ function sanitizeList(items, limit) {
 function resolveParent(input) {
     if (input.parent) {
         const exact = getThreadById(input.repo, input.parent);
-        if (!exact) {
-            throw new Error(`指定的 parent thread 不存在: ${input.parent}`);
-        }
-        return exact.id;
+        // 找不到也不阻断 checkpoint，降级为无 parent
+        return exact?.id;
     }
     return findBestThread(input.repo, input.task, {
         branch: input.branch,
@@ -125,6 +123,32 @@ function detectReposFromChanges(changes, fallbackRepo) {
     }
     return repoMap;
 }
+// ── Folder 推断 ──
+/** 从 changes 的文件路径推断公共子目录 */
+function extractFolder(changes) {
+    const paths = changes
+        .map(c => extractFilePath(c))
+        .filter((p) => !!p && !p.startsWith('/'));
+    if (paths.length === 0)
+        return undefined;
+    const dirs = paths.map(p => {
+        const parts = p.split('/');
+        return parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+    }).filter(Boolean);
+    if (dirs.length === 0)
+        return undefined;
+    // 找公共前缀目录
+    const first = dirs[0].split('/');
+    let common = 0;
+    for (let i = 0; i < first.length; i++) {
+        if (dirs.every(d => d.split('/')[i] === first[i])) {
+            common = i + 1;
+        }
+        else
+            break;
+    }
+    return common > 0 ? first.slice(0, common).join('/') : undefined;
+}
 // ── 核心 pipeline ──
 /** 写入单个 thread 文件，返回 { threadId, path } */
 function writeThread(opts) {
@@ -136,6 +160,9 @@ function writeThread(opts) {
         `task: ${opts.task}`,
         opts.branch ? `branch: ${opts.branch}` : null,
         opts.parent ? `parent: ${opts.parent}` : null,
+        opts.cli ? `cli: ${opts.cli}` : null,
+        opts.model ? `model: ${opts.model}` : null,
+        opts.folder ? `folder: ${opts.folder}` : null,
         `created: ${opts.created}`,
         `ttl: 7d`,
         '---',
@@ -176,6 +203,8 @@ export function checkpoint(input) {
     const created = new Date().toISOString();
     const task = sanitizeScalar(input.task);
     const branch = input.branch ? sanitizeScalar(input.branch) : undefined;
+    const cli = input.cli ? sanitizeScalar(input.cli) : undefined;
+    const model = input.model ? sanitizeScalar(input.model) : undefined;
     const status = sanitizeScalar(input.status || '进行中');
     const decisions = sanitizeList(input.decisions || [], ENTRY_LIMITS.decisions);
     const changes = sanitizeList(input.changes || [], ENTRY_LIMITS.changes);
@@ -190,8 +219,9 @@ export function checkpoint(input) {
     // 单 repo：直接写（可能修正了 repo 字段）
     if (repos.length <= 1) {
         const actualRepo = repos[0] || fallbackRepo;
+        const folder = extractFolder(changes);
         const { threadId, path: filePath } = writeThread({
-            repo: actualRepo, task, branch, parent, created,
+            repo: actualRepo, task, branch, parent, cli, model, folder, created,
             decisions, changes, findings, next, status,
         });
         const relatedBoardItems = findMatchingBoardItems(task);
@@ -208,9 +238,13 @@ export function checkpoint(input) {
     let primaryResult;
     for (const [repo, repoChanges] of repoMap) {
         const isPrimary = repo === fallbackRepo || !primaryResult;
+        const repoFolder = extractFolder(repoChanges);
         const result = writeThread({
             repo, task, branch: isPrimary ? branch : undefined,
             parent: isPrimary ? parent : undefined,
+            cli: isPrimary ? cli : undefined,
+            model: isPrimary ? model : undefined,
+            folder: repoFolder,
             created, decisions, changes: repoChanges,
             findings, next, status,
         });

@@ -20,7 +20,7 @@ import {
   loadBoard, updateBoardItem, listBoardSummaries, archiveStaleItems,
   findMatchingBoardItems, listBoardSlugs, boardPath,
 } from './storage.js';
-import { unlinkSync } from 'fs';
+import { unlinkSync, readFileSync } from 'fs';
 import { listRecentThreads, loadThreadDetails } from './bootstrap.js';
 import { QUADRANT_KEYS, QUADRANT_LABELS } from './types.js';
 import { execSync } from 'child_process';
@@ -68,9 +68,12 @@ mk — MindKeeper CLI
   mk bd archive <project>         归档
 
   mk dst [all]                    列出 thread（按 repo 聚合）
+  mk dst -l                       列出 thread（详细表格，含 time/cli/model/repo/folder）
   mk dst <id>                     查看详情
   mk dst rm <id>                  删除
   mk dst archive <id>             归档
+  mk dst resume <id> [--no-cd]    恢复 thread 上下文
+                                    --no-cd: 不切换工作目录，仅加载上下文
 `);
 }
 
@@ -134,24 +137,62 @@ function printThreadGroups(
   groups: ThreadGroup[],
   limit: number,
   dim: boolean,
+  detailed = false,
 ) {
+  if (detailed) {
+    // Detailed table format: ID | TIME | CLI | MODEL | REPO/FOLDER | TASK
+    const header = `  ${c.bold('ID')}                 ${c.bold('TIME')}    ${c.bold('CLI')}       ${c.bold('MODEL')}              ${c.bold('REPO/FOLDER')}               ${c.bold('TASK')}`;
+    console.log(header);
+    console.log('  ' + '─'.repeat(110));
+  }
+
   let printed = 0;
   for (const g of groups) {
     if (printed >= limit) break;
     const remaining = limit - printed;
     const show = g.threads.slice(0, remaining);
-    if (dim) {
-      console.log(`  ${c.gray(g.name)}`);
-    } else {
-      console.log(`  ${c.green(g.name)}`);
+
+    if (!detailed) {
+      if (dim) {
+        console.log(`  ${c.gray(g.name)}`);
+      } else {
+        console.log(`  ${c.green(g.name)}`);
+      }
     }
+
     for (const t of show) {
-      const line = `    ${fmtId(t.id)}  ${truncate(t.task, 42)}  ${c.gray(fmtAge(t.createdAtMs))}`;
-      console.log(dim ? c.gray(line) : line);
+      if (detailed) {
+        const time = fmtAgeShort(t.createdAtMs);
+        const cli = (t.cli || '-').padEnd(8);
+        const model = truncate(t.model || '-', 16).padEnd(18);
+        const folder = t.folder ? `${g.name}/${t.folder}` : g.name;
+        const shortFolder = truncate(folder, 24).padEnd(26);
+        const task = truncate(t.task, 30);
+        const line = `  ${fmtId(t.id)}  ${c.gray(time)}  ${cli}  ${model}  ${shortFolder}  ${task}`;
+        console.log(dim ? c.gray(line) : line);
+      } else {
+        const line = `    ${fmtId(t.id)}  ${truncate(t.task, 42)}  ${c.gray(fmtAge(t.createdAtMs))}`;
+        console.log(dim ? c.gray(line) : line);
+      }
       printed++;
     }
   }
   return printed;
+}
+
+function fmtAgeShort(ms: number): string {
+  const diff = Date.now() - ms;
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(hours / 24);
+  if (days === 0) {
+    if (hours === 0) return '<1h';
+    return `${hours}h`;
+  }
+  if (days < 7) return `${days}d`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `${weeks}w`;
+  const months = Math.floor(days / 30);
+  return `${months}m`;
 }
 
 // ── 全景 ──
@@ -366,7 +407,54 @@ function cmdBoard() {
 // ── thread 子命令 ──
 function cmdThread() {
   const sub = args[1];
+  const isDetailed = args.includes('-l') || args.includes('--detailed');
+
+  // Handle flags like -l before subcommand checks
+  if (isDetailed && (!sub || sub === '-l' || sub === '--detailed' || sub === 'all')) {
+    const all = listRecentThreads(undefined, 100);
+    if (all.length === 0) { console.log('没有 thread'); return; }
+
+    const cwd = process.cwd();
+    const { local, other } = groupThreadsByRepo(all, cwd);
+
+    // Detailed list all in one table
+    console.log(c.bold(`\n🧵 Thread (${all.length})\n`));
+    printThreadGroups([...local, ...other], Infinity, false, true);
+    console.log(c.gray('\n\nmk dst resume <id> [--no-cd]  恢复上下文'));
+    return;
+  }
+
   const showAllItems = sub === 'all';
+
+  // mk dst resume <id> [--no-cd]
+  if (sub === 'resume') {
+    const id = args[2];
+    const noCd = args.includes('--no-cd');
+    if (!id) { console.log('用法: mk thread resume <id> [--no-cd]'); return; }
+
+    const threads = listRecentThreads(undefined, 100);
+    const thread = threads.find(t => t.id === id);
+    if (!thread) { console.log(`未找到: ${id}`); return; }
+
+    // 直接读取 thread 文件，不依赖外部 dst 命令
+    try {
+      const content = readFileSync(thread.path, 'utf-8');
+
+      if (!noCd) {
+        console.log(`\n已切换到: ${c.cyan(thread.repo)}`);
+        console.log(`目录: ${c.gray(thread.folder || '.')}\n`);
+      } else {
+        console.log(`\n当前目录保持不变`);
+        console.log(`Thread 路径: ${c.cyan(thread.repo)}${thread.folder ? '/' + thread.folder : ''}\n`);
+      }
+
+      console.log(c.bold('=== Thread 上下文 ==='));
+      console.log(content);
+    } catch {
+      console.log(`读取失败: ${thread.path}`);
+    }
+    return;
+  }
 
   // mk dst — 按 repo 聚合列表（全部）
   if (!sub || showAllItems) {

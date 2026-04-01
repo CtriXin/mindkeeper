@@ -26,6 +26,9 @@ export interface ThreadSummary {
     parent?: string;
     ttl?: string;
     resumed?: string;
+    cli?: string;
+    model?: string;
+    folder?: string;
 }
 /** 按 repo 过滤 thread；repo 为空时返回所有 */
 export declare function listRecentThreads(repo?: string, limit?: number): ThreadSummary[];
