@@ -5,6 +5,10 @@
 # Node.js
 node_modules/
 
+# TypeScript
+dist/
+*.tsbuildinfo
+
 # Python
 __pycache__/
 *.pyc
