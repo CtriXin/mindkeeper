@@ -1,0 +1,51 @@
+# Latest
+
+- 时间：2026-04-08T234630+0800
+- 当前主线：`local official Claude Code CLI -> self-hosted gateway -> server official runtime pool`
+- 主线仓：`cc-official-broker`
+- 底座仓：`cc-mcp-bridge`
+- 当前执行 worktree：`/Users/xin/auto-skills-wt-cc-official-broker-native`
+- 当前执行分支：`feature/cc-official-broker-native-gateway-mainline`
+- 当前阶段：C1/C3/C4/C5/C6/C7 已 review 通过
+- 任务模型/评分台账：`./TASK_MODEL_SCORE.md`
+- 恢复入口：`../iterations/2026-04-08T090506+0800-native-gateway-mainline/DISTILL_RECOVERY.md`
+- MindKeeper 恢复口令：`dst-0408-1x9q4r`
+- 注意：删除动作暂未硬删，只先做 audit / 可逆归档
+- C4 revision：`./handoffs/2026-04-08T150000+0800-c4-revision-by-glm51.md`
+- 最新通过：C4 fail-fast 已本地复验通过，三条 `POST /sessions` 路径在 binding 失败时统一返回 `503`
+- **05-agent-runtime-id-header 已完成**：`x-cc-runtime-id` header 和 `metadata.runtime_id` 已通过 `remoteServiceClient.mjs` 传递到 upstream
+- 最新通过：C6 `GET /v1/session_state` 已复审通过，支持 routing-key 查询、本地 fallback、remote session_state 合并
+- **C7 remote:doctor alignment 已完成**：新增 verdict 结构，基于 probe 判定 runtime_id，CLI 输出 5 项判定 + overall 摘要
+- **08 remote:doctor real interop 已完成**：真实 remote service（`23.95.30.199:28082`）5 项 verdict 全部 PASS，ACCEPTANCE PASS
+- 修复 remote 侧：cc-static-1 wrapper 补 `-i` 修复 stdin 断开，cc-static-3 标记 unhealthy（org disabled）
+- handoff：`./handoffs/2026-04-08T223000+0800-08-remote-doctor-real-interop.md`
+- 下一步建议：同步 stdin 修复到 82.156.121.141；替换 cc-static-3 OAuth 凭证；持久化 remote:doctor 配置到 worktree .env
+- 白话说明：`./docs/RUNTIME_CHAIN_PLAIN.md`
+- **09 local official CLI -> gateway 入口验证 已完成**
+  - 结论：当前真正跑通的是 **official child headless + broker shell/contract**
+  - 尚未接近真正 local official CLI（完整 TUI）入口
+  - 最小 blocker：本地 `claude 2.1.92` binary 缺少 `DIRECT_CONNECT` / `cc://` 支持
+  - handoff：`./handoffs/2026-04-08T225100+0800-09-agent-local-official-cli-gateway-e2e.md`
+- **10 local official CLI direct-connect upgrade gap 已完成**
+  - 结论：**2.1.92 无法 direct-connect 进 gateway，根本原因是该 build 缺少暴露给用户的 `claude open <cc-url>` CLI 入口**
+  - 具体缺失：无 `createDirectConnectSession`、无 `open` subcommand、`claude open --help` 无 advertised 入口
+  - blocker 类型：**local official binary 能力限制 / feature flag 缺失**（binary 内部有 DirectConnect UI 代码，但 CLI 层未开放）
+  - 最小升级建议：升级到官方最新稳定版，复跑 `official:doctor` -> `official:connect`；若仍不支持，则放弃追完整 TUI，固定 headless child 主链
+  - handoff：`./handoffs/2026-04-08T225934+0800-10-agent-local-official-cli-direct-connect-gap.md`
+- **11 agent-official-attach-turnkey 已完成**：`official:attach` 现已收成一条命令体验入口，`.env` + `--env-file=.env` + 更直接报错提示已全部落地
+  - handoff：`./handoffs/2026-04-08T224800+0800-11-agent-official-attach-turnkey.md`
+- **12 official:attach -> live broker 真实联调 已完成**
+  - 结论：live-configured broker 已可完成 `device auth -> session create -> official child launch -> session-ingress initialized -> final result`
+  - 当前真实 status：`protocol_ok_model_error`
+  - 本轮已补：fresh worktree 自动 seed 默认 runtime、`official:attach` 自动 sync remote auth bundle、remote auth cache 绑定 `container_name`
+  - 最小 blocker：live profile 当前仍同步 `claude-code-official-3` 的 auth bundle；该 org 已 disabled，导致模型回合失败
+  - handoff：`./handoffs/2026-04-08T234630+0800-12-agent-official-attach-live-broker.md`
+- **13 live auth source alignment 已完成**
+  - 结论：`official:attach` 真实 live broker 已从 `protocol_ok_model_error` 提升到 `protocol_and_model_ok`
+  - 返回结果：`LIVE_ATTACH_OK`
+  - 外部配置改动：`~/.config/mms/credentials.sh` 现显式指向 `cc-static-1` 对应 auth source：`/var/lib/cc-mcp-bridge/claude-home-1/.credentials.json`
+  - 代码改动：`remoteAuthSync.mjs` 现支持无容器名时直接 SSH 读取 host 文件，并尊重显式空 `container_name`
+  - handoff：`./handoffs/2026-04-08T004800+0800-13-agent-live-auth-source-alignment.md`
+- 下一任务建议：把 live attach 成功配置固化成更稳定的 profile/env 模板，减少手工 env 注入
+- 下一任务建议：开始考虑是否收一个可复用的 facade 入口，但不影响当前已通主线
+- 可选增强已记录：`CLIProxyAPI` 只作为 future `gateway facade` 备选，不进入当前最快主线，不替代现有 runtime control plane

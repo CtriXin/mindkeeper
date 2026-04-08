@@ -1,0 +1,15 @@
+.DS_Store
+node_modules/
+dist/
+coverage/
+.mcp.json
+.ai/agent-release-notes.md
+.ai/logs/
+.claude/
+.env
+/.tmp/
+/data/
+/handoffs/
+/projects/
+/sessions/
+/tmp/
