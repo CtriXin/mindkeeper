@@ -1,12 +1,12 @@
 # Latest
 
-- 时间：2026-04-08T234630+0800
+- 时间：2026-04-09T01:20+0800
 - 当前主线：`local official Claude Code CLI -> self-hosted gateway -> server official runtime pool`
 - 主线仓：`cc-official-broker`
 - 底座仓：`cc-mcp-bridge`
 - 当前执行 worktree：`/Users/xin/auto-skills-wt-cc-official-broker-native`
 - 当前执行分支：`feature/cc-official-broker-native-gateway-mainline`
-- 当前阶段：C1/C3/C4/C5/C6/C7 已 review 通过
+- 当前阶段：P0 已通；C1/C3/C4/C5/C6/C7/11/12/13/14 已收口
 - 任务模型/评分台账：`./TASK_MODEL_SCORE.md`
 - 恢复入口：`../iterations/2026-04-08T090506+0800-native-gateway-mainline/DISTILL_RECOVERY.md`
 - MindKeeper 恢复口令：`dst-0408-1x9q4r`
@@ -19,7 +19,6 @@
 - **08 remote:doctor real interop 已完成**：真实 remote service（`23.95.30.199:28082`）5 项 verdict 全部 PASS，ACCEPTANCE PASS
 - 修复 remote 侧：cc-static-1 wrapper 补 `-i` 修复 stdin 断开，cc-static-3 标记 unhealthy（org disabled）
 - handoff：`./handoffs/2026-04-08T223000+0800-08-remote-doctor-real-interop.md`
-- 下一步建议：同步 stdin 修复到 82.156.121.141；替换 cc-static-3 OAuth 凭证；持久化 remote:doctor 配置到 worktree .env
 - 白话说明：`./docs/RUNTIME_CHAIN_PLAIN.md`
 - **09 local official CLI -> gateway 入口验证 已完成**
   - 结论：当前真正跑通的是 **official child headless + broker shell/contract**
@@ -46,6 +45,11 @@
   - 外部配置改动：`~/.config/mms/credentials.sh` 现显式指向 `cc-static-1` 对应 auth source：`/var/lib/cc-mcp-bridge/claude-home-1/.credentials.json`
   - 代码改动：`remoteAuthSync.mjs` 现支持无容器名时直接 SSH 读取 host 文件，并尊重显式空 `container_name`
   - handoff：`./handoffs/2026-04-08T004800+0800-13-agent-live-auth-source-alignment.md`
-- 下一任务建议：把 live attach 成功配置固化成更稳定的 profile/env 模板，减少手工 env 注入
-- 下一任务建议：开始考虑是否收一个可复用的 facade 入口，但不影响当前已通主线
+- **14 MMS profile live env alignment 已完成**
+  - 结论：`mms:profile:print/install` 与 `broker:live` 已对齐当前 live 成功组合，`MMS` 现在能稳定承担 `env exporter + launcher`
+  - 代码改动：profile generator 新增 remote auth env hooks；live profile resolver 会保留显式空 `CC_BROKER_REMOTE_CLAUDE_CONTAINER_NAME=''`
+  - 当前真实 baseline：host=`23.95.30.199`，runtime=`cc-static-1`，egress=`72.1.179.98`
+  - handoff：`./handoffs/2026-04-09T004445+0800-14-mms-profile-live-env-alignment.md`
 - 可选增强已记录：`CLIProxyAPI` 只作为 future `gateway facade` 备选，不进入当前最快主线，不替代现有 runtime control plane
+- 下一任务建议：把 `MMS` 仓里的 launcher 真正接到 `[[broker_profiles]] -> export env -> 启动 Claude Code`
+- 下一任务建议：保持 `CLIProxyAPI` 只做 facade 备选，不动当前 runtime control plane 主线

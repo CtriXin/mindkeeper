@@ -132,27 +132,41 @@ function parseExportedEnv(content = "") {
   return values
 }
 
+function hasOwn(object, key) {
+  return Boolean(object) && Object.prototype.hasOwnProperty.call(object, key)
+}
+
 function resolveSecret(profile, exportedEnv, directKey, envKey, fallback = "") {
   const envName = String(profile?.[envKey] || "").trim()
   if (envName) {
-    const envValue = process.env[envName] || exportedEnv[envName]
-    if (envValue) return String(envValue).trim()
+    if (hasOwn(process.env, envName)) {
+      return String(process.env[envName] || "").trim()
+    }
+    if (hasOwn(exportedEnv, envName)) {
+      return String(exportedEnv[envName] || "").trim()
+    }
   }
 
-  const inlineValue = String(profile?.[directKey] || "").trim()
-  if (inlineValue) return inlineValue
+  if (hasOwn(profile, directKey)) {
+    return String(profile?.[directKey] || "").trim()
+  }
   return String(fallback || "").trim()
 }
 
 function resolveProfileValue(profile, exportedEnv, directKey, envKey, fallback = "") {
   const envName = String(profile?.[envKey] || "").trim()
   if (envName) {
-    const envValue = process.env[envName] || exportedEnv[envName]
-    if (envValue) return String(envValue).trim()
+    if (hasOwn(process.env, envName)) {
+      return String(process.env[envName] || "").trim()
+    }
+    if (hasOwn(exportedEnv, envName)) {
+      return String(exportedEnv[envName] || "").trim()
+    }
   }
 
-  const inlineValue = String(profile?.[directKey] || "").trim()
-  if (inlineValue) return inlineValue
+  if (hasOwn(profile, directKey)) {
+    return String(profile?.[directKey] || "").trim()
+  }
   return String(fallback || "").trim()
 }
 

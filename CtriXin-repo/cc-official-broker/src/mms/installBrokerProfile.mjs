@@ -6,6 +6,10 @@ function tomlValue(value) {
   return JSON.stringify(String(value))
 }
 
+function pickDefined(primary, fallback = "") {
+  return primary === undefined ? fallback : primary
+}
+
 function defaultConfigPath() {
   const home = os.userInfo().homedir || os.homedir()
   return path.join(home, ".config", "mms", "config.toml")
@@ -19,6 +23,14 @@ export function buildPersistentBrokerProfile(config, overrides = {}) {
   const brokerBaseUrl = overrides.brokerBaseUrl || config.brokerBaseUrl || "http://127.0.0.1:8787"
   const deviceKeyEnv = overrides.deviceKeyEnv || "MMS_BROKER_DEVICE_KEY_PERSONAL"
   const remoteBearerEnv = overrides.remoteServiceBearerTokenEnv || "MMS_REMOTE_SERVICE_TOKEN_PERSONAL"
+  const remoteClaudeSshTargetEnv =
+    overrides.remoteClaudeSshTargetEnv || "CC_BROKER_REMOTE_CLAUDE_SSH_TARGET"
+  const remoteClaudeContainerNameEnv =
+    overrides.remoteClaudeContainerNameEnv || "CC_BROKER_REMOTE_CLAUDE_CONTAINER_NAME"
+  const remoteClaudeCredentialsPathEnv =
+    overrides.remoteClaudeCredentialsPathEnv || "CC_BROKER_REMOTE_CLAUDE_CREDENTIALS_PATH"
+  const remoteClaudeGlobalConfigPathEnv =
+    overrides.remoteClaudeGlobalConfigPathEnv || "CC_BROKER_REMOTE_CLAUDE_GLOBAL_CONFIG_PATH"
   const entryMode = overrides.entryMode || "official_proxy"
   const fallbackEntryMode = overrides.fallbackEntryMode || ""
   const runnerTools = overrides.runnerTools || config.runnerTools || ["pwd", "git_status", "read_file", "search"]
@@ -39,8 +51,12 @@ export function buildPersistentBrokerProfile(config, overrides = {}) {
     remote_service_base_url: overrides.remoteServiceBaseUrl || config.remoteServiceBaseUrl || "http://23.95.30.199:28082",
     remote_service_endpoint: overrides.remoteServiceEndpoint || config.remoteServiceEndpoint || "responses",
     remote_service_model: overrides.remoteServiceModel || config.remoteServiceModel || "claude-opus-4-6",
-    remote_claude_ssh_target: overrides.remoteClaudeSshTarget || config.remoteClaudeSshTarget || "",
-    remote_claude_container_name: overrides.remoteClaudeContainerName || config.remoteClaudeContainerName || "",
+    remote_claude_ssh_target: pickDefined(overrides.remoteClaudeSshTarget, config.remoteClaudeSshTarget || ""),
+    remote_claude_container_name: pickDefined(overrides.remoteClaudeContainerName, config.remoteClaudeContainerName || ""),
+    remote_claude_ssh_target_env: remoteClaudeSshTargetEnv,
+    remote_claude_container_name_env: remoteClaudeContainerNameEnv,
+    remote_claude_credentials_path_env: remoteClaudeCredentialsPathEnv,
+    remote_claude_global_config_path_env: remoteClaudeGlobalConfigPathEnv,
     remote_service_bearer_token_env: remoteBearerEnv,
     broker_repo_path: overrides.brokerRepoPath || process.cwd(),
     runner_tools: runnerTools,
@@ -69,6 +85,10 @@ export function renderBrokerProfileToml(profile) {
     `remote_service_model = ${tomlValue(profile.remote_service_model || "")}`,
     `remote_claude_ssh_target = ${tomlValue(profile.remote_claude_ssh_target || "")}`,
     `remote_claude_container_name = ${tomlValue(profile.remote_claude_container_name || "")}`,
+    `remote_claude_ssh_target_env = ${tomlValue(profile.remote_claude_ssh_target_env || "")}`,
+    `remote_claude_container_name_env = ${tomlValue(profile.remote_claude_container_name_env || "")}`,
+    `remote_claude_credentials_path_env = ${tomlValue(profile.remote_claude_credentials_path_env || "")}`,
+    `remote_claude_global_config_path_env = ${tomlValue(profile.remote_claude_global_config_path_env || "")}`,
     `remote_service_bearer_token_env = ${tomlValue(profile.remote_service_bearer_token_env)}`,
     `broker_repo_path = ${tomlValue(profile.broker_repo_path)}`,
     `runner_tools = [${(profile.runner_tools || []).map(tomlValue).join(", ")}]`,
@@ -183,10 +203,15 @@ export function buildProfileInstallGuide(config, overrides = {}) {
     profile_toml: renderBrokerProfileToml(profile),
     env_examples: [
       `${profile.device_key_env}=demo-device-key`,
-      `${profile.remote_service_bearer_token_env}=sk_live_xxxxx`
+      `${profile.remote_service_bearer_token_env}=sk_live_xxxxx`,
+      `${profile.remote_claude_ssh_target_env}=root@23.95.30.199`,
+      `${profile.remote_claude_container_name_env}=`,
+      `${profile.remote_claude_credentials_path_env}=/var/lib/cc-mcp-bridge/claude-home-1/.credentials.json`,
+      `${profile.remote_claude_global_config_path_env}=/var/lib/cc-mcp-bridge/claude-home-1/.claude.json`
     ],
     run_steps: [
       `现在推荐把 profile 默认入口固定为 official_proxy，MMS 会直接拉起本机真实 Claude Code CLI，再通过本地 proxy 接到远端 official runtime`,
+      `当前 live auth source 已收口为 host-path 读取；如容器名留空，remote auth sync 会直接按 credentials/global-config 路径读取`,
       `如需让 official CLI 默认跳过本地权限确认，可把 claude_bypass_permissions 改成 true`,
       `在项目目录执行: npm run broker:live`,
       `然后在任意工作目录执行: mms broker run ${profile.id}`,

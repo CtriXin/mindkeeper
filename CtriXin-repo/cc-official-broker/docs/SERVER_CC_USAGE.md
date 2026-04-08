@@ -1,3 +1,5 @@
+> Historical note: 这份文档记录的是旧 server baseline（`82.156.121.141`），不是当前主线。当前 baseline 以 `23.95.30.199 / cc-static-1 / 72.1.179.98` 为准。
+
 # Server CC Usage
 
 ## 当前 baseline

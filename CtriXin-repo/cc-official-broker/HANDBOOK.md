@@ -76,7 +76,7 @@ npm run official:attach
 - session-ingress connected + initialized
 - final result returned
 
-当前最小 blocker 不是协议层，而是 live profile 还在同步 `claude-code-official-3` 的 remote auth bundle；该 org 已 disabled，所以模型回合失败。
+这个 blocker 已解除：live auth source 已改为 `cc-static-1` 对应的 host-path auth bundle，`official:attach` 已返回 `LIVE_ATTACH_OK`。
 
 相关 handoff：
 
@@ -104,6 +104,18 @@ npm run official:attach
 相关 handoff：
 
 - `./.ai/coord/handoffs/2026-04-08T004800+0800-13-agent-live-auth-source-alignment.md`
+
+## 2026-04-09 MMS profile/live env 已收口
+
+这轮把“成功的 live auth source + official_proxy 配置”正式收成了 MMS profile 能消费的形态：
+
+- `mms:profile:print` / `mms:profile:install` 现在会带上 4 个 remote auth env hooks
+- `broker:live` 读取 `~/.config/mms/config.toml + credentials.sh` 时，会尊重显式空 `CC_BROKER_REMOTE_CLAUDE_CONTAINER_NAME=''`
+- 这意味着 `MMS` 现在可以稳定承担 `env exporter + launcher` 这一层，不需要再手抄 live auth source 组合
+
+相关 handoff：
+
+- `./.ai/coord/handoffs/2026-04-09T004445+0800-14-mms-profile-live-env-alignment.md`
 
 ## 2026-04-08 运行链白话说明
 
@@ -148,7 +160,7 @@ MMS(local)
   - `company/personal` 隔离
 - 当前服务器 baseline 已成立：
   - host: `23.95.30.199`
-  - entry: `cc-static`
+  - entry: `cc-static-1`
   - official `Claude Code`: `2.1.92`
   - auth: first-party `claude.ai`
 - 当前不做：
@@ -440,7 +452,7 @@ MMS(local)
   - runtime target switch
 - decision:
   - live broker profile 的 remote official auth target 改为独立配置，不再默认跟 `remote_service_base_url` 绑定同一台机器
-  - 当前 personal profile 默认使用 `root@23.95.30.199` + `claude-code-official-3` 来同步 official `claude.ai` auth bundle
+  - 当前 personal profile 推荐使用 `root@23.95.30.199` + host-path auth source（`claude-home-1`）来同步 official `claude.ai` auth bundle
   - 现有本机 `Claude Code 2.1.92` 重新实测后，仍不能把 `cc://` 当成真正 direct-connect 入口；进入 TUI 后会把整条 URL 当普通 prompt
 - note:
   - 新服务器上的 official auth 已可用，但这只解决 remote login，不解决本机 binary 的 direct-connect runtime 能力
@@ -481,12 +493,12 @@ MMS(local)
   - live runtime recovery
   - mms official entry alignment
 - decision:
-  - live remote runtime 先强制收口到 `cc-static-3`
-  - `cc-static-1/2` 暂时从 runtime pool 里摘掉，避免继续把流量打到坏 runtime
+  - live remote runtime 当前已收口回 `cc-static-1`
+  - disabled org 的旧 auth source 已退出主线
   - `official_connect` 在 `MMS` 侧如果探测到 local official build 不支持 direct-connect，就自动改走 `official:proxy`
   - 新生成的 `broker profile` 默认入口改成 `official_proxy`
 - note:
-  - 已把 `cc-static-3` 的 official OAuth credentials 从 auth source 同步到 live runtime
+  - 已把 live auth sync target 收口到 `cc-static-1` 的 `claude-home-1` auth bundle
   - live `/v1/responses` 已恢复 `200`
   - 本地 `node src/index.mjs official:proxy --print 'reply with ok only'` 已实测返回 `ok`
   - 这意味着用户现在可以从真实 official `Claude Code` CLI 入口感知远端主脑，而不是继续卡在 broker shell

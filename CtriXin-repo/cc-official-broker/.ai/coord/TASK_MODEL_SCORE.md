@@ -23,6 +23,8 @@
 | C4 sticky/runtime binding revision | `glm5.1` | single-agent | 8.4 | 1 | 精准按 review 修正 fail-fast 语义，改动克制，验证脚本可执行 |
 | C6 gateway session_state | `qwen-3.6-plus` | single-agent | 7.7 | 2 | 主功能落得较稳，首版验证和 miss 语义差一点，补修后通过 |
 | C7 remote:doctor alignment | `qwen-3.6-plus` | single-agent | 7.4 | 3 | 主方向对，但 verdict 收口和状态文案修了两轮后通过 |
+| Task 09 local official CLI -> gateway e2e | `qwen-3.6-plus` | single-agent | 8.0 | 1 | 调研速度快，能明确把 blocker 收口到 local official binary 而不是 gateway / server |
+| Task 11 official:attach turnkey | `kimi beta` | single-agent | 8.3 | 1 | 体验入口收口直接，零配置命令与文档同步都比较到位 |
 
 ## 模型观察
 
@@ -92,6 +94,18 @@
 - 适合：
   - revision / 精修 / 按明确验收条件补洞
 
+
+### `kimi beta`
+
+- 擅长：
+  - 做 CLI 体验层 / 脚本封装时收口很快
+  - 会优先把“用户怎么一条命令跑起来”讲清楚
+  - 文档、提示文案、入口脚本能一起补齐
+- 不擅长：
+  - 当前样本主要集中在体验层，复杂安全边界样本还不够
+  - 还不适合直接放到 auth / runtime safety 的最终收口位
+- 适合：
+  - turnkey 入口、CLI 封装、体验优化
 
 ### `qwen-3.6-plus`
 

@@ -1,3 +1,5 @@
+> Historical note: 这份联调清单主要记录旧 remote service 样本；当前主线 live endpoint 以 `http://23.95.30.199:28082` 为准。
+
 # Server 联调清单
 
 这份清单是给 `cc-official-broker` 和服务器端 runtime service 联调用的。

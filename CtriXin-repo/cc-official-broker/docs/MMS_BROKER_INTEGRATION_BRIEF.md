@@ -87,6 +87,10 @@ remote_service_label = "server-mms-personal"
 remote_service_base_url = "https://cc-service.example.com"
 remote_service_endpoint = "responses"
 remote_service_model = "claude-opus-4-6"
+remote_claude_ssh_target_env = "CC_BROKER_REMOTE_CLAUDE_SSH_TARGET"
+remote_claude_container_name_env = "CC_BROKER_REMOTE_CLAUDE_CONTAINER_NAME"
+remote_claude_credentials_path_env = "CC_BROKER_REMOTE_CLAUDE_CREDENTIALS_PATH"
+remote_claude_global_config_path_env = "CC_BROKER_REMOTE_CLAUDE_GLOBAL_CONFIG_PATH"
 remote_service_bearer_token_env = "MMS_REMOTE_SERVICE_TOKEN_PERSONAL"
 ```
 
@@ -98,11 +102,20 @@ remote_service_bearer_token_env = "MMS_REMOTE_SERVICE_TOKEN_PERSONAL"
 - `workspace_id`
 - `remote_service_base_url`
 - `remote_service_bearer_token_env`
+- `remote_claude_ssh_target_env`
+- `remote_claude_container_name_env`
+- `remote_claude_credentials_path_env`
+- `remote_claude_global_config_path_env`
 
 补充：
 
 - 这样一个 broker profile 就可以顺带绑定一个 server-side runtime target
 - 后续如果你有多组远端 OAuth / 多个 server-side `MMS` 或 runtime service，可以直接靠切 profile 做早期测试
+- 当前 live 成功配置里，healthy runtime `cc-static-1` 的 auth source 已经不是 `docker exec` 读取，而是 host-path：
+  - `CC_BROKER_REMOTE_CLAUDE_CONTAINER_NAME=''`
+  - `CC_BROKER_REMOTE_CLAUDE_CREDENTIALS_PATH=/var/lib/cc-mcp-bridge/claude-home-1/.credentials.json`
+  - `CC_BROKER_REMOTE_CLAUDE_GLOBAL_CONFIG_PATH=/var/lib/cc-mcp-bridge/claude-home-1/.claude.json`
+- `CC_BROKER_REMOTE_CLAUDE_CONTAINER_NAME=''` 是显式 override，不是“没配”；live profile resolver 现在会保留空字符串，避免退回旧 container 名
 
 ## 6. 推荐的职责拆分
 

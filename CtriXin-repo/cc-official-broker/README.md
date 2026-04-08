@@ -14,7 +14,7 @@
 
 - server-side official `cc` baseline: ready
 - auth: ready
-- egress: locked to `168.158.184.72`
+- egress: locked to `72.1.179.98`
 - auth/logging baseline: aligned with `cc-mcp-bridge/docs/BRIDGE_AUTH_LOGGING_SPEC.md`
 - local stub milestone: `auth + sessions + session stream + runner connect` ready
 - local tool routing milestone: `tool.call + tool.result` ready for read-only demo tools
@@ -189,6 +189,15 @@ multi-model-switch(local)
   - secret 通过环境变量读取：
     - `MMS_BROKER_DEVICE_KEY_*`
     - `MMS_REMOTE_SERVICE_TOKEN_*`
+    - `CC_BROKER_REMOTE_CLAUDE_SSH_TARGET`
+    - `CC_BROKER_REMOTE_CLAUDE_CONTAINER_NAME`
+    - `CC_BROKER_REMOTE_CLAUDE_CREDENTIALS_PATH`
+    - `CC_BROKER_REMOTE_CLAUDE_GLOBAL_CONFIG_PATH`
+  - 当前 live 成功组合已经收口为：
+    - runtime：`cc-static-1`
+    - auth source：`/var/lib/cc-mcp-bridge/claude-home-1/.credentials.json`
+    - `CC_BROKER_REMOTE_CLAUDE_CONTAINER_NAME` 可显式留空，让 remote auth sync 直接按 host-path 读取
+    - `broker:live` / live profile resolver 会保留这个空字符串，不再 fallback 回旧 container 名
 - 当前也已能验证一条最小 tool bridge：
   - broker 下发 `tool.call`
   - local runner 执行 `pwd/git_status/read_file/search`
@@ -298,7 +307,7 @@ multi-model-switch(local)
   - 如果 official Claude request 里已经带了 tools，proxy 现在会自动切到“remote planner -> local tool execution”模式：
     - 远端负责决定下一步
     - 本机 official Claude 负责真的跑 `Bash / Read / Write ...`
-  - 当前 live remote 已实测恢复，`official:proxy --print` 能真实打通到 `cc-static-3`
+  - 当前 live remote 已实测恢复，`official:proxy` / `official:attach` 现统一以 `cc-static-1` 为 healthy runtime
 - 所以如果你问“现在进 B 到底测什么”，最直接的就是两件事：
   - `/tool pwd`：看本地 runner 回灌
   - `/official`：看 broker 是否真能把官方 child attach 上来
