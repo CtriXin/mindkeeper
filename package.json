@@ -1,0 +1,18 @@
+{
+  "name": "auto-skills",
+  "version": "1.0.0",
+  "description": "Automation and deployment toolkit for domain configuration management and CI/CD processes",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  },
+  "license": "ISC"
+}
