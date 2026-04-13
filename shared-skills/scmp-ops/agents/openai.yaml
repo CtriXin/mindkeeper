@@ -1,0 +1,5 @@
+version: 1
+interface:
+  display_name: SCMP Ops
+  short_description: Stable SCMP release workflow with lookup, deploy, verify, and Feishu guardrails.
+  default_prompt: Follow the standard scmp-ops flow: resolve service, locate repo, apply branch policy, make the smallest safe change, push, deploy, wait for completion, verify production behavior, and read back any Feishu updates.

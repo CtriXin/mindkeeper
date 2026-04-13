@@ -1,0 +1,5 @@
+version: 1
+interface:
+  display_name: SCMP Self Improve
+  short_description: Lightweight reflection and promotion loop for evolving scmp-ops without bloating it.
+  default_prompt: Review recent SCMP work, extract concrete lessons, classify them by stability, update the inbox or promoted notes as justified, and log promotions so the skill system improves without drifting.
