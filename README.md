@@ -36,6 +36,10 @@ MindKeeper： Session → Learn → Cross-Project Recall → Evolve
 - **Thread** — 上下文蒸馏，跨 session 恢复工作状态
 - **主动推送** — bootstrap 时自动匹配相关经验，不需手动查询
 
+相关设计文档：
+- `docs/DISTILL_DESIGN.md` — distill / checkpoint 的原始闭环设计
+- `docs/WORKLOG_MEMORY_DESIGN.md` — fragment / reflection / distill / issue sync / gbrain-memory 的完整分层设计
+
 ---
 
 ## Installation
@@ -69,7 +73,7 @@ curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh 
 ### Install a specific tag or branch
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash -s -- --ref v2.2.0
+curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash -s -- --ref v2.3.0
 curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash -s -- --ref main
 ```
 
@@ -110,7 +114,7 @@ cd ~/.local/share/mindkeeper && pnpm install
 
 ---
 
-## MCP Tools (8 个)
+## MCP Tools
 
 ### Knowledge — 知识管理
 
@@ -126,7 +130,30 @@ cd ~/.local/share/mindkeeper && pnpm install
 |------|------|
 | `brain_bootstrap` | 轻量启动入口 — board 信号 + thread 恢复 + recipe 自动推送 |
 | `brain_checkpoint` | 蒸馏当前工作状态，写入 thread 文件供跨 session 恢复 |
+| `brain_fragment` | 记录一个连续工作片段，适合开发/探索/debug/修复过程中随时留痕 |
+| `brain_link_issue` | 把当前 thread chain 的 root 显式绑定到一个 `issue-tracking` issue slug |
+| `brain_sync_issue` | 把当前 thread chain 的 digest 同步到 `issue.md` 的固定 Mindkeeper 区块 |
 | `brain_threads` | 列出所有未过期的 thread，按 repo 分组 |
+
+`brain_checkpoint` 还会为当前项目维护一份本地 `Session Index`：
+
+- 路径：`<repo>/.ai/SESSION_INDEX.md`
+- 字段：`time / cli / model / folder / task / status / thread id`
+- 作用：同一项目开很多窗口后，直接进项目目录就能看出最近 distill 过什么、该恢复哪个 `dst-...`
+- 回填：`mk dst sync` 可根据现有 thread 重建当前项目索引
+
+`brain_fragment` 和 `brain_checkpoint` 的边界：
+
+- `brain_fragment`：小步留痕。每做完一段开发、探索、debug、修复就追加一条，不要求立刻蒸馏。
+- `brain_checkpoint`：阶段压缩。把当前阶段沉淀成新的 `dst-*` 快照，供跨 session 恢复。
+- 两者不冲突：同一条任务链会共享一个 `root`，新的 checkpoint 仍能看到此前 fragments。
+
+`brain_link_issue` / `brain_sync_issue` 的使用方式：
+
+- 先设置环境变量：`MINDKEEPER_ISSUE_TRACKING_ROOT=/path/to/issue-tracking`
+- 第一次绑定：调用 `brain_link_issue(repo, issue, project?)`
+- 需要归档时：调用 `brain_sync_issue(repo, thread?)`
+- 当前实现是显式同步，不会每写一条 fragment 就自动刷 `issue.md`
 
 ### Board — 项目看板
 
@@ -147,7 +174,15 @@ cd ~/.local/share/mindkeeper && pnpm install
 │   ├── index.json          # Recipe 索引（快速查找）
 │   └── recipes/*.md        # Recipe 文件（frontmatter + markdown）
 ├── threads/                # Thread 蒸馏文件（dst-YYYYMMDD-*.md）
+├── fragments/              # Thread 链下的持续工作片段（<root>.jsonl）
+├── issue-links/            # root -> issue-tracking 显式映射（<root>.json）
 └── boards/                 # Board JSON 文件（每个项目一个）
+```
+
+项目目录内会按需生成：
+
+```
+<repo>/.ai/SESSION_INDEX.md  # 项目内 session/thread 索引，便于 crash 后找回
 ```
 
 ### Recipe 格式
@@ -227,6 +262,9 @@ repo: /path/to/your-project
 task: 修复登录Bug
 branch: fix/login
 parent: dst-20260326-xyz789
+cli: codex
+model: gpt-5.4
+folder: src/auth
 created: 2026-03-27T15:08:38.729Z
 ttl: 7d
 ---
@@ -278,11 +316,13 @@ JWT 替换完成，待部署
 
 ```
 src/
-├── server.ts      # MCP server 入口 + 8 个 tool handler
+├── server.ts      # MCP server 入口 + tool handlers
 ├── router.ts      # 语义路由（同义词/trigram/tags 匹配）
 ├── storage.ts     # 文件 I/O（recipe/board CRUD + 衰减/关联）
 ├── bootstrap.ts   # Thread 解析/恢复/列表
 ├── distill.ts     # Checkpoint 蒸馏 pipeline
+├── fragments.ts   # root 级 append-only worklog
+├── issue-sync.ts  # issue link / digest sync
 ├── types.ts       # 所有 TypeScript 类型定义
 └── env.ts         # 环境检测（MMS bridge session → 真实 HOME）
 ```

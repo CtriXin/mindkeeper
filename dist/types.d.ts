@@ -94,6 +94,24 @@ export interface SearchResult {
     score: number;
     matchedTriggers: string[];
 }
+export type FragmentKind = 'dev' | 'explore' | 'debug' | 'fix' | 'note' | 'reflect';
+export interface FragmentRecord {
+    id: string;
+    rootId: string;
+    threadId: string;
+    repo: string;
+    task: string;
+    branch?: string;
+    cli?: string;
+    model?: string;
+    kind: FragmentKind;
+    created: string;
+    summary: string;
+    decisions: string[];
+    changes: string[];
+    findings: string[];
+    next: string[];
+}
 export declare const TOOLS: {
     /** 任务完成后提取 recipe */
     readonly LEARN: "brain_learn";
@@ -105,6 +123,12 @@ export declare const TOOLS: {
     readonly BOOTSTRAP: "brain_bootstrap";
     /** 蒸馏 checkpoint */
     readonly CHECKPOINT: "brain_checkpoint";
+    /** 追加持续工作片段 */
+    readonly FRAGMENT: "brain_fragment";
+    /** 绑定 issue-tracking issue */
+    readonly LINK_ISSUE: "brain_link_issue";
+    /** 同步 digest 到 issue-tracking */
+    readonly SYNC_ISSUE: "brain_sync_issue";
     /** 列出 threads */
     readonly THREADS: "brain_threads";
     /** 读写项目看板 */

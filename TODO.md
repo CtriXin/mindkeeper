@@ -27,6 +27,10 @@
 - [ ] 当前阈值 0.5，需根据实际匹配质量调整
 - [ ] 考虑 repo/framework 过滤（只推送同框架的 recipe）
 
+### 4.1 Hive continuity support
+- [ ] 为 Hive 补一层 continuity seed，优先服务 compact / interrupt / new session 恢复
+- [ ] 先按 `docs/HIVE_CONTINUITY_TODO.md` 做轻量索引，不进入 Hive 主循环
+
 ### 5. Scale-Adaptive 学习深度
 - [ ] 轻量模式：< 3 文件，evidence 直接存
 - [ ] 标准模式：3-10 文件，capture → distill

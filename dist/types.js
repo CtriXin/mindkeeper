@@ -17,6 +17,12 @@ export const TOOLS = {
     BOOTSTRAP: 'brain_bootstrap',
     /** 蒸馏 checkpoint */
     CHECKPOINT: 'brain_checkpoint',
+    /** 追加持续工作片段 */
+    FRAGMENT: 'brain_fragment',
+    /** 绑定 issue-tracking issue */
+    LINK_ISSUE: 'brain_link_issue',
+    /** 同步 digest 到 issue-tracking */
+    SYNC_ISSUE: 'brain_sync_issue',
     /** 列出 threads */
     THREADS: 'brain_threads',
     /** 读写项目看板 */

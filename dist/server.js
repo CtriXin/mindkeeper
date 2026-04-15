@@ -2,7 +2,7 @@
 /**
  * MindKeeper MCP Server
  *
- * Startup tools (5): brain_bootstrap / brain_checkpoint / brain_recall / brain_check / brain_extend
+ * Startup tools (10): brain_bootstrap / brain_token_status / brain_token_reset / brain_checkpoint / brain_fragment / brain_link_issue / brain_sync_issue / brain_threads / brain_recall / brain_check / brain_extend
  * Extended tools (3, loaded via brain_extend): brain_learn / brain_board / brain_list
  *
  * 业务逻辑在 handlers.ts，此文件只负责 MCP 协议层和路由分发。
@@ -11,9 +11,10 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
 import { loadIndex } from './storage.js';
-import { handleLearn, handleRecall, handleList, handleBootstrap, handleCheckpoint, handleBoard, handleCheck, } from './handlers.js';
+import { handleLearn, handleRecall, handleList, handleBootstrap, handleCheckpoint, handleFragment, handleLinkIssue, handleSyncIssue, handleThreads, handleBoard, handleCheck, } from './handlers.js';
+import { initSession, formatStatus, resetState, } from './token-monitor.js';
 const index = loadIndex();
-const server = new Server({ name: 'mindkeeper', version: '2.2.0' }, { capabilities: { tools: {}, resources: {} } });
+const server = new Server({ name: 'mindkeeper', version: '2.3.0' }, { capabilities: { tools: {}, resources: {} } });
 // ── 懒加载状态 ──
 let extended = false;
 // ── 工具定义 ──
@@ -29,6 +30,22 @@ const CORE_TOOLS = [
                 thread: { type: 'string', description: '指定恢复的 thread id（如 dst-20260326-xxxxxx）' },
             },
             required: ['task', 'repo'],
+        },
+    },
+    {
+        name: 'brain_token_status',
+        description: '查看当前 session 的 token 使用状态和对话轮次。',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+        },
+    },
+    {
+        name: 'brain_token_reset',
+        description: '重置 token 计数器（开始新 session 时调用）。',
+        inputSchema: {
+            type: 'object',
+            properties: {},
         },
     },
     {
@@ -50,6 +67,67 @@ const CORE_TOOLS = [
                 status: { type: 'string', description: '一句话状态' },
             },
             required: ['repo', 'task', 'status'],
+        },
+    },
+    {
+        name: 'brain_fragment',
+        description: '记录一个连续工作片段（开发/探索/debug/修复），挂到当前 thread 链上。适合随时 clear 前做小步留痕，不替代 distill。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                repo: { type: 'string', description: '当前仓库路径' },
+                task: { type: 'string', description: '当前任务描述' },
+                thread: { type: 'string', description: '可选，显式指定挂载的 thread id' },
+                parent: { type: 'string', description: '可选，自动 seed thread 时使用的 parent thread id' },
+                branch: { type: 'string', description: '当前分支' },
+                cli: { type: 'string', description: '调用来源客户端（如 claude-code, cursor, codex）' },
+                model: { type: 'string', description: '当前使用的模型（如 opus-4, kimi-k2.5）' },
+                kind: { type: 'string', enum: ['dev', 'explore', 'debug', 'fix', 'note'], description: '片段类型' },
+                summary: { type: 'string', description: '这一段工作的简短摘要' },
+                decisions: { type: 'array', items: { type: 'string' }, description: '这一段新增的决策（≤5）' },
+                changes: { type: 'array', items: { type: 'string' }, description: '这一段涉及的文件或变更（≤8）' },
+                findings: { type: 'array', items: { type: 'string' }, description: '这一段发现和踩坑（≤8）' },
+                next: { type: 'array', items: { type: 'string' }, description: '这一段结束后的待续事项（≤8）' },
+            },
+            required: ['repo', 'task', 'summary'],
+        },
+    },
+    {
+        name: 'brain_link_issue',
+        description: '把当前 thread chain 的 root 绑定到一个 issue-tracking issue slug。后续 brain_sync_issue 才能把 digest 回写到 issue.md。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                repo: { type: 'string', description: '当前仓库路径' },
+                task: { type: 'string', description: '可选，当前任务描述；未传时使用最近 thread' },
+                thread: { type: 'string', description: '可选，显式指定 thread id' },
+                project: { type: 'string', description: 'issue-tracking 中的项目目录；默认取 repo basename' },
+                issue: { type: 'string', description: 'issue slug，如 mindkeeper-fragment-memory-20260415' },
+            },
+            required: ['repo', 'issue'],
+        },
+    },
+    {
+        name: 'brain_sync_issue',
+        description: '把当前 thread chain 的 digest 同步到 issue-tracking issue.md。依赖 brain_link_issue 和环境变量 MINDKEEPER_ISSUE_TRACKING_ROOT。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                repo: { type: 'string', description: '当前仓库路径' },
+                task: { type: 'string', description: '可选，当前任务描述；未传时使用最近 thread' },
+                thread: { type: 'string', description: '可选，显式指定 thread id' },
+            },
+            required: ['repo'],
+        },
+    },
+    {
+        name: 'brain_threads',
+        description: '列出所有未过期的 thread，按 repo 分组。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                repo: { type: 'string', description: '可选，按 repo 过滤' },
+            },
         },
     },
     {
@@ -206,8 +284,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case 'brain_list': return handleList(args, index);
             case 'brain_bootstrap': return handleBootstrap(args, index);
             case 'brain_checkpoint': return handleCheckpoint(args);
+            case 'brain_fragment': return handleFragment(args);
+            case 'brain_link_issue': return handleLinkIssue(args);
+            case 'brain_sync_issue': return handleSyncIssue(args);
+            case 'brain_threads': return handleThreads(args);
             case 'brain_board': return handleBoard(args);
             case 'brain_check': return handleCheck(args, index);
+            case 'brain_token_status': {
+                const state = initSession();
+                return { content: [{ type: 'text', text: formatStatus(state) }] };
+            }
+            case 'brain_token_reset': {
+                const state = resetState();
+                return { content: [{ type: 'text', text: `Token 计数器已重置。新 Session: ${state.sessionId}` }] };
+            }
             case 'brain_extend':
                 extended = true;
                 await server.notification({ method: 'notifications/tools/list_changed', params: {} });

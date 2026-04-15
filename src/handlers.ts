@@ -12,13 +12,15 @@ import { loadIndex, saveIndex, loadRecipe, saveRecipe, recipeMetaFrom, touchReci
 import { searchRecipes } from './router.js';
 import { bootstrapQuick, formatQuickResume, getThreadById, listRecentThreads, findBestThread, loadThreadDetails } from './bootstrap.js';
 import { checkpoint, formatDistillReceipt } from './distill.js';
+import { appendFragment } from './fragments.js';
+import { defaultIssueProject, saveIssueLink, syncIssueDigest } from './issue-sync.js';
 import {
   loadBoard, createBoard, addBoardItem, updateBoardItem,
   addBoardMemo, checkBoards, listBoardSummaries, archiveStaleItems,
   saveBoard, checkRecipeStaleness, deprecateStaleRecipes, getRecipeHealthSummary,
   findMatchingBoardItems,
 } from './storage.js';
-import type { BrainIndex, Recipe, RecipeFile, QuadrantKey, Board, BoardSignal } from './types.js';
+import type { BrainIndex, Recipe, RecipeFile, QuadrantKey, Board, BoardSignal, FragmentKind } from './types.js';
 import { QUADRANT_KEYS, QUADRANT_LABELS } from './types.js';
 import { getRealHome } from './env.js';
 
@@ -46,6 +48,59 @@ function detectModel(): string | undefined {
   if (!model) return undefined;
   // 去掉尾部的 context window 标记 [1m] 等
   return model.replace(/\[[\w]+\]$/, '');
+}
+
+function resolveThreadForWrite(args: Record<string, unknown>): {
+  thread?: ReturnType<typeof getThreadById>;
+  seededThreadId?: string;
+  repo: string;
+  task: string;
+  branch?: string;
+} {
+  const repo = String(args.repo || '');
+  const task = args.task ? String(args.task) : '';
+  const branch = args.branch ? String(args.branch) : undefined;
+  const requestedThread = args.thread ? getThreadById(repo, String(args.thread)) : undefined;
+  const allowSeed = args.allowSeed !== false;
+
+  if (args.thread && !requestedThread) {
+    throw new Error(`thread 不存在: ${String(args.thread)}`);
+  }
+
+  let thread = requestedThread;
+  if (!thread) {
+    thread = task
+      ? findBestThread(repo, task, {
+          branch,
+          includeResumed: true,
+        })
+      : listRecentThreads(repo, 1, { includeResumed: true })[0];
+  }
+  let seededThreadId: string | undefined;
+
+  if (!thread && allowSeed) {
+    const seeded = checkpoint({
+      repo,
+      task: task || String(args.summary || 'seed thread'),
+      branch,
+      parent: args.parent ? String(args.parent) : undefined,
+      cli: args.cli ? String(args.cli) : detectCli(),
+      model: args.model ? String(args.model) : detectModel(),
+      decisions: [],
+      changes: [],
+      findings: [],
+      next: [],
+      status: `工作片段起点：${String(args.summary || task || 'seed thread')}`,
+    });
+    thread = getThreadById(repo, seeded.threadId);
+    seededThreadId = seeded.threadId;
+  }
+
+  if (!thread) {
+    throw new Error(task ? '未找到可写入的 thread。' : '当前 repo 还没有可用的 thread。');
+  }
+
+  return { thread, seededThreadId, repo, task, branch };
 }
 
 // ── 响应类型 ──
@@ -406,6 +461,13 @@ export function handleBootstrap(args: Record<string, unknown>, index: BrainIndex
       lines.push('  决策:');
       details.decisions.forEach(d => lines.push(`    - ${d}`));
     }
+    if (details.recentFragments.length > 0) {
+      lines.push('  最近片段:');
+      details.recentFragments.forEach(fragment => {
+        const nextHint = fragment.next[0] ? ` → ${fragment.next[0]}` : '';
+        lines.push(`    - [${fragment.kind}] ${fragment.summary}${nextHint}`);
+      });
+    }
   } else if (threads.length > 0) {
     lines.push('\n**最近对话**');
     const grouped = new Map<string, typeof threads>();
@@ -512,6 +574,126 @@ export function handleCheckpoint(args: Record<string, unknown>): ToolResponse {
   return ok(receipt);
 }
 
+export function handleFragment(args: Record<string, unknown>): ToolResponse {
+  if (!args.repo || !args.task || !args.summary) {
+    return err('brain_fragment 需要 repo、task、summary。');
+  }
+
+  let thread;
+  let seededThreadId: string | undefined;
+  let repo;
+  let task;
+  let branch;
+  try {
+    ({ thread, seededThreadId, repo, task, branch } = resolveThreadForWrite(args));
+  } catch (error) {
+    return err(error instanceof Error ? error.message : String(error));
+  }
+
+  if (!thread) {
+    return err('无法定位或创建 fragment 归属 thread。');
+  }
+
+  const rawKind = String(args.kind || 'note');
+  const allowedKinds: FragmentKind[] = ['dev', 'explore', 'debug', 'fix', 'note'];
+  const kind = allowedKinds.includes(rawKind as FragmentKind) ? rawKind as FragmentKind : 'note';
+
+  const fragment = appendFragment({
+    rootId: thread.root || thread.id,
+    threadId: thread.id,
+    repo: thread.repo || repo,
+    task,
+    branch: thread.branch || branch,
+    cli: args.cli ? String(args.cli) : detectCli(),
+    model: args.model ? String(args.model) : detectModel(),
+    kind,
+    summary: String(args.summary),
+    decisions: (args.decisions as string[]) || [],
+    changes: (args.changes as string[]) || [],
+    findings: (args.findings as string[]) || [],
+    next: (args.next as string[]) || [],
+  });
+
+  let text = `已记录 fragment: ${fragment.id}\nthread: ${thread.id}\nroot: ${fragment.rootId}\nkind: ${fragment.kind}`;
+  if (seededThreadId) {
+    text += `\nseed thread: ${seededThreadId}`;
+  }
+  text += `\nsummary: ${fragment.summary}`;
+  if (fragment.next.length > 0) {
+    text += `\nnext: ${fragment.next.join(' | ')}`;
+  }
+
+  return ok(text);
+}
+
+export function handleLinkIssue(args: Record<string, unknown>): ToolResponse {
+  if (!args.repo || !args.issue) {
+    return err('brain_link_issue 需要 repo、issue。');
+  }
+
+  let thread;
+  let repo;
+  let task;
+  try {
+    ({ thread, repo, task } = resolveThreadForWrite({
+      ...args,
+      allowSeed: false,
+    }));
+  } catch (error) {
+    return err(error instanceof Error ? error.message : String(error));
+  }
+
+  if (!thread) {
+    return err('无法定位可绑定 issue 的 thread。');
+  }
+
+  let link;
+  try {
+    const project = args.project ? String(args.project) : defaultIssueProject(thread.repo || repo);
+    link = saveIssueLink({
+      rootId: thread.root || thread.id,
+      project,
+      issue: String(args.issue),
+      repo: thread.repo || repo,
+    });
+  } catch (error) {
+    return err(error instanceof Error ? error.message : String(error));
+  }
+
+  return ok(
+    `已绑定 issue\nroot: ${link.rootId}\nthread: ${thread.id}\nproject: ${link.project}\nissue: ${link.issue}`,
+  );
+}
+
+export function handleSyncIssue(args: Record<string, unknown>): ToolResponse {
+  if (!args.repo) {
+    return err('brain_sync_issue 需要 repo。');
+  }
+
+  let thread;
+  try {
+    ({ thread } = resolveThreadForWrite({
+      ...args,
+      allowSeed: false,
+    }));
+  } catch (error) {
+    return err(error instanceof Error ? error.message : String(error));
+  }
+
+  if (!thread) {
+    return err('无法定位可同步的 thread。');
+  }
+
+  try {
+    const result = syncIssueDigest(thread);
+    return ok(
+      `已同步 issue digest\nproject: ${result.project}\nissue: ${result.issue}\nroot: ${result.rootId}\nfragments: ${result.fragmentCount}\npath: ${result.path}`,
+    );
+  } catch (error) {
+    return err(error instanceof Error ? error.message : String(error));
+  }
+}
+
 export function handleThreads(args: Record<string, unknown>): ToolResponse {
   const repo = args.repo ? String(args.repo) : undefined;
   const threads = listRecentThreads(repo, 50);
@@ -539,7 +721,7 @@ export function handleThreads(args: Record<string, unknown>): ToolResponse {
     lines.push('');
   }
 
-  lines.push('恢复方式：发送 thread id（如 `dst-20260326-xxx`）');
+  lines.push('恢复方式：输入 `/cr <id>`，或直接发送 thread id（如 `dst-20260326-xxx`）');
   return ok(lines.join('\n'));
 }
 

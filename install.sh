@@ -5,7 +5,7 @@
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash
 #   bash install.sh --update
-#   bash install.sh --ref v2.2.0
+#   bash install.sh --ref v2.3.0
 
 set -euo pipefail
 

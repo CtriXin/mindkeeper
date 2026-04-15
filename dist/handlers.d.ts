@@ -17,6 +17,9 @@ export declare function handleRecall(args: Record<string, unknown>, index: Brain
 export declare function handleList(args: Record<string, unknown>, index: BrainIndex): ToolResponse;
 export declare function handleBootstrap(args: Record<string, unknown>, index: BrainIndex): ToolResponse;
 export declare function handleCheckpoint(args: Record<string, unknown>): ToolResponse;
+export declare function handleFragment(args: Record<string, unknown>): ToolResponse;
+export declare function handleLinkIssue(args: Record<string, unknown>): ToolResponse;
+export declare function handleSyncIssue(args: Record<string, unknown>): ToolResponse;
 export declare function handleThreads(args: Record<string, unknown>): ToolResponse;
 export declare function handleBoard(args: Record<string, unknown>): ToolResponse;
 export declare function handleCheck(args: Record<string, unknown>, index: BrainIndex): ToolResponse;

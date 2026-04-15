@@ -34,6 +34,8 @@ export interface DistillResult {
     success: boolean;
     threadId: string;
     path: string;
+    repo: string;
+    repoSource: 'git' | 'history' | 'parent' | 'raw';
     parent?: string;
     stats: {
         decisions: number;
@@ -49,6 +51,7 @@ export interface DistillResult {
     hints?: DistillHint[];
     /** 多 repo 拆分时的其他 thread */
     splitThreads?: SplitThread[];
+    sessionIndexPath?: string;
 }
 export declare function checkpoint(input: DistillInput): DistillResult;
 export declare function formatDistillReceipt(result: DistillResult): string;

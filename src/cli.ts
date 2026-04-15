@@ -21,10 +21,12 @@ import {
   findMatchingBoardItems, listBoardSlugs, boardPath,
 } from './storage.js';
 import { unlinkSync, readFileSync } from 'fs';
-import { listRecentThreads, loadThreadDetails } from './bootstrap.js';
+import { getThreadById, listRecentThreads, loadThreadDetails } from './bootstrap.js';
+import { syncProjectSessionIndex, SESSION_INDEX_REL_PATH } from './session-index.js';
 import { QUADRANT_KEYS, QUADRANT_LABELS } from './types.js';
 import { execSync } from 'child_process';
 import { getRealHome } from './env.js';
+import { resolve } from 'path';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -74,6 +76,7 @@ mk — MindKeeper CLI
   mk dst archive <id>             归档
   mk dst resume <id> [--no-cd]    恢复 thread 上下文
                                     --no-cd: 不切换工作目录，仅加载上下文
+  mk dst sync [repo]              重建当前项目 ${SESSION_INDEX_REL_PATH}
 `);
 }
 
@@ -93,6 +96,19 @@ function fmtAge(ms: number): string {
 
 function projName(repo: string): string {
   return repo.split('/').pop() || repo;
+}
+
+function detectRepoRoot(base: string): string {
+  try {
+    return execSync('git rev-parse --show-toplevel', {
+      cwd: base,
+      encoding: 'utf-8',
+      timeout: 3000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return base;
+  }
 }
 
 // ── Thread 按 repo 聚合 ──
@@ -426,14 +442,24 @@ function cmdThread() {
 
   const showAllItems = sub === 'all';
 
+  if (sub === 'sync') {
+    const target = args[2] ? resolve(args[2]) : detectRepoRoot(process.cwd());
+    const result = syncProjectSessionIndex(target);
+    if (!result.path || result.count === 0) {
+      console.log(`没有可同步的 thread：${target}`);
+      return;
+    }
+    console.log(`已同步 ${result.path} (${result.count} 条)`);
+    return;
+  }
+
   // mk dst resume <id> [--no-cd]
   if (sub === 'resume') {
     const id = args[2];
     const noCd = args.includes('--no-cd');
     if (!id) { console.log('用法: mk thread resume <id> [--no-cd]'); return; }
 
-    const threads = listRecentThreads(undefined, 100);
-    const thread = threads.find(t => t.id === id);
+    const thread = getThreadById('', id);
     if (!thread) { console.log(`未找到: ${id}`); return; }
 
     // 直接读取 thread 文件，不依赖外部 dst 命令

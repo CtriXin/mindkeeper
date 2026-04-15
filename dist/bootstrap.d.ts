@@ -10,6 +10,7 @@
  * 6. 只推荐最相关的 1-2 个 procedure
  * 7. 更具体的 next action（不是泛文案）
  */
+import type { FragmentRecord } from './types.js';
 export interface BootstrapInput {
     task: string;
     repo?: string;
@@ -17,11 +18,13 @@ export interface BootstrapInput {
 }
 export interface ThreadSummary {
     id: string;
+    root: string;
     repo: string;
     task: string;
     status: string;
     path: string;
     createdAtMs: number;
+    created?: string;
     branch?: string;
     parent?: string;
     ttl?: string;
@@ -30,25 +33,40 @@ export interface ThreadSummary {
     model?: string;
     folder?: string;
 }
-/** 按 repo 过滤 thread；repo 为空时返回所有 */
-export declare function listRecentThreads(repo?: string, limit?: number): ThreadSummary[];
+interface ThreadListOptions {
+    includeResumed?: boolean;
+    includeExpired?: boolean;
+}
+/** 按 repo 过滤 thread；repo 为空时返回所有未恢复 thread */
+export declare function listRecentThreads(repo?: string, limit?: number, options?: ThreadListOptions): ThreadSummary[];
+/** 项目 thread 历史：包含已恢复 thread，默认只保留未过期项 */
+export declare function listThreadHistory(repo?: string, limit?: number): ThreadSummary[];
 /** 清理过期 thread 文件：TTL 过期后再宽限 30 天删除 */
 export declare function gcThreads(): number;
 export declare function getThreadById(repo: string, threadId: string): ThreadSummary | undefined;
 export declare function findBestThread(repo: string, task: string, options?: {
     branch?: string;
     minScore?: number;
+    includeResumed?: boolean;
+}): ThreadSummary | undefined;
+export declare function findBestThreadAnyRepo(task: string, options?: {
+    branch?: string;
+    minScore?: number;
+    includeResumed?: boolean;
 }): ThreadSummary | undefined;
 export interface QuickResume {
     task: string;
     /** 主 thread（最近的或指定的） */
     activeThread?: {
         id: string;
+        root: string;
         repo: string;
         task: string;
         status: string;
         nextSteps: string[];
         decisions: string[];
+        findings: string[];
+        recentFragments: Array<Pick<FragmentRecord, 'id' | 'kind' | 'summary' | 'next'>>;
     };
     /** 其他可恢复的 thread */
     otherThreads: {
@@ -61,6 +79,9 @@ export interface QuickResume {
 export declare function loadThreadDetails(t: ThreadSummary): {
     nextSteps: string[];
     decisions: string[];
+    findings: string[];
+    recentFragments: Array<Pick<FragmentRecord, 'id' | 'kind' | 'summary' | 'next'>>;
 };
 export declare function bootstrapQuick(input: BootstrapInput): QuickResume;
 export declare function formatQuickResume(qr: QuickResume): string;
+export {};

@@ -111,6 +111,28 @@ export interface SearchResult {
   matchedTriggers: string[];
 }
 
+// ── Fragment（持续工作片段） ──
+
+export type FragmentKind = 'dev' | 'explore' | 'debug' | 'fix' | 'note' | 'reflect';
+
+export interface FragmentRecord {
+  id: string;
+  rootId: string;
+  threadId: string;
+  repo: string;
+  task: string;
+  branch?: string;
+  cli?: string;
+  model?: string;
+  kind: FragmentKind;
+  created: string;
+  summary: string;
+  decisions: string[];
+  changes: string[];
+  findings: string[];
+  next: string[];
+}
+
 // ── 工具名 ──
 
 export const TOOLS = {
@@ -124,6 +146,12 @@ export const TOOLS = {
   BOOTSTRAP: 'brain_bootstrap',
   /** 蒸馏 checkpoint */
   CHECKPOINT: 'brain_checkpoint',
+  /** 追加持续工作片段 */
+  FRAGMENT: 'brain_fragment',
+  /** 绑定 issue-tracking issue */
+  LINK_ISSUE: 'brain_link_issue',
+  /** 同步 digest 到 issue-tracking */
+  SYNC_ISSUE: 'brain_sync_issue',
   /** 列出 threads */
   THREADS: 'brain_threads',
   /** 读写项目看板 */

@@ -13,6 +13,7 @@ brain/
 
 # 本地 agent release notes
 .ai/agent-release-notes.md
+.ai/SESSION_INDEX.md
 
 # IDE
 .vscode/

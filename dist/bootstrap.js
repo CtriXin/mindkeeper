@@ -15,12 +15,18 @@ import { join, basename } from 'path';
 import { execSync } from 'child_process';
 import { getRealHome } from './env.js';
 import { extractKeywords } from './utils.js';
+import { loadFragments } from './fragments.js';
 const SCE_DIR = join(getRealHome(), '.sce');
 // ── Git 上下文 ──
 function git(cmd, cwd) {
     try {
         // trimEnd 只去尾部换行，保留行首空格（porcelain 格式依赖前导空格）
-        return execSync(`git ${cmd}`, { cwd, encoding: 'utf-8', timeout: 5000 }).trimEnd();
+        return execSync(`git ${cmd}`, {
+            cwd,
+            encoding: 'utf-8',
+            timeout: 5000,
+            stdio: ['ignore', 'pipe', 'ignore'],
+        }).trimEnd();
     }
     catch {
         return '';
@@ -89,11 +95,13 @@ function parseThreadFile(path, now) {
         const ttlMs = deriveEffectiveTtl(content, meta.ttl);
         return {
             id: meta.id || basename(path, '.md'),
+            root: meta.root || meta.id || basename(path, '.md'),
             repo: meta.repo || '',
             task: meta.task || basename(path, '.md'),
             status,
             path,
             createdAtMs,
+            created: meta.created,
             branch: meta.branch,
             parent: meta.parent,
             ttl: meta.ttl,
@@ -136,8 +144,7 @@ function markThreadResumed(thread) {
     }
     catch { /* 静默失败 */ }
 }
-/** 按 repo 过滤 thread；repo 为空时返回所有 */
-export function listRecentThreads(repo, limit = 2) {
+function listThreads(repo, limit = 2, options) {
     const threadsDir = join(SCE_DIR, 'threads');
     if (!existsSync(threadsDir))
         return [];
@@ -147,7 +154,9 @@ export function listRecentThreads(repo, limit = 2) {
             .filter(f => f.endsWith('.md'))
             .map(f => parseThreadFile(join(threadsDir, f), now))
             .filter((thread) => Boolean(thread))
-            .filter(t => !t.expired && !t.resumed && (!repo || t.repo === repo))
+            .filter(t => (options?.includeExpired ? true : !t.expired))
+            .filter(t => (options?.includeResumed ? true : !t.resumed))
+            .filter(t => !repo || t.repo === repo)
             .sort((a, b) => b.createdAtMs - a.createdAtMs)
             .slice(0, limit)
             .map(({ expired: _expired, ...thread }) => thread);
@@ -155,6 +164,14 @@ export function listRecentThreads(repo, limit = 2) {
     catch {
         return [];
     }
+}
+/** 按 repo 过滤 thread；repo 为空时返回所有未恢复 thread */
+export function listRecentThreads(repo, limit = 2, options) {
+    return listThreads(repo, limit, options);
+}
+/** 项目 thread 历史：包含已恢复 thread，默认只保留未过期项 */
+export function listThreadHistory(repo, limit = 100) {
+    return listThreads(repo, limit, { includeResumed: true });
 }
 const GC_GRACE_DAYS = 30;
 /** 清理过期 thread 文件：TTL 过期后再宽限 30 天删除 */
@@ -241,7 +258,7 @@ export function getThreadById(repo, threadId) {
 }
 export function findBestThread(repo, task, options) {
     const minScore = options?.minScore ?? 4;
-    const candidates = listRecentThreads(repo, 50)
+    const candidates = listRecentThreads(repo, 50, { includeResumed: options?.includeResumed })
         .map(thread => ({
         thread,
         score: scoreTaskSimilarity(task, thread.task) +
@@ -250,6 +267,26 @@ export function findBestThread(repo, task, options) {
         .filter(item => item.score >= minScore)
         .sort((a, b) => b.score - a.score || b.thread.createdAtMs - a.thread.createdAtMs);
     return candidates[0]?.thread;
+}
+export function findBestThreadAnyRepo(task, options) {
+    const minScore = options?.minScore ?? 7;
+    const candidates = listRecentThreads(undefined, 100, { includeResumed: options?.includeResumed })
+        .map(thread => ({
+        thread,
+        score: scoreTaskSimilarity(task, thread.task) +
+            (options?.branch && thread.branch === options?.branch ? 2 : 0),
+    }))
+        .filter(item => item.score >= minScore)
+        .sort((a, b) => b.score - a.score || b.thread.createdAtMs - a.thread.createdAtMs);
+    const best = candidates[0];
+    const second = candidates[1];
+    if (!best)
+        return undefined;
+    // 仅在跨 repo 候选明显领先时才自动推断，避免误绑错项目。
+    if (second && second.thread.repo !== best.thread.repo && best.score - second.score < 3) {
+        return undefined;
+    }
+    return best.thread;
 }
 function resolveTargetThread(input, options) {
     if (!input.repo)
@@ -283,24 +320,31 @@ function extractThreadSection(content, header) {
 export function loadThreadDetails(t) {
     try {
         const content = readFileSync(t.path, 'utf-8');
+        const recentFragments = loadFragments(t.root || t.id, 3);
         return {
             nextSteps: extractThreadSection(content, '待续'),
             decisions: extractThreadSection(content, '决策').slice(0, 3),
+            findings: extractThreadSection(content, '发现').slice(0, 5),
+            recentFragments: recentFragments.map(fragment => ({
+                id: fragment.id,
+                kind: fragment.kind,
+                summary: fragment.summary,
+                next: fragment.next,
+            })),
         };
     }
     catch {
-        return { nextSteps: [], decisions: [] };
+        return { nextSteps: [], decisions: [], findings: [], recentFragments: [] };
     }
 }
 export function bootstrapQuick(input) {
-    const threads = listRecentThreads(input.repo, 5);
-    if (threads.length === 0) {
-        return { task: input.task, otherThreads: [] };
-    }
     const target = resolveTargetThread(input);
     if (!target) {
         return { task: input.task, otherThreads: [] };
     }
+    const threads = listRecentThreads(input.repo, 5, {
+        includeResumed: Boolean(input.thread),
+    });
     // 标记已恢复，sce-ls 不再显示
     markThreadResumed(target);
     const details = loadThreadDetails(target);
@@ -308,11 +352,14 @@ export function bootstrapQuick(input) {
         task: input.task,
         activeThread: {
             id: target.id,
+            root: target.root,
             repo: target.repo,
             task: target.task,
             status: target.status || '进行中',
             nextSteps: details.nextSteps,
             decisions: details.decisions,
+            findings: details.findings,
+            recentFragments: details.recentFragments,
         },
         otherThreads: threads
             .filter(t => t.id !== target.id)
@@ -335,9 +382,20 @@ export function formatQuickResume(qr) {
         text += `\n**关键决策**:\n`;
         t.decisions.forEach(d => text += `- ${d}\n`);
     }
+    if (t.findings.length > 0) {
+        text += `\n**重要发现**:\n`;
+        t.findings.forEach(f => text += `- ${f}\n`);
+    }
+    if (t.recentFragments.length > 0) {
+        text += `\n**最近片段**:\n`;
+        t.recentFragments.forEach(fragment => {
+            const nextHint = fragment.next[0] ? ` → ${fragment.next[0]}` : '';
+            text += `- [${fragment.kind}] ${fragment.summary}${nextHint}\n`;
+        });
+    }
     // 同 repo 有其他 thread
     if (qr.otherThreads.length > 0) {
-        text += `\n**同项目其他进度**（说 \`继续 <id>\` 切换）:\n`;
+        text += `\n**同项目其他进度**（输入 \`/cr <id>\` 切换）:\n`;
         qr.otherThreads.forEach(o => {
             const oRepo = o.repo.split('/').pop() || o.repo;
             text += `- \`${o.id}\` (${oRepo}): ${o.task}${o.status ? ' — ' + o.status : ''}\n`;

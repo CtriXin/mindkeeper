@@ -8,10 +8,11 @@
  * 输出和 bootstrap reader 对齐的 thread frontmatter。
  */
 
-import { writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join, resolve, dirname } from 'path';
+import { writeFileSync, existsSync, mkdirSync, realpathSync } from 'fs';
+import { join, resolve, dirname, relative } from 'path';
 import { execSync } from 'child_process';
-import { findBestThread, getThreadById, gcThreads } from './bootstrap.js';
+import { findBestThread, findBestThreadAnyRepo, getThreadById, gcThreads } from './bootstrap.js';
+import { syncProjectSessionIndex } from './session-index.js';
 import { findMatchingBoardItems } from './storage.js';
 import { getRealHome } from './env.js';
 
@@ -50,6 +51,8 @@ export interface DistillResult {
   success: boolean;
   threadId: string;
   path: string;
+  repo: string;
+  repoSource: 'git' | 'history' | 'parent' | 'raw';
   parent?: string;
   stats: {
     decisions: number;
@@ -61,6 +64,7 @@ export interface DistillResult {
   hints?: DistillHint[];
   /** 多 repo 拆分时的其他 thread */
   splitThreads?: SplitThread[];
+  sessionIndexPath?: string;
 }
 
 // ── ID 生成 ──
@@ -106,7 +110,15 @@ function resolveParent(input: DistillInput): string | undefined {
   return findBestThread(input.repo, input.task, {
     branch: input.branch,
     minScore: 4,
+    includeResumed: true,
   })?.id;
+}
+
+interface RepoContext {
+  repo: string;
+  folderHint?: string;
+  source: 'git' | 'history' | 'parent' | 'raw';
+  isGitRepo: boolean;
 }
 
 // ── Repo 自动检测 ──
@@ -131,7 +143,10 @@ function gitRepoRoot(filePath: string): string | null {
   if (_gitRootCache.has(dir)) return _gitRootCache.get(dir)!;
   try {
     const root = execSync('git rev-parse --show-toplevel', {
-      cwd: dir, encoding: 'utf-8', timeout: 3000,
+      cwd: dir,
+      encoding: 'utf-8',
+      timeout: 3000,
+      stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
     _gitRootCache.set(dir, root);
     return root;
@@ -139,6 +154,73 @@ function gitRepoRoot(filePath: string): string | null {
     _gitRootCache.set(dir, null);
     return null;
   }
+}
+
+function normalizePathForFrontmatter(value: string): string {
+  return value.replace(/\\/g, '/');
+}
+
+function resolveRepoContext(inputRepo: string): RepoContext {
+  const requestedRepo = resolve(sanitizeScalar(inputRepo));
+  const absoluteRepo = existsSync(requestedRepo) ? realpathSync(requestedRepo) : requestedRepo;
+  const gitRoot = gitRepoRoot(absoluteRepo);
+  if (!gitRoot) {
+    return {
+      repo: normalizePathForFrontmatter(absoluteRepo),
+      source: 'raw',
+      isGitRepo: false,
+    };
+  }
+
+  const normalizedRoot = normalizePathForFrontmatter(gitRoot);
+  const normalizedRepo = normalizePathForFrontmatter(absoluteRepo);
+  const folderHint = normalizedRepo !== normalizedRoot && normalizedRepo.startsWith(normalizedRoot + '/')
+    ? normalizePathForFrontmatter(relative(normalizedRoot, normalizedRepo)) || undefined
+    : undefined;
+
+  return {
+    repo: normalizedRoot,
+    folderHint,
+    source: 'git',
+    isGitRepo: true,
+  };
+}
+
+function inferRepoContext(
+  input: DistillInput,
+  task: string,
+  branch: string | undefined,
+  current: RepoContext,
+): RepoContext {
+  if (current.isGitRepo) return current;
+
+  if (input.parent) {
+    const parentThread = getThreadById(current.repo, input.parent);
+    if (parentThread?.repo) {
+      return {
+        repo: parentThread.repo,
+        folderHint: parentThread.folder,
+        source: 'parent',
+        isGitRepo: true,
+      };
+    }
+  }
+
+  const matchedThread = findBestThreadAnyRepo(task, {
+    branch,
+    minScore: branch ? 6 : 8,
+    includeResumed: true,
+  });
+  if (matchedThread?.repo) {
+    return {
+      repo: matchedThread.repo,
+      folderHint: matchedThread.folder,
+      source: 'history',
+      isGitRepo: true,
+    };
+  }
+
+  return current;
 }
 
 /** 将 change 的文件路径解析为绝对路径，尝试 fallbackRepo 和 cwd */
@@ -230,6 +312,7 @@ function writeThread(opts: {
   task: string;
   branch?: string;
   parent?: string;
+  root?: string;
   cli?: string;
   model?: string;
   folder?: string;
@@ -241,10 +324,12 @@ function writeThread(opts: {
   status: string;
 }): { threadId: string; path: string } {
   const threadId = generateThreadId();
+  const root = opts.root || threadId;
 
   const frontmatter = [
     '---',
     `id: ${threadId}`,
+    `root: ${root}`,
     `repo: ${opts.repo}`,
     `task: ${opts.task}`,
     opts.branch ? `branch: ${opts.branch}` : null,
@@ -289,12 +374,20 @@ function writeThread(opts: {
   return { threadId, path: filePath };
 }
 
+function syncProjectIndexIfPossible(repo: string): string | undefined {
+  const root = gitRepoRoot(repo);
+  if (!root) return undefined;
+  const normalizedRepo = normalizePathForFrontmatter(repo);
+  const normalizedRoot = normalizePathForFrontmatter(root);
+  if (normalizedRepo !== normalizedRoot) return undefined;
+  return syncProjectSessionIndex(normalizedRoot).path;
+}
+
 export function checkpoint(input: DistillInput): DistillResult {
   if (!existsSync(THREADS_DIR)) {
     mkdirSync(THREADS_DIR, { recursive: true });
   }
 
-  const parent = resolveParent(input);
   const created = new Date().toISOString();
   const task = sanitizeScalar(input.task);
   const branch = input.branch ? sanitizeScalar(input.branch) : undefined;
@@ -306,7 +399,23 @@ export function checkpoint(input: DistillInput): DistillResult {
   const findings = sanitizeList(input.findings || [], ENTRY_LIMITS.findings);
   const next = sanitizeList(input.next || [], ENTRY_LIMITS.next);
 
-  const fallbackRepo = sanitizeScalar(input.repo);
+  const repoContext = inferRepoContext(input, task, branch, resolveRepoContext(input.repo));
+  const fallbackRepo = repoContext.repo;
+  const parent = resolveParent({
+    ...input,
+    repo: fallbackRepo,
+    task,
+    branch,
+    cli,
+    model,
+    status,
+    decisions,
+    changes,
+    findings,
+    next,
+  });
+  const parentThread = parent ? getThreadById(fallbackRepo, parent) : undefined;
+  const chainRoot = parentThread?.root || parentThread?.id;
 
   // 自动检测 changes 中涉及的 repo
   const repoMap = changes.length > 0
@@ -318,33 +427,39 @@ export function checkpoint(input: DistillInput): DistillResult {
   // 单 repo：直接写（可能修正了 repo 字段）
   if (repos.length <= 1) {
     const actualRepo = repos[0] || fallbackRepo;
-    const folder = extractFolder(changes);
+    const folder = extractFolder(changes) || (actualRepo === fallbackRepo ? repoContext.folderHint : undefined);
     const { threadId, path: filePath } = writeThread({
-      repo: actualRepo, task, branch, parent, cli, model, folder, created,
+      repo: actualRepo, task, branch, parent, root: chainRoot, cli, model, folder, created,
       decisions, changes, findings, next, status,
     });
+    const sessionIndexPath = syncProjectIndexIfPossible(actualRepo);
 
     const relatedBoardItems = findMatchingBoardItems(task);
     const hints = detectHints({ status, findings, next, decisions }, relatedBoardItems);
 
     return {
-      success: true, threadId, path: filePath, parent,
+      success: true, threadId, path: filePath, repo: actualRepo,
+      repoSource: actualRepo === fallbackRepo ? repoContext.source : 'git',
+      parent,
       stats: { decisions: decisions.length, changes: changes.length, findings: findings.length, next: next.length },
       relatedBoardItems: relatedBoardItems.length > 0 ? relatedBoardItems : undefined,
       hints: hints.length > 0 ? hints : undefined,
+      sessionIndexPath,
     };
   }
 
   // 多 repo：拆分，每个 repo 一个 thread，共享 decisions/findings/next
   const splitThreads: SplitThread[] = [];
   let primaryResult: { threadId: string; path: string } | undefined;
+  let primaryRepo: string | undefined;
 
   for (const [repo, repoChanges] of repoMap) {
     const isPrimary = repo === fallbackRepo || !primaryResult;
-    const repoFolder = extractFolder(repoChanges);
+    const repoFolder = extractFolder(repoChanges) || (isPrimary ? repoContext.folderHint : undefined);
     const result = writeThread({
       repo, task, branch: isPrimary ? branch : undefined,
       parent: isPrimary ? parent : undefined,
+      root: chainRoot,
       cli: isPrimary ? cli : undefined,
       model: isPrimary ? model : undefined,
       folder: repoFolder,
@@ -354,12 +469,17 @@ export function checkpoint(input: DistillInput): DistillResult {
 
     if (isPrimary) {
       primaryResult = result;
+      primaryRepo = repo;
     } else {
       splitThreads.push({ threadId: result.threadId, repo, path: result.path });
     }
   }
 
   const primary = primaryResult!;
+  for (const repo of repos) {
+    syncProjectIndexIfPossible(repo);
+  }
+  const sessionIndexPath = primaryRepo ? syncProjectIndexIfPossible(primaryRepo) : undefined;
   const relatedBoardItems = findMatchingBoardItems(task);
   const hints = detectHints({ status, findings, next, decisions }, relatedBoardItems);
 
@@ -370,11 +490,14 @@ export function checkpoint(input: DistillInput): DistillResult {
     success: true,
     threadId: primary.threadId,
     path: primary.path,
+    repo: primaryRepo || fallbackRepo,
+    repoSource: primaryRepo === fallbackRepo || !primaryRepo ? repoContext.source : 'git',
     parent,
     stats: { decisions: decisions.length, changes: changes.length, findings: findings.length, next: next.length },
     relatedBoardItems: relatedBoardItems.length > 0 ? relatedBoardItems : undefined,
     hints: hints.length > 0 ? hints : undefined,
     splitThreads: splitThreads.length > 0 ? splitThreads : undefined,
+    sessionIndexPath,
   };
 }
 
@@ -449,6 +572,14 @@ export function formatDistillReceipt(result: DistillResult): string {
     for (const hint of result.hints) {
       text += `\n${HINT_ICONS[hint.type] || '•'} ${hint.message}`;
     }
+  }
+
+  if (result.sessionIndexPath) {
+    text += `\n**Session Index**: ${result.sessionIndexPath}`;
+  }
+
+  if (result.repoSource === 'raw') {
+    text += `\n**注意**: repo 未校验为 git root，当前记录绑定到 ${result.repo}`;
   }
 
   text += `\n\n**恢复口令: \`${threadId}\`**`;
