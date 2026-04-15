@@ -5,6 +5,7 @@
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash
 #   bash install.sh --update
+#   bash install.sh --ref v2.2.0
 
 set -euo pipefail
 
@@ -18,7 +19,47 @@ fi
 INSTALL_DIR="$REAL_HOME/.local/share/mindkeeper"
 REPO_URL="https://github.com/CtriXin/mindkeeper.git"
 UPDATE_MODE=false
-[[ "${1:-}" == "--update" ]] && UPDATE_MODE=true
+INSTALL_REF=""
+
+usage() {
+  cat <<'EOF'
+Usage:
+  bash install.sh
+  bash install.sh --update
+  bash install.sh --ref <tag-or-branch>
+
+Notes:
+  --update                Update the current branch checkout in-place
+  --ref <tag-or-branch>   Install or switch to a specific tag/branch
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "${1:-}" in
+    --update)
+      UPDATE_MODE=true
+      ;;
+    --ref)
+      shift
+      if [[ -z "${1:-}" ]]; then
+        echo "ERROR: --ref requires a tag or branch name."
+        usage
+        exit 1
+      fi
+      INSTALL_REF="$1"
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: unknown argument: $1"
+      usage
+      exit 1
+      ;;
+  esac
+  shift
+done
 
 echo ""
 echo "━━━ MindKeeper Installer ━━━"
@@ -38,21 +79,62 @@ if (( NODE_VERSION < 18 )); then
   exit 1
 fi
 
+checkout_requested_ref() {
+  local ref="$1"
+  if [[ -z "$ref" ]]; then
+    return 0
+  fi
+
+  echo "Switching MindKeeper to ref: $ref"
+  git fetch --tags --force origin >/dev/null 2>&1 || true
+
+  if git ls-remote --exit-code --heads origin "$ref" >/dev/null 2>&1; then
+    git fetch --depth 1 origin "$ref"
+    git checkout -B "$ref" FETCH_HEAD
+    return 0
+  fi
+
+  if git ls-remote --exit-code --tags origin "refs/tags/$ref" >/dev/null 2>&1; then
+    git fetch --depth 1 origin "refs/tags/$ref:refs/tags/$ref"
+    git checkout -f "$ref"
+    return 0
+  fi
+
+  if git rev-parse --verify "$ref^{commit}" >/dev/null 2>&1; then
+    git checkout -f "$ref"
+    return 0
+  fi
+
+  echo "ERROR: ref not found: $ref"
+  exit 1
+}
+
 # ── Clone or update ──
 if [ -d "$INSTALL_DIR/.git" ]; then
-  if $UPDATE_MODE; then
+  cd "$INSTALL_DIR"
+  if [[ -n "$INSTALL_REF" ]]; then
+    checkout_requested_ref "$INSTALL_REF"
+  elif $UPDATE_MODE; then
     echo "Updating existing installation..."
-    cd "$INSTALL_DIR"
+    current_branch="$(git symbolic-ref --short -q HEAD || true)"
+    if [[ -z "$current_branch" ]]; then
+      echo "Pinned or detached checkout detected. Re-run with --ref <tag-or-branch> to move versions."
+      exit 1
+    fi
     git pull --ff-only
   else
     echo "Already installed at $INSTALL_DIR"
-    echo "Use --update to update."
+    echo "Use --update to update, or --ref <tag-or-branch> to switch versions."
     exit 0
   fi
 else
   echo "Cloning MindKeeper..."
   mkdir -p "$(dirname "$INSTALL_DIR")"
-  git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
+  if [[ -n "$INSTALL_REF" ]]; then
+    git clone --depth 1 --branch "$INSTALL_REF" "$REPO_URL" "$INSTALL_DIR"
+  else
+    git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
+  fi
   cd "$INSTALL_DIR"
 fi
 

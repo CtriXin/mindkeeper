@@ -66,6 +66,13 @@ cd ~/.local/share/mindkeeper && git pull && npm install --production
 curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash -s -- --update
 ```
 
+### Install a specific tag or branch
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash -s -- --ref v2.2.0
+curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash -s -- --ref main
+```
+
 ### MCP Configuration
 
 Add to your MCP config file:
