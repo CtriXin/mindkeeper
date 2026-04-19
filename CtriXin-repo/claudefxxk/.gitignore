@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Agent release notes (per AGENTS.md rules, user-specific)
+.ai/
+
+# Sensitive backups (contain user .claude.bak data)
+backups/
+
+# Legacy versions and iteration archives (kept in filesystem, not in git)
+archive/
+backup-pre-v3/
