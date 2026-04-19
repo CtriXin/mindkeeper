@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "roles": [
+    {
+      "id": "prompt-compiler",
+      "aliases": ["minifier", "prompt-optimizer"],
+      "kind": "system",
+      "file": "roles/prompt-compiler.md",
+      "used_by": ["system"]
+    },
+    {
+      "id": "challenger",
+      "aliases": ["reviewer-challenger", "bug-finder"],
+      "kind": "review",
+      "file": "roles/challenger.md",
+      "used_by": ["hive", "hive-discuss", "agent-2-agent"]
+    },
+    {
+      "id": "architect",
+      "aliases": ["reviewer-architect", "structure-reviewer"],
+      "kind": "review",
+      "file": "roles/architect.md",
+      "used_by": ["hive", "hive-discuss", "agent-2-agent"]
+    },
+    {
+      "id": "subtractor",
+      "aliases": ["reviewer-subtractor", "simplifier"],
+      "kind": "review",
+      "file": "roles/subtractor.md",
+      "used_by": ["hive", "hive-discuss", "agent-2-agent"]
+    },
+    {
+      "id": "discussion-partner",
+      "aliases": ["structured-discuss", "pushback-partner"],
+      "kind": "discussion",
+      "file": "roles/discussion-partner.md",
+      "used_by": ["hive", "hive-discuss", "agent-discuss"]
+    },
+    {
+      "id": "designer-soul",
+      "aliases": ["designer", "design-director"],
+      "kind": "design",
+      "file": "roles/designer-soul.md",
+      "compiled_file": "roles/designer-soul.min.md",
+      "used_by": ["designer", "llm-creator-ops"]
+    },
+    {
+      "id": "strategist",
+      "aliases": ["seo-strategist", "content-strategist"],
+      "kind": "strategy",
+      "file": "roles/strategist.md",
+      "used_by": ["llm-creator-ops"]
+    },
+    {
+      "id": "copywriter",
+      "aliases": ["conversion-copywriter", "content-writer"],
+      "kind": "content",
+      "file": "roles/copywriter.md",
+      "used_by": ["llm-creator-ops"]
+    },
+    {
+      "id": "frontend-architect",
+      "aliases": ["builder-architect", "render-architect"],
+      "kind": "build",
+      "file": "roles/frontend-architect.md",
+      "used_by": ["llm-creator-ops"]
+    },
+    {
+      "id": "growth",
+      "aliases": ["monetization-growth", "revenue-optimizer"],
+      "kind": "growth",
+      "file": "roles/growth.md",
+      "used_by": ["llm-creator-ops"]
+    },
+    {
+      "id": "audit",
+      "aliases": ["quality-audit", "publish-gate"],
+      "kind": "review",
+      "file": "roles/audit.md",
+      "compiled_file": "roles/audit.min.md",
+      "used_by": ["llm-creator-ops"]
+    },
+    {
+      "id": "authority",
+      "aliases": ["offpage-seo", "link-authority"],
+      "kind": "authority",
+      "file": "roles/authority.md",
+      "used_by": ["llm-creator-ops"]
+    },
+    {
+      "id": "evolution-memory",
+      "aliases": ["iteration-memory", "state-synthesizer"],
+      "kind": "memory",
+      "file": "roles/evolution-memory.md",
+      "used_by": ["llm-creator-ops"]
+    },
+    {
+      "id": "writer-soul",
+      "aliases": ["seo-writer", "article-writer"],
+      "kind": "writing",
+      "file": "roles/writer-soul.md",
+      "compiled_file": "roles/writer-soul.min.md",
+      "used_by": ["llm-creator-ops"]
+    },
+    {
+      "id": "image-slot",
+      "aliases": ["image-provider", "article-image-slot"],
+      "kind": "media",
+      "file": "roles/image-slot.md",
+      "used_by": ["llm-creator-ops"]
+    }
+  ]
+}

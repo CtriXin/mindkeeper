@@ -1,0 +1,5 @@
+.DS_Store
+.ai/agent-release-notes.md
+
+.ai/session-handoff-*.md
+.ai/restore/
