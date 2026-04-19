@@ -189,9 +189,9 @@ fi
 # ----------------------------------------------------------------------------
 echo "[P1] 当前 session settings.json（自动脱敏）..."
 CURRENT_SETTINGS=""
-for s in "$HOME/.config/mms/claude-gateway/s"/*/.claude/settings.json; do
-    [ -f "$s" ] && CURRENT_SETTINGS="$s" && break
-done
+# 按修改时间取最新的 MMS gateway session settings.json（避免 glob 顺序问题）
+LATEST_SETTINGS=$(ls -t "$HOME/.config/mms/claude-gateway/s"/*/.claude/settings.json 2>/dev/null | head -1)
+[ -n "$LATEST_SETTINGS" ] && [ -f "$LATEST_SETTINGS" ] && CURRENT_SETTINGS="$LATEST_SETTINGS"
 [ -z "$CURRENT_SETTINGS" ] && [ -f "$HOME/.claude/settings.json" ] && CURRENT_SETTINGS="$HOME/.claude/settings.json"
 
 if [ -n "$CURRENT_SETTINGS" ]; then
