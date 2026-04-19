@@ -78,6 +78,40 @@ DRY_RUN=1 ./claude-nuke-and-restore.sh
 
 ---
 
+## 网络层配置（`~/.zshrc` 中的 `claude()` 函数）
+
+隔离脚本（阶段 13）会清理 `~/.zshrc` 中的旧 `claude()` 函数。执行完成后，需要把代理配置重新注入 `~/.zshrc`。
+
+**当前配置要点：**
+
+- **代理协议**: `http://`（Claude CLI 的 Node.js 不支持 `socks5://` 或 `socks5h://`）
+- **主代理**: `http://127.0.0.1:31001`（Oracle relay via SSH）
+- **Fallback**: `http://127.0.0.1:7897`（Clash HTTP）
+- **TZ 固定**: `America/Los_Angeles`（查询失败时兜底，不随 IP 波动）
+- **快照机制**: 记录上次 IP+TZ，MATCH 时跳过检验快速启动
+
+**安装方式：**
+
+```bash
+# 把 v3/claude-proxy.zsh 的内容追加到 ~/.zshrc 末尾
+cat ~/auto-skills/CtriXin-repo/claudefxxk/v3/claude-proxy.zsh >> ~/.zshrc
+source ~/.zshrc
+```
+
+**验证：**
+
+```bash
+claude
+# 应显示:
+# [Claude] IP: x.x.x.x
+# [Claude] TZ: America/Los_Angeles
+# [Claude] localTime: MM.DD HH:mm:ss
+# [Claude] tzTime: MM.DD HH:mm:ss
+# 按回车启动，看到 OAuth 弹窗 = 配置正确
+```
+
+---
+
 ## 如果出问题
 
 | 问题 | 回滚方式 |
