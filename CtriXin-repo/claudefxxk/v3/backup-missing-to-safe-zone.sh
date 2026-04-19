@@ -46,9 +46,11 @@ DIRTY_COUNT=0
 if [ -d "$AGENT_IM_DIR/.git" ]; then
     DIRTY_COUNT=$(cd "$AGENT_IM_DIR" && git status --short 2>/dev/null | wc -l | tr -d ' ')
     if [ "$DIRTY_COUNT" -gt 0 ]; then
-        echo "  ⚠️ 警告: agent-im 有 $DIRTY_COUNT 个未提交修改！"
-        echo "     建议先: cd $AGENT_IM_DIR && git add . && git commit -m 'backup-before-cleanup' && git push"
-        read -p "  是否继续? [y/N]: " CONTINUE
+        echo "  检测到 agent-im 有 $DIRTY_COUNT 个未提交修改。"
+        echo "  继续备份不会修改这个 repo，但建议先 commit/push，避免后续清理前丢上下文。"
+        echo "  建议先执行: cd $AGENT_IM_DIR && git add . && git commit -m 'backup-before-cleanup' && git push"
+        echo "  选择: y=继续备份  N/Enter=退出"
+        read -p "  是否继续备份? [y/N]: " CONTINUE
         if [ "$CONTINUE" != "y" ] && [ "$CONTINUE" != "Y" ]; then
             exit 1
         fi
