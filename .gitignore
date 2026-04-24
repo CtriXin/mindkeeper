@@ -16,3 +16,16 @@ __pycache__/
 # 公司内部敏感内容 - 仅保留本地版本控制，不上传
 scmp-deploy/
 .worktree-meta.json
+
+# 独立子仓库 / 本地项目集合
+shared-skills/
+CtriXin-repo/
+excalidraw-mcp/
+
+# 归档后仅保留本地回执，不再纳入父仓库
+tracking/
+Ctri-model-switch/
+.superset/
+
+# 生成输出
+out/
