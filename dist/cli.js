@@ -12,6 +12,7 @@
  * mk dst [id]                 列表 / 详情（alias: thread）
  * mk dst rm <id>              删除
  * mk dst archive <id>         归档
+ * mk c                        跨 CLI 续聊（continuity pack）
  */
 import { loadIndex, saveIndex, loadRecipe, deleteRecipe } from './storage.js';
 import { searchRecipes, extractKeywords } from './router.js';
@@ -22,6 +23,7 @@ import { syncProjectSessionIndex, SESSION_INDEX_REL_PATH } from './session-index
 import { QUADRANT_KEYS, QUADRANT_LABELS } from './types.js';
 import { execSync } from 'child_process';
 import { resolve } from 'path';
+import { cmdContinuity } from './continuity.js';
 const args = process.argv.slice(2);
 const command = args[0];
 // ── ANSI 颜色 ──
@@ -68,6 +70,10 @@ mk — MindKeeper CLI
   mk dst resume <id> [--no-cd]    恢复 thread 上下文
                                     --no-cd: 不切换工作目录，仅加载上下文
   mk dst sync [repo]              重建当前项目 ${SESSION_INDEX_REL_PATH}
+
+  mk c                             跨 CLI 续聊：生成 continuity pack 并复制
+  mk c codex:<hash>                指定 Codex session hash
+  mk c --to mms-codex              生成后提示用 mms codex 继续
 `);
 }
 // ── 通用格式化 ──
@@ -641,6 +647,11 @@ switch (command) {
     case 'thread':
     case 'dst':
         cmdThread();
+        break;
+    case 'continue':
+    case 'continuity':
+    case 'c':
+        await cmdContinuity(args.slice(1));
         break;
     case 'help':
     case '--help':

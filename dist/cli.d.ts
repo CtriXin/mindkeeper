@@ -12,5 +12,6 @@
  * mk dst [id]                 列表 / 详情（alias: thread）
  * mk dst rm <id>              删除
  * mk dst archive <id>         归档
+ * mk c                        跨 CLI 续聊（continuity pack）
  */
 export {};
