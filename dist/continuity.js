@@ -727,11 +727,116 @@ function gitState(cwd, preset) {
 function formatTime(ms) {
     return new Date(ms).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/u, ' UTC');
 }
+const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
+const ansi = {
+    reset: '\x1b[0m',
+    bold: '\x1b[1m',
+    dim: '\x1b[2m',
+    cyan: '\x1b[36m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    magenta: '\x1b[35m',
+    blue: '\x1b[34m',
+    red: '\x1b[31m',
+    gray: '\x1b[90m',
+};
+function paint(code, text) {
+    if (!useColor || code === 'reset')
+        return text;
+    return `${ansi[code]}${text}${ansi.reset}`;
+}
+function terminalWidth() {
+    return Math.min(Math.max(process.stdout.columns || 100, 82), 132);
+}
+function stripAnsi(text) {
+    return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+function charWidth(char) {
+    const code = char.codePointAt(0) || 0;
+    return code > 0x7f ? 2 : 1;
+}
+function visibleWidth(text) {
+    return [...stripAnsi(text)].reduce((sum, char) => sum + charWidth(char), 0);
+}
+function padVisible(text, width) {
+    return text + ' '.repeat(Math.max(0, width - visibleWidth(text)));
+}
+function clipVisible(text, width) {
+    const raw = stripAnsi(text).replace(/\s+/g, ' ').trim();
+    if (visibleWidth(raw) <= width)
+        return raw;
+    let out = '';
+    let used = 0;
+    for (const char of raw) {
+        const w = charWidth(char);
+        if (used + w > width - 1)
+            break;
+        out += char;
+        used += w;
+    }
+    return out.trimEnd() + '…';
+}
+function box(title, body, width = terminalWidth()) {
+    const inner = width - 4;
+    const topTitle = ` ${title} `;
+    const topFill = Math.max(0, inner - visibleWidth(topTitle));
+    const lines = [`╭─${paint('bold', topTitle)}${'─'.repeat(topFill)}─╮`];
+    for (const line of body) {
+        const bodyLine = visibleWidth(line) > inner ? clipVisible(line, inner) : line;
+        lines.push(`│ ${padVisible(bodyLine, inner)} │`);
+    }
+    lines.push(`╰${'─'.repeat(inner + 2)}╯`);
+    return lines.join('\n');
+}
+function sourceBadge(source) {
+    return source === 'codex' ? paint('cyan', 'codex ') : paint('magenta', 'claude');
+}
+function originBadge(origin) {
+    const text = origin === 'real-home' ? 'home'
+        : origin === 'mms-slot' ? 'mms-slot'
+            : origin === 'mms-account' ? 'oauth'
+                : origin === 'mms-project' ? 'mms-proj'
+                    : 'env';
+    return origin === 'mms-account' ? paint('yellow', text)
+        : origin.startsWith('mms') ? paint('blue', text)
+            : paint('gray', text);
+}
+function targetText(target) {
+    if (!target || target === 'clipboard')
+        return 'clipboard';
+    if (target === 'mms-codex')
+        return 'mms codex';
+    if (target === 'mms-claude')
+        return 'mms claude';
+    return target;
+}
+function presetText(preset) {
+    const p = preset || 'standard';
+    if (p === 'full')
+        return paint('yellow', p);
+    if (p === 'compact')
+        return paint('green', p);
+    return paint('cyan', p);
+}
+function formatBytes(chars) {
+    if (chars < 1000)
+        return `${chars} chars`;
+    return `${(chars / 1000).toFixed(chars < 10000 ? 1 : 0)}k chars`;
+}
 function formatSessionRow(session, index) {
     const age = formatAge(session.updatedAtMs);
     const repo = extractRepoName(session.cwd);
-    const summary = oneLine(session.summary || '(no summary)', 92);
-    return `${String(index).padStart(2, ' ')}. [${session.source}] ${age.padEnd(7)} ${repo.padEnd(22).slice(0, 22)} ${session.id.slice(0, 8)}  ${summary}`;
+    const summaryWidth = Math.max(24, terminalWidth() - 74);
+    const summary = clipVisible(oneLine(session.summary || '(no summary)', 220), summaryWidth);
+    return [
+        paint('bold', String(index).padStart(2, ' ')),
+        sourceBadge(session.source),
+        padVisible(paint('gray', age), 6),
+        padVisible(clipVisible(repo, 18), 18),
+        paint('bold', session.id.slice(0, 8)),
+        padVisible(originBadge(session.origin), 8),
+        summary,
+    ].join('  ');
 }
 function formatAge(ms) {
     const diff = Date.now() - ms;
@@ -909,16 +1014,15 @@ function findByRef(sessions, ref) {
         return exact;
     return sessions.find(s => (!source || s.source === source) && (s.id.startsWith(id) || basename(s.rawPath).includes(id)));
 }
-async function chooseSession(sessions, ref) {
+async function chooseSession(sessions, ref, opts = { copy: true, preset: 'standard' }, searchAll = false) {
     if (ref)
         return findByRef(sessions, ref);
     if (!process.stdin.isTTY || !process.stdout.isTTY)
         return sessions[0];
-    console.log('可续聊 session:');
-    sessions.slice(0, 20).forEach((session, index) => console.log(formatSessionRow(session, index + 1)));
+    printSessionList(sessions.slice(0, 20), opts, searchAll);
     const rl = createInterface({ input, output });
     try {
-        const answer = (await rl.question('\n选择 session [1]: ')).trim();
+        const answer = (await rl.question(`\n${paint('bold', 'Pick session')} ${paint('gray', '[1]')} › `)).trim();
         const index = answer ? Number(answer) : 1;
         return sessions[index - 1] || sessions[0];
     }
@@ -933,11 +1037,13 @@ async function chooseTarget(existing) {
         return 'clipboard';
     const rl = createInterface({ input, output });
     try {
-        console.log('\n继续到:');
-        console.log('1. clipboard');
-        console.log('2. mms codex');
-        console.log('3. mms claude');
-        const answer = (await rl.question('选择目标 [1]: ')).trim();
+        console.log('');
+        console.log(box('Continue Target', [
+            `${paint('bold', '1')} clipboard   ${paint('gray', 'copy pack, paste anywhere')}`,
+            `${paint('bold', '2')} mms codex   ${paint('gray', 'copy pack, then open MMS Codex')}`,
+            `${paint('bold', '3')} mms claude  ${paint('gray', 'copy pack, then open MMS Claude')}`,
+        ], Math.min(terminalWidth(), 86)));
+        const answer = (await rl.question(`${paint('bold', 'Pick target')} ${paint('gray', '[1]')} › `)).trim();
         if (answer === '2')
             return 'mms-codex';
         if (answer === '3')
@@ -962,24 +1068,76 @@ function launchTarget(target) {
         execFileSync('claude', [], { stdio: 'inherit' });
     }
 }
+function printSessionList(sessions, opts, searchAll) {
+    const scope = searchAll ? 'all projects' : `current dir: ${process.cwd()}`;
+    console.log(box('MindKeeper Continuity', [
+        `${paint('cyan', 'continuity')} sits between native resume and distill.`,
+        `scope ${paint('bold', scope)}`,
+        `preset ${presetText(opts.preset)}  target ${paint('bold', targetText(opts.to))}  limit ${opts.limit ?? DEFAULT_LIMIT}`,
+    ]));
+    console.log('');
+    console.log([
+        padVisible('#', 2),
+        padVisible('cli', 6),
+        padVisible('age', 6),
+        padVisible('project', 18),
+        padVisible('hash', 8),
+        padVisible('origin', 8),
+        'signal',
+    ].join('  '));
+    console.log(paint('gray', '─'.repeat(Math.min(terminalWidth(), 132))));
+    sessions.forEach((session, index) => console.log(formatSessionRow(session, index + 1)));
+}
+function printActionHint() {
+    console.log('');
+    console.log(paint('gray', 'Examples'));
+    console.log(`  ${paint('bold', 'mk c 2')} ${paint('gray', '继续第 2 条')}`);
+    console.log(`  ${paint('bold', 'mk c claude:<id> --to mms-codex --preset full')} ${paint('gray', '跨 CLI 高保真续接')}`);
+    console.log(`  ${paint('bold', 'mk c --all --list')} ${paint('gray', '查看所有项目')}`);
+}
 function printContinuityHelp() {
+    console.log(box('MindKeeper Continuity', [
+        'Cross-CLI resume pack: native resume < continuity < distill.',
+        'Reads local Claude/Codex/MMS transcripts; writes .ai/continuity/*.md.',
+    ]));
     console.log(`
-mk c / mk continue — 生成跨 CLI 续聊上下文
+${paint('bold', 'Usage')}
+  mk c                              interactive picker, copy pack
+  mk c 2                            pick row 2 from current-dir sessions
+  mk c codex:<hash>                 resolve Codex session by hash/prefix
+  mk c claude:<session-id>          resolve Claude session by id/prefix
 
-  mk c                         交互选择 session，生成并复制 continuity pack
-  mk c 2                       选择列表中的第 2 条 session
-  mk c codex:<hash>            按 Codex session hash 生成
-  mk c claude:<session-id>     按 Claude session id 生成
-  mk c --list                  列出当前目录可发现的 session
-  mk c --all --list            列出所有项目可发现的 session
-  mk c --to mms-codex          目标标记为 MMS Codex
-  mk c --to mms-claude         目标标记为 MMS Claude
-  mk c --print                 同时打印 Markdown
-  mk c --no-copy               不复制到剪贴板
-  mk c --no-git                不写 Git State
-  mk c --preset compact|standard|full
-  mk c --launch                复制后启动目标 CLI（仅配合 --to 使用）
+${paint('bold', 'Scope')}
+  -l, --list                        list current-dir sessions
+  --all --list                      list all discoverable projects
+  --limit <n>                       list/search limit, default ${DEFAULT_LIMIT}
+
+${paint('bold', 'Output')}
+  --to clipboard|mms-codex|mms-claude|codex|claude
+  --preset compact|standard|full    compact=short, standard=default, full=high fidelity
+  --print                           print generated Markdown
+  --no-copy                         do not copy to clipboard
+  --no-git                          omit Git State
+  --launch                          launch target CLI after copy
+  -h, --help                        show this help
 `);
+}
+function printResultCard(args) {
+    const copyLine = args.copyRequested
+        ? args.copied ? paint('green', 'copied to clipboard') : paint('red', 'copy failed')
+        : paint('gray', 'copy skipped');
+    const launch = args.target === 'mms-codex' ? 'mms codex'
+        : args.target === 'mms-claude' ? 'mms claude'
+            : args.target === 'codex' ? 'codex'
+                : args.target === 'claude' ? 'claude'
+                    : '';
+    console.log(box('Continuity Pack Ready', [
+        `session ${sourceBadge(args.session.source)} ${paint('bold', args.session.id.slice(0, 12))}  ${paint('gray', args.session.origin)}`,
+        `preset ${presetText(args.preset)}  size ${paint('bold', formatBytes(args.chars))}  target ${paint('bold', targetText(args.target))}`,
+        `file ${args.filePath}`,
+        `clipboard ${copyLine}`,
+        launch ? `next ${paint('bold', launch)} ${paint('gray', 'then paste')}` : 'next paste into any CLI',
+    ]));
 }
 export async function cmdContinuity(argv) {
     const opts = parseArgs(argv);
@@ -994,15 +1152,15 @@ export async function cmdContinuity(argv) {
             console.log('没有发现可续聊 session');
             return;
         }
-        sessions.forEach((session, index) => console.log(formatSessionRow(session, index + 1)));
-        console.log('\n继续: mk c <序号>，例如 mk c 2');
+        printSessionList(sessions, opts, searchAll);
+        printActionHint();
         return;
     }
     if (sessions.length === 0) {
         console.log('没有发现可续聊 session');
         return;
     }
-    const session = await chooseSession(sessions, opts.ref);
+    const session = await chooseSession(sessions, opts.ref, opts, searchAll);
     if (!session) {
         console.log(opts.ref ? `找不到 session: ${opts.ref}` : '未选择 session');
         return;
@@ -1013,18 +1171,15 @@ export async function cmdContinuity(argv) {
     const markdown = renderContinuityMarkdown(session, context, preset, target, opts.git !== false);
     const filePath = writeContinuityFile(session, markdown, process.cwd());
     const copied = opts.copy !== false ? copyToClipboard(markdown) : false;
-    console.log(`已生成: ${filePath}`);
-    console.log(`大小: ${markdown.length} chars`);
-    if (opts.copy === false) {
-        console.log('未复制: --no-copy');
-    }
-    else {
-        console.log(copied ? '已复制到剪贴板' : '复制失败: 未找到 pbcopy/wl-copy/xclip/xsel');
-    }
-    if (target === 'mms-codex')
-        console.log('启动命令: mms codex');
-    if (target === 'mms-claude')
-        console.log('启动命令: mms claude');
+    printResultCard({
+        session,
+        target,
+        preset,
+        filePath,
+        chars: markdown.length,
+        copied,
+        copyRequested: opts.copy !== false,
+    });
     if (opts.print)
         console.log('\n' + markdown);
     if (opts.launch && target !== 'clipboard')

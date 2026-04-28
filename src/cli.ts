@@ -33,7 +33,7 @@ const args = process.argv.slice(2);
 const command = args[0];
 
 // ── ANSI 颜色 ──
-const isColor = process.stdout.isTTY !== false;
+const isColor = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
 const c = {
   bold:    (s: string) => isColor ? `\x1b[1m${s}\x1b[0m` : s,
   cyan:    (s: string) => isColor ? `\x1b[36m${s}\x1b[0m` : s,
@@ -42,6 +42,18 @@ const c = {
   magenta: (s: string) => isColor ? `\x1b[35m${s}\x1b[0m` : s,
   gray:    (s: string) => isColor ? `\x1b[90m${s}\x1b[0m` : s,
 };
+
+function stripColor(s: string): string {
+  return s.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function displayLen(s: string): number {
+  return [...stripColor(s)].reduce((n, ch) => n + ((ch.codePointAt(0) || 0) > 0x7f ? 2 : 1), 0);
+}
+
+function padDisplay(s: string, width: number): string {
+  return s + ' '.repeat(Math.max(0, width - displayLen(s)));
+}
 
 function truncate(s: string, w: number): string {
   let len = 0;
@@ -53,35 +65,51 @@ function truncate(s: string, w: number): string {
 }
 
 function printHelp() {
+  const inner = 74;
+  const title = ` ${c.bold('MindKeeper')} ${c.gray('project memory / cross-session continuity')} `;
+  const topFill = '─'.repeat(Math.max(0, inner - displayLen(title)));
+  const hero = `${c.green('recipes')} + ${c.yellow('boards')} + ${c.magenta('threads')} + ${c.cyan('continuity packs')}`;
   console.log(`
-mk — MindKeeper CLI
+${c.cyan('╭─')}${title}${c.cyan(`${topFill}─╮`)}
+${c.cyan('│')} ${padDisplay(hero, inner)} ${c.cyan('│')}
+${c.cyan('╰')}${c.gray('─'.repeat(inner + 2))}${c.cyan('╯')}
 
+${c.bold('Overview')}
   mk                              全景（各显示 5 条）
   mk all                          全景（显示全部）
-  mk "query"                      统一搜索
+  mk "query"                      统一搜索 recipe / thread / fragment
 
+${c.bold('Recipes')}
   mk rcp [all]                    列出 recipe
   mk rcp <id>                     查看详情
   mk rcp rm <id>                  删除
 
+${c.bold('Boards')}
   mk bd [all]                     列出看板
   mk bd <project>                 查看看板
   mk bd rm <project>              删除看板
   mk bd done <project> <id>       标记完成
   mk bd archive <project>         归档
 
+${c.bold('Threads / Distill')}
   mk dst [all]                    列出 thread（按 repo 聚合）
-  mk dst -l                       列出 thread（详细表格，含 time/cli/model/repo/folder）
+  mk dst -l                       详细表格，含 time / cli / model / repo / folder
   mk dst <id>                     查看详情
   mk dst rm <id>                  删除
   mk dst archive <id>             归档
   mk dst resume <id> [--no-cd]    恢复 thread 上下文
-                                    --no-cd: 不切换工作目录，仅加载上下文
   mk dst sync [repo]              重建当前项目 ${SESSION_INDEX_REL_PATH}
 
-  mk c                             跨 CLI 续聊：生成 continuity pack 并复制
-  mk c codex:<hash>                指定 Codex session hash
-  mk c --to mms-codex              生成后提示用 mms codex 继续
+${c.bold('Continuity')}
+  mk c                            交互选择 session，生成 pack 并复制
+  mk c 2                          选择列表第 2 条
+  mk c codex:<hash>               指定 Codex session
+  mk c claude:<session-id>        指定 Claude session
+  mk c --list                     列出当前目录 sessions
+  mk c --all --list               列出所有项目 sessions
+  mk c --to clipboard|mms-codex|mms-claude|codex|claude
+  mk c --preset compact|standard|full
+  mk c --print --no-copy --no-git --launch --limit 20
 `);
 }
 
