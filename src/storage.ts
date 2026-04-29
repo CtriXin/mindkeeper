@@ -11,7 +11,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlink
 import { join } from 'path';
 import { getRealHome } from './env.js';
 import { extractKeywords } from './utils.js';
-import type { BrainIndex, Recipe, RecipeMeta, RecipeFile, ChangelogEntry, Unit, UnitMeta, Board, BoardItem, BoardMemo, BoardSignal, QuadrantKey, RecipeStalenessSignal } from './types.js';
+import type { BrainIndex, Recipe, RecipeMeta, RecipeFile, ChangelogEntry, Unit, UnitMeta, Board, BoardItem, BoardMemo, BoardSignal, QuadrantKey, RecipeStalenessSignal, DigestEntry } from './types.js';
 import { QUADRANT_KEYS } from './types.js';
 
 const SCE_DIR = join(getRealHome(), '.sce');
@@ -831,4 +831,173 @@ export function findMatchingBoardItems(taskText: string): Array<{ project: strin
     .sort((a, b) => b.overlap - a.overlap)
     .slice(0, 3)
     .map(({ project, itemId, title }) => ({ project, itemId, title }));
+}
+
+// ── Digest（分析缓存） ──
+
+const DIGESTS_DIR = join(SCE_DIR, 'digests');
+const DIGEST_INDEX_PATH = join(DIGESTS_DIR, 'index.json');
+
+interface DigestIndex {
+  version: string;
+  updated: string;
+  entries: DigestEntry[];
+}
+
+function ensureDigestsDir() {
+  if (!existsSync(DIGESTS_DIR)) mkdirSync(DIGESTS_DIR, { recursive: true });
+}
+
+function loadDigestIndex(): DigestIndex {
+  ensureDigestsDir();
+  if (!existsSync(DIGEST_INDEX_PATH)) {
+    const empty: DigestIndex = { version: '1.0', updated: new Date().toISOString(), entries: [] };
+    writeFileSync(DIGEST_INDEX_PATH, JSON.stringify(empty, null, 2));
+    return empty;
+  }
+  return JSON.parse(readFileSync(DIGEST_INDEX_PATH, 'utf-8'));
+}
+
+function saveDigestIndex(di: DigestIndex): void {
+  di.updated = new Date().toISOString();
+  writeFileSync(DIGEST_INDEX_PATH, JSON.stringify(di, null, 2));
+}
+
+function digestPath(id: string): string {
+  return join(DIGESTS_DIR, `${id}.md`);
+}
+
+function generateDigestId(): string {
+  return `dgt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** 关键词重叠率 */
+function keywordOverlap(a: string[], b: string[]): number {
+  if (a.length === 0 || b.length === 0) return 0;
+  const setB = new Set(b.map(k => k.toLowerCase()));
+  const hits = a.filter(k => setB.has(k.toLowerCase())).length;
+  return hits / Math.max(a.length, b.length);
+}
+
+/** Ebbinghaus 衰减 + Zipf 半衰期调整 */
+function digestDecay(entry: DigestEntry): number {
+  const daysSince = (Date.now() - new Date(entry.lastAccessed || entry.created).getTime()) / 86400000;
+  // 高频访问 → 更长半衰期：base 7 天，每 5 次访问 +3 天，上限 30 天
+  const halfLife = Math.min(7 + Math.floor(entry.accessCount / 5) * 3, 30);
+  return Math.exp(-daysSince / halfLife);
+}
+
+export function storeDigest(input: {
+  name: string;
+  keywords: string[];
+  content: string;
+  project?: string;
+  repo?: string;
+  global?: boolean;
+  ttlHours?: number;
+}): DigestEntry {
+  ensureDigestsDir();
+  const di = loadDigestIndex();
+  const now = new Date().toISOString();
+  const id = generateDigestId();
+
+  const entry: DigestEntry = {
+    id,
+    name: input.name,
+    keywords: input.keywords,
+    content: input.content,
+    project: input.project,
+    repo: input.repo,
+    created: now,
+    lastAccessed: now,
+    accessCount: 0,
+    global: input.global ?? false,
+    expiresAt: input.ttlHours
+      ? new Date(Date.now() + input.ttlHours * 3600000).toISOString()
+      : undefined,
+  };
+
+  // 写入文件
+  const meta = [`name: ${entry.name}`, `keywords: [${entry.keywords.map(k => `"${k}"`).join(', ')}]`, `created: ${entry.created}`].join('\n');
+  writeFileSync(digestPath(id), `---\n${meta}\n---\n${entry.content}`);
+
+  di.entries.push(entry);
+  saveDigestIndex(di);
+  return entry;
+}
+
+export function recallDigests(query: {
+  keywords: string[];
+  project?: string;
+  limit?: number;
+}): Array<DigestEntry & { score: number }> {
+  const di = loadDigestIndex();
+  const now = Date.now();
+  const limit = query.limit || 3;
+
+  const results: Array<DigestEntry & { score: number }> = [];
+
+  for (const entry of di.entries) {
+    // 过期跳过
+    if (entry.expiresAt && new Date(entry.expiresAt).getTime() < now) continue;
+
+    // 项目过滤（global 可跨项目）
+    if (query.project && entry.project !== query.project && !entry.global) continue;
+
+    const overlap = keywordOverlap(query.keywords, entry.keywords);
+    if (overlap < 0.15) continue;
+
+    const decay = digestDecay(entry);
+    const score = overlap * decay;
+
+    results.push({ ...entry, score });
+  }
+
+  results.sort((a, b) => b.score - a.score);
+
+  // 更新访问统计
+  const touched = results.slice(0, limit);
+  if (touched.length > 0) {
+    const nowISO = new Date().toISOString();
+    for (const r of touched) {
+      const idx = di.entries.findIndex(e => e.id === r.id);
+      if (idx >= 0) {
+        di.entries[idx].lastAccessed = nowISO;
+        di.entries[idx].accessCount++;
+      }
+    }
+    saveDigestIndex(di);
+
+    // 更新内存中的返回值
+    for (const r of touched) {
+      r.lastAccessed = nowISO;
+      r.accessCount++;
+    }
+  }
+
+  return touched;
+}
+
+export function invalidateDigest(id: string): boolean {
+  ensureDigestsDir();
+  const di = loadDigestIndex();
+  const idx = di.entries.findIndex(e => e.id === id);
+  if (idx < 0) return false;
+
+  di.entries.splice(idx, 1);
+  saveDigestIndex(di);
+
+  const path = digestPath(id);
+  if (existsSync(path)) unlinkSync(path);
+  return true;
+}
+
+export function listDigestSummaries(project?: string): Array<{ id: string; name: string; keywords: string[]; accessCount: number; created: string }> {
+  const di = loadDigestIndex();
+  let entries = di.entries;
+  if (project) entries = entries.filter(e => e.project === project || e.global);
+  return entries.map(e => ({
+    id: e.id, name: e.name, keywords: e.keywords,
+    accessCount: e.accessCount, created: e.created,
+  }));
 }

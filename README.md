@@ -42,6 +42,40 @@ MindKeeper： Session → Learn → Cross-Project Recall → Evolve
 
 ---
 
+<!-- repo-graphics:workflow-start -->
+## Workflow Overview
+
+> This repo keeps the public flow in Mermaid so open-source history does not accumulate HTML/PNG card assets.
+
+```mermaid
+flowchart LR
+  subgraph Entry[Entry Surfaces]
+    A["AI clients\nClaude / Codex / Cursor"]
+    B["bin/dst + hooks\nbootstrap / token monitor"]
+    C["Resources\nrecipe index / thread list"]
+  end
+  subgraph Runtime[Core Continuity Loop]
+    D["brain_bootstrap\nload repo rules + git context"]
+    E["Recall\nrecipes + boards + best thread"]
+    F["Capture\ncheckpoint / fragment / issue sync"]
+    G["Persist\n~/.sce + repo Session Index"]
+    H["Resume\nnext session gets next action fast"]
+  end
+  subgraph Artifacts[Durable Artifacts]
+    I["brain/\nindex.json + recipes/*.md"]
+    J["threads / fragments /\nissue-links / boards"]
+    K["repo/.ai/SESSION_INDEX.md"]
+  end
+  A --> D
+  B --> D
+  C --> E
+  D --> E --> F --> G --> H
+  G --> I
+  G --> J
+  G --> K
+```
+<!-- repo-graphics:workflow-end -->
+
 ## Installation
 
 ### One-line Install (Recommended)

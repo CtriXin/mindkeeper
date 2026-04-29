@@ -2,8 +2,8 @@
 /**
  * MindKeeper MCP Server
  *
- * Startup tools (10): brain_bootstrap / brain_token_status / brain_token_reset / brain_checkpoint / brain_fragment / brain_link_issue / brain_sync_issue / brain_threads / brain_recall / brain_check / brain_extend
- * Extended tools (3, loaded via brain_extend): brain_learn / brain_board / brain_list
+ * Startup tools (11): brain_bootstrap / brain_token_status / brain_token_reset / brain_checkpoint / brain_fragment / brain_link_issue / brain_sync_issue / brain_threads / brain_recall / brain_check / brain_search / brain_extend
+ * Extended tools (4, loaded via brain_extend): brain_learn / brain_board / brain_list / brain_digest
  *
  * 业务逻辑在 handlers.ts，此文件只负责 MCP 协议层和路由分发。
  */
@@ -20,7 +20,7 @@ import { loadIndex } from './storage.js';
 import {
   handleLearn, handleRecall, handleList,
   handleBootstrap, handleCheckpoint, handleFragment, handleLinkIssue, handleSyncIssue, handleThreads,
-  handleBoard, handleCheck,
+  handleBoard, handleCheck, handleDigest, handleSearch,
 } from './handlers.js';
 import {
   initSession, recordTurn, checkCompression, applySlidingWindow,
@@ -174,6 +174,20 @@ const CORE_TOOLS = [
       },
     },
   },
+  {
+    name: 'brain_search',
+    description: '全文搜索历史 thread、fragment 和 recipe。支持自然语言查询，按匹配度排序。\n搜索范围：线程记录（跨 session 进度）、工作片段（开发/探索/debug）、知识库（实现经验）。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '搜索查询（如 "auth 延迟加载"、"hooks 修复"）' },
+        types: { type: 'array', items: { type: 'string', enum: ['thread', 'fragment', 'recipe'] }, description: '搜索范围，默认全部' },
+        repo: { type: 'string', description: '限定 repo 路径' },
+        limit: { type: 'number', description: '返回数量，默认 10' },
+      },
+      required: ['query'],
+    },
+  },
 ];
 
 const EXTEND_STUB = {
@@ -242,6 +256,31 @@ const EXTENDED_TOOLS = [
         project: { type: 'string', description: '按项目过滤' },
         tag: { type: 'string', description: '按标签过滤' },
         framework: { type: 'string', description: '按框架过滤' },
+      },
+    },
+  },
+  {
+    name: 'brain_digest',
+    description: '分析结果缓存。避免重复分析（代码审计、架构总结等）浪费 token。\n' +
+      'store: 缓存分析结果; recall: 按关键词召回; invalidate: 删除; list: 列出所有。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['store', 'recall', 'invalidate', 'list'],
+          description: '操作类型，默认 store',
+        },
+        name: { type: 'string', description: 'store: 缓存名称（如 "auth-audit"）' },
+        content: { type: 'string', description: 'store: 缓存内容' },
+        keywords: { type: 'array', items: { type: 'string' }, description: 'store/recall: 匹配关键词' },
+        query: { type: 'string', description: 'recall: 用自然语言查询（自动提取关键词）' },
+        project: { type: 'string', description: '项目名过滤' },
+        repo: { type: 'string', description: 'store: 来源仓库' },
+        global: { type: 'boolean', description: 'store: 是否全局可见（跨项目），默认 false' },
+        ttl_hours: { type: 'number', description: 'store: 过期时间（小时），不设则永不过期' },
+        id: { type: 'string', description: 'invalidate: 要删除的 digest ID' },
+        limit: { type: 'number', description: 'recall: 返回数量，默认 3' },
       },
     },
   },
@@ -326,6 +365,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'brain_threads':   return handleThreads(args);
       case 'brain_board':     return handleBoard(args);
       case 'brain_check':     return handleCheck(args, index);
+      case 'brain_digest':    return handleDigest(args);
+      case 'brain_search':    return handleSearch(args);
       case 'brain_token_status': {
         const state = initSession();
         return { content: [{ type: 'text', text: formatStatus(state) }] };

@@ -135,6 +135,10 @@ export declare const TOOLS: {
     readonly BOARD: "brain_board";
     /** 扫描项目信号 */
     readonly CHECK: "brain_check";
+    /** 分析结果缓存 */
+    readonly DIGEST: "brain_digest";
+    /** 全文搜索 */
+    readonly SEARCH: "brain_search";
 };
 export declare const QUADRANT_KEYS: readonly ["q1", "q2", "q3", "q4"];
 export type QuadrantKey = typeof QUADRANT_KEYS[number];
@@ -184,4 +188,27 @@ export interface RecipeStalenessSignal {
     recipeId: string;
     summary: string;
     reasons: string[];
+}
+export interface DigestEntry {
+    id: string;
+    /** 语义化名称，如 "project-a-auth-audit" */
+    name: string;
+    /** 主题关键词，用于召回匹配 */
+    keywords: string[];
+    /** 缓存内容 */
+    content: string;
+    /** 来源项目 */
+    project?: string;
+    /** 来源 repo */
+    repo?: string;
+    /** 创建时间 */
+    created: string;
+    /** 最后访问时间 */
+    lastAccessed: string;
+    /** 访问次数 */
+    accessCount: number;
+    /** 过期时间（ISO），可选 */
+    expiresAt?: string;
+    /** 是否全局可见（跨项目） */
+    global: boolean;
 }

@@ -29,6 +29,10 @@ export const TOOLS = {
     BOARD: 'brain_board',
     /** 扫描项目信号 */
     CHECK: 'brain_check',
+    /** 分析结果缓存 */
+    DIGEST: 'brain_digest',
+    /** 全文搜索 */
+    SEARCH: 'brain_search',
 };
 // ── Board（项目看板） ──
 export const QUADRANT_KEYS = ['q1', 'q2', 'q3', 'q4'];

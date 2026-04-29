@@ -23,4 +23,6 @@ export declare function handleSyncIssue(args: Record<string, unknown>): ToolResp
 export declare function handleThreads(args: Record<string, unknown>): ToolResponse;
 export declare function handleBoard(args: Record<string, unknown>): ToolResponse;
 export declare function handleCheck(args: Record<string, unknown>, index: BrainIndex): ToolResponse;
+export declare function handleDigest(args: Record<string, unknown>): ToolResponse;
+export declare function handleSearch(args: Record<string, unknown>): ToolResponse;
 export {};

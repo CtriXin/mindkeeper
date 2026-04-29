@@ -238,6 +238,18 @@ function calculateScore(triggers, queryTerms, meta) {
         if (daysSinceAccess < 7)
             score += 0.1;
     }
+    // Ebbinghaus 时间衰减：R(t) = e^(-t/S)
+    // insight 半衰期长（180天），recipe 半衰期中等（60天），无访问的新 recipe 半衰期短（30天）
+    const lastActivity = meta.lastAccessed || meta.updated || meta.created;
+    if (lastActivity) {
+        const daysSince = (Date.now() - new Date(lastActivity).getTime()) / 86400000;
+        const halfLife = meta.type === 'insight' ? 180
+            : meta.accessCount > 0 ? 60
+                : 30;
+        const decay = Math.exp(-daysSince / halfLife);
+        // 衰减乘到 score 上，保留最低 0.1 避免完全消失
+        score *= Math.max(decay, 0.1);
+    }
     return { score: Math.min(score, 1), matched: [...new Set(matched)] };
 }
 // ── 搜索 recipes ──

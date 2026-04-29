@@ -6,7 +6,7 @@
  * - brain/recipes/*.md: Recipe 文件（frontmatter + 结构化 markdown）
  * - brain/units/*.md: 旧知识单元（只读，不再新增）
  */
-import type { BrainIndex, Recipe, RecipeMeta, Unit, UnitMeta, Board, BoardItem, BoardMemo, BoardSignal, QuadrantKey, RecipeStalenessSignal } from './types.js';
+import type { BrainIndex, Recipe, RecipeMeta, Unit, UnitMeta, Board, BoardItem, BoardMemo, BoardSignal, QuadrantKey, RecipeStalenessSignal, DigestEntry } from './types.js';
 export declare function loadIndex(): BrainIndex;
 export declare function saveIndex(index: BrainIndex): void;
 export declare function loadRecipe(id: string): Recipe | null;
@@ -80,4 +80,28 @@ export declare function findMatchingBoardItems(taskText: string): Array<{
     project: string;
     itemId: string;
     title: string;
+}>;
+export declare function storeDigest(input: {
+    name: string;
+    keywords: string[];
+    content: string;
+    project?: string;
+    repo?: string;
+    global?: boolean;
+    ttlHours?: number;
+}): DigestEntry;
+export declare function recallDigests(query: {
+    keywords: string[];
+    project?: string;
+    limit?: number;
+}): Array<DigestEntry & {
+    score: number;
+}>;
+export declare function invalidateDigest(id: string): boolean;
+export declare function listDigestSummaries(project?: string): Array<{
+    id: string;
+    name: string;
+    keywords: string[];
+    accessCount: number;
+    created: string;
 }>;

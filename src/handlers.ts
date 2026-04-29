@@ -10,15 +10,18 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { loadIndex, saveIndex, loadRecipe, saveRecipe, recipeMetaFrom, touchRecipes } from './storage.js';
 import { searchRecipes } from './router.js';
+import { extractKeywords } from './utils.js';
 import { bootstrapQuick, formatQuickResume, getThreadById, listRecentThreads, findBestThread, loadThreadDetails } from './bootstrap.js';
 import { checkpoint, formatDistillReceipt } from './distill.js';
 import { appendFragment } from './fragments.js';
 import { defaultIssueProject, saveIssueLink, syncIssueDigest } from './issue-sync.js';
+import { searchAll, formatSearchResults } from './search.js';
 import {
   loadBoard, createBoard, addBoardItem, updateBoardItem,
   addBoardMemo, checkBoards, listBoardSummaries, archiveStaleItems,
   saveBoard, checkRecipeStaleness, deprecateStaleRecipes, getRecipeHealthSummary,
   findMatchingBoardItems,
+  storeDigest, recallDigests, invalidateDigest, listDigestSummaries,
 } from './storage.js';
 import type { BrainIndex, Recipe, RecipeFile, QuadrantKey, Board, BoardSignal, FragmentKind } from './types.js';
 import { QUADRANT_KEYS, QUADRANT_LABELS } from './types.js';
@@ -438,6 +441,19 @@ export function handleBootstrap(args: Record<string, unknown>, index: BrainIndex
     }
   }
 
+  // Digest 缓存召回
+  const taskKeywords = extractKeywords(String(args.task));
+  if (taskKeywords.length > 0) {
+    const digestHits = recallDigests({ keywords: taskKeywords, limit: 2 });
+    if (digestHits.length > 0) {
+      lines.push('\n**缓存分析**');
+      for (const d of digestHits) {
+        const preview = d.content.length > 120 ? d.content.slice(0, 120) + '...' : d.content;
+        lines.push(`  - \`${d.id}\` ${d.name} — ${preview}`);
+      }
+    }
+  }
+
   if (signals.length > 0) {
     lines.push('\n**项目看板**');
     for (const s of signals.slice(0, 5)) {
@@ -552,6 +568,26 @@ export function handleCheckpoint(args: Record<string, unknown>): ToolResponse {
   }
 
   const receipt = formatDistillReceipt(result) + autoRecipeNote;
+
+  // 自动缓存 digest：findings ≥ 5 条时存储
+  const ckptFindings = (args.findings as string[]) || [];
+  if (ckptFindings.length >= 5) {
+    try {
+      const repoStr = String(args.repo);
+      const projectName = repoStr.split('/').filter(Boolean).pop() || 'unknown';
+      const taskName = String(args.task).slice(0, 40);
+      const keywords = extractKeywords(taskName + ' ' + ckptFindings.join(' ')).slice(0, 8);
+      const digestContent = ckptFindings.map((f, i) => `${i + 1}. ${f}`).join('\n');
+      storeDigest({
+        name: `${projectName}-${taskName.replace(/\s+/g, '-').slice(0, 30)}`,
+        keywords,
+        content: digestContent,
+        project: projectName,
+        repo: repoStr,
+        global: true,
+      });
+    } catch { /* digest 存储失败不影响蒸馏 */ }
+  }
 
   // 推送飞书（可选，静默）
   try {
@@ -878,4 +914,122 @@ export function handleCheck(args: Record<string, unknown>, index: BrainIndex): T
   }
 
   return ok(lines.join('\n'));
+}
+
+// ── Digest Handler ──
+
+export function handleDigest(args: Record<string, unknown>): ToolResponse {
+  const action = String(args.action || 'store');
+
+  switch (action) {
+    case 'store': {
+      const name = String(args.name || '');
+      const content = String(args.content || '');
+      if (!name || !content) {
+        return err('digest store 需要 name 和 content。');
+      }
+      const keywords = (args.keywords as string[]) || [];
+      if (keywords.length === 0) {
+        // 自动从 name + 前 50 字符提取关键词
+        keywords.push(...name.split(/[\s\-_/.]+/).filter(w => w.length >= 2));
+      }
+
+      const entry = storeDigest({
+        name,
+        keywords: [...new Set(keywords.map(k => k.toLowerCase()))],
+        content,
+        project: args.project ? String(args.project) : undefined,
+        repo: args.repo ? String(args.repo) : undefined,
+        global: args.global === true,
+        ttlHours: args.ttl_hours ? Number(args.ttl_hours) : undefined,
+      });
+
+      return ok(
+        `已缓存 digest: ${entry.id}\n` +
+        `名称: ${entry.name}\n` +
+        `关键词: ${entry.keywords.slice(0, 5).join(', ')}\n` +
+        `全局: ${entry.global ? '是' : '否'}` +
+        (entry.expiresAt ? `\n过期: ${entry.expiresAt}` : ''),
+      );
+    }
+
+    case 'recall': {
+      const keywords = (args.keywords as string[]) || [];
+      const query = String(args.query || '');
+      if (keywords.length === 0 && query) {
+        keywords.push(...query.split(/[\s\-_/.]+/).filter(w => w.length >= 2));
+      }
+      if (keywords.length === 0) {
+        return err('digest recall 需要 keywords 或 query。');
+      }
+
+      const results = recallDigests({
+        keywords,
+        project: args.project ? String(args.project) : undefined,
+        limit: Number(args.limit) || 3,
+      });
+
+      if (results.length === 0) {
+        return ok('未找到匹配的 digest 缓存。');
+      }
+
+      const text = results.map((r, i) => {
+        const lines: string[] = [];
+        lines.push(`## ${i + 1}. ${r.name} (score: ${r.score.toFixed(2)})`);
+        lines.push(`**ID**: ${r.id} | **项目**: ${r.project || '-'} | **访问**: ${r.accessCount} 次`);
+        if (r.expiresAt) {
+          const expired = new Date(r.expiresAt).getTime() < Date.now();
+          lines.push(`**过期**: ${expired ? '已过期' : r.expiresAt}`);
+        }
+        lines.push('', r.content);
+        return lines.join('\n');
+      }).join('\n\n---\n\n');
+
+      return ok(text);
+    }
+
+    case 'invalidate': {
+      const id = String(args.id || '');
+      if (!id) {
+        return err('digest invalidate 需要 id。');
+      }
+      const removed = invalidateDigest(id);
+      return ok(removed ? `已删除 digest: ${id}` : `未找到 digest: ${id}`);
+    }
+
+    case 'list': {
+      const summaries = listDigestSummaries(args.project ? String(args.project) : undefined);
+      if (summaries.length === 0) {
+        return ok('Digest 缓存为空。');
+      }
+      const text = summaries.map(s =>
+        `- \`${s.id}\` ${s.name} [${s.keywords.slice(0, 3).join(', ')}] — 访问 ${s.accessCount} 次 (${s.created.slice(0, 10)})`
+      ).join('\n');
+      return ok(`共 ${summaries.length} 个 digest:\n\n${text}`);
+    }
+
+    default:
+      return err(`未知 action: ${action}。支持: store, recall, invalidate, list`);
+  }
+}
+
+// ── Search Handler ──
+
+export function handleSearch(args: Record<string, unknown>): ToolResponse {
+  const query = String(args.query || '');
+  if (!query) {
+    return err('brain_search 需要 query 参数。');
+  }
+
+  const types = args.types
+    ? (Array.isArray(args.types) ? args.types : String(args.types).split(',')).filter(
+        (t): t is 'thread' | 'fragment' | 'recipe' => ['thread', 'fragment', 'recipe'].includes(t),
+      )
+    : undefined;
+
+  const repo = args.repo ? String(args.repo) : undefined;
+  const limit = Number(args.limit) || 10;
+
+  const results = searchAll(query, { types, repo, limit });
+  return ok(formatSearchResults(results));
 }

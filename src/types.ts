@@ -158,6 +158,10 @@ export const TOOLS = {
   BOARD: 'brain_board',
   /** 扫描项目信号 */
   CHECK: 'brain_check',
+  /** 分析结果缓存 */
+  DIGEST: 'brain_digest',
+  /** 全文搜索 */
+  SEARCH: 'brain_search',
 } as const;
 
 // ── Board（项目看板） ──
@@ -218,4 +222,30 @@ export interface RecipeStalenessSignal {
   recipeId: string;
   summary: string;
   reasons: string[];
+}
+
+// ── Digest（分析缓存） ──
+
+export interface DigestEntry {
+  id: string;
+  /** 语义化名称，如 "project-a-auth-audit" */
+  name: string;
+  /** 主题关键词，用于召回匹配 */
+  keywords: string[];
+  /** 缓存内容 */
+  content: string;
+  /** 来源项目 */
+  project?: string;
+  /** 来源 repo */
+  repo?: string;
+  /** 创建时间 */
+  created: string;
+  /** 最后访问时间 */
+  lastAccessed: string;
+  /** 访问次数 */
+  accessCount: number;
+  /** 过期时间（ISO），可选 */
+  expiresAt?: string;
+  /** 是否全局可见（跨项目） */
+  global: boolean;
 }
