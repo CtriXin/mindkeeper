@@ -1,6 +1,7 @@
 export type ContinuitySource = 'codex' | 'claude';
 export type ContinuityTarget = 'clipboard' | 'mms-codex' | 'mms-claude' | 'codex' | 'claude';
 export type ContinuityPreset = 'compact' | 'standard' | 'full';
+export type ContinuityOutput = 'clipboard' | 'file';
 export interface ContinuitySession {
     id: string;
     source: ContinuitySource;
@@ -22,6 +23,7 @@ export interface ContinuityOptions {
     launch?: boolean;
     list?: boolean;
     preset?: ContinuityPreset;
+    output?: ContinuityOutput;
     limit?: number;
     git?: boolean;
     all?: boolean;

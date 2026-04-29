@@ -108,8 +108,9 @@ ${c.bold('Continuity')}
   mk c --list                     列出当前目录 sessions
   mk c --all --list               列出所有项目 sessions
   mk c --to clipboard|mms-codex|mms-claude|codex|claude
+  mk c --output clipboard|file     剪贴板激进压缩 / 文件高保真
   mk c --preset compact|standard|full
-  mk c --print --no-copy --no-git --launch --limit 20
+  mk c --file --clipboard --print --no-copy --no-git --launch --limit 20
 `);
 }
 

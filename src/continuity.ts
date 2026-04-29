@@ -19,6 +19,7 @@ import { getRealHome } from './env.js';
 export type ContinuitySource = 'codex' | 'claude';
 export type ContinuityTarget = 'clipboard' | 'mms-codex' | 'mms-claude' | 'codex' | 'claude';
 export type ContinuityPreset = 'compact' | 'standard' | 'full';
+export type ContinuityOutput = 'clipboard' | 'file';
 
 export interface ContinuitySession {
   id: string;
@@ -65,6 +66,7 @@ export interface ContinuityOptions {
   launch?: boolean;
   list?: boolean;
   preset?: ContinuityPreset;
+  output?: ContinuityOutput;
   limit?: number;
   git?: boolean;
   all?: boolean;
@@ -74,6 +76,16 @@ interface ParsedArgs extends ContinuityOptions {
   help?: boolean;
 }
 
+interface PresetLimits {
+  summaries: number;
+  summaryChars: number;
+  messages: number;
+  tools: number;
+  messageChars: number;
+  resultChars: number;
+  includeToolResults: boolean;
+}
+
 const DEFAULT_LIMIT = 40;
 const HEAD_SCAN_BYTES = 4 * 1024 * 1024;
 const TAIL_SCAN_BYTES = 16 * 1024 * 1024;
@@ -81,21 +93,24 @@ const CONTINUITY_PACK_HEADER = '# MindKeeper Continuity Pack';
 const CONTINUITY_PACK_OMITTED = '[previous MindKeeper Continuity Pack omitted]';
 const CONTINUITY_PACK_END_MARKER = '- 不要重复已经完成的探索；从最近未解决点继续。';
 
-const PRESET_LIMITS: Record<ContinuityPreset, {
-  summaries: number;
-  messages: number;
-  tools: number;
-  messageChars: number;
-  resultChars: number;
-  includeToolResults: boolean;
-}> = {
-  compact: { summaries: 6, messages: 6, tools: 10, messageChars: 900, resultChars: 0, includeToolResults: false },
-  standard: { summaries: 14, messages: 10, tools: 18, messageChars: 1500, resultChars: 0, includeToolResults: false },
-  full: { summaries: 60, messages: 30, tools: 80, messageChars: 12000, resultChars: 4000, includeToolResults: true },
+const CLIPBOARD_PRESET_LIMITS: Record<ContinuityPreset, PresetLimits> = {
+  compact: { summaries: 4, summaryChars: 420, messages: 4, tools: 6, messageChars: 700, resultChars: 0, includeToolResults: false },
+  standard: { summaries: 8, summaryChars: 700, messages: 8, tools: 12, messageChars: 1200, resultChars: 0, includeToolResults: false },
+  full: { summaries: 20, summaryChars: 1200, messages: 16, tools: 40, messageChars: 5000, resultChars: 1200, includeToolResults: true },
+};
+
+const FILE_PRESET_LIMITS: Record<ContinuityPreset, PresetLimits> = {
+  compact: { summaries: 10, summaryChars: 900, messages: 12, tools: 20, messageChars: 1800, resultChars: 0, includeToolResults: false },
+  standard: { summaries: 30, summaryChars: 1200, messages: 24, tools: 50, messageChars: 4000, resultChars: 0, includeToolResults: false },
+  full: { summaries: 100, summaryChars: 2400, messages: 80, tools: 160, messageChars: 20000, resultChars: 8000, includeToolResults: true },
 };
 
 function uniq<T>(items: T[]): T[] {
   return [...new Set(items)];
+}
+
+function limitsFor(preset: ContinuityPreset, output: ContinuityOutput): PresetLimits {
+  return (output === 'file' ? FILE_PRESET_LIMITS : CLIPBOARD_PRESET_LIMITS)[preset];
 }
 
 function realpathish(path: string): string {
@@ -610,8 +625,8 @@ function looksLikePath(value: string): boolean {
   return value.includes('/') || /\.[A-Za-z0-9]{1,8}$/.test(value);
 }
 
-function extractCodexContext(session: ContinuitySession, preset: ContinuityPreset): ExtractedContext {
-  const limits = PRESET_LIMITS[preset];
+function extractCodexContext(session: ContinuitySession, preset: ContinuityPreset, output: ContinuityOutput): ExtractedContext {
+  const limits = limitsFor(preset, output);
   const entries = jsonLines(readTailText(session.rawPath));
   const messages: ContinuityMessage[] = [];
   const tools: ToolActivity[] = [];
@@ -654,8 +669,8 @@ function extractCodexContext(session: ContinuitySession, preset: ContinuityPrese
   };
 }
 
-function extractClaudeContext(session: ContinuitySession, preset: ContinuityPreset): ExtractedContext {
-  const limits = PRESET_LIMITS[preset];
+function extractClaudeContext(session: ContinuitySession, preset: ContinuityPreset, output: ContinuityOutput): ExtractedContext {
+  const limits = limitsFor(preset, output);
   const entries = jsonLines(readTailText(session.rawPath));
   const summaries: ContinuitySummary[] = [];
   const messages: ContinuityMessage[] = [];
@@ -727,8 +742,8 @@ function dedupeTools(tools: ToolActivity[]): ToolActivity[] {
   return out;
 }
 
-function extractSessionContext(session: ContinuitySession, preset: ContinuityPreset): ExtractedContext {
-  return session.source === 'codex' ? extractCodexContext(session, preset) : extractClaudeContext(session, preset);
+function extractSessionContext(session: ContinuitySession, preset: ContinuityPreset, output: ContinuityOutput): ExtractedContext {
+  return session.source === 'codex' ? extractCodexContext(session, preset, output) : extractClaudeContext(session, preset, output);
 }
 
 function gitState(cwd: string, preset: ContinuityPreset): string[] {
@@ -860,6 +875,10 @@ function targetText(target: ContinuityTarget | undefined): string {
   return target;
 }
 
+function outputText(output: ContinuityOutput | undefined): string {
+  return output === 'file' ? paint('yellow', 'file') : paint('green', 'clipboard');
+}
+
 function presetText(preset: ContinuityPreset | undefined): string {
   const p = preset || 'standard';
   if (p === 'full') return paint('yellow', p);
@@ -904,9 +923,10 @@ function renderContinuityMarkdown(
   context: ExtractedContext,
   preset: ContinuityPreset,
   target: ContinuityTarget,
+  output: ContinuityOutput,
   includeGit: boolean,
 ): string {
-  const limits = PRESET_LIMITS[preset];
+  const limits = limitsFor(preset, output);
   const lines: string[] = [
     '# MindKeeper Continuity Pack',
     '',
@@ -917,6 +937,7 @@ function renderContinuityMarkdown(
     `- source: \`${session.source}\``,
     `- session id: \`${session.id}\``,
     `- target: \`${target}\``,
+    `- output: \`${output}\``,
     `- cwd: \`${session.cwd || process.cwd()}\``,
   ];
   if (session.branch) lines.push(`- branch: \`${session.branch}\``);
@@ -942,7 +963,7 @@ function renderContinuityMarkdown(
     for (const summary of context.summaries) {
       const ts = summary.at ? Date.parse(summary.at) : NaN;
       const when = Number.isNaN(ts) ? '' : ` (${formatTime(ts)})`;
-      lines.push(`- ${truncate(cleanText(summary.content), 700)}${when}`);
+      lines.push(`- ${truncate(cleanText(summary.content), limits.summaryChars)}${when}`);
     }
     lines.push('');
   }
@@ -1023,7 +1044,21 @@ function parseArgs(argv: string[]): ParsedArgs {
     const arg = argv[i];
     if (arg === '--help' || arg === '-h') opts.help = true;
     else if (arg === '--print') opts.print = true;
-    else if (arg === '--no-copy') opts.copy = false;
+    else if (arg === '--no-copy') {
+      opts.copy = false;
+      opts.output = opts.output || 'file';
+    }
+    else if (arg === '--file') {
+      opts.output = 'file';
+      opts.copy = false;
+    }
+    else if (arg === '--clipboard' || arg === '--paste') {
+      opts.output = 'clipboard';
+      opts.copy = true;
+    }
+    else if (arg === '--output' || arg === '--mode') opts.output = normalizeOutput(argv[++i]);
+    else if (arg.startsWith('--output=')) opts.output = normalizeOutput(arg.slice('--output='.length));
+    else if (arg.startsWith('--mode=')) opts.output = normalizeOutput(arg.slice('--mode='.length));
     else if (arg === '--no-git') opts.git = false;
     else if (arg === '--launch') opts.launch = true;
     else if (arg === '--list' || arg === '-l') opts.list = true;
@@ -1038,6 +1073,17 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
   opts.ref = positional[0];
   return opts;
+}
+
+function normalizeOutput(value: string | undefined): ContinuityOutput {
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'file' || v === 'files' || v === 'disk' || v === 'write') return 'file';
+  return 'clipboard';
+}
+
+function resolveOutput(opts: ParsedArgs): ContinuityOutput {
+  if (opts.output) return opts.output;
+  return opts.copy === false ? 'file' : 'clipboard';
 }
 
 function normalizeTarget(value: string | undefined): ContinuityTarget | undefined {
@@ -1125,10 +1171,11 @@ function launchTarget(target: ContinuityTarget): void {
 
 function printSessionList(sessions: ContinuitySession[], opts: ParsedArgs, searchAll: boolean): void {
   const scope = searchAll ? 'all projects' : `current dir: ${process.cwd()}`;
+  const output = resolveOutput(opts);
   console.log(box('MindKeeper Continuity', [
     `${paint('cyan', 'continuity')} sits between native resume and distill.`,
     `scope ${paint('bold', scope)}`,
-    `preset ${presetText(opts.preset)}  target ${paint('bold', targetText(opts.to))}  limit ${opts.limit ?? DEFAULT_LIMIT}`,
+    `output ${outputText(output)}  preset ${presetText(opts.preset)}  target ${paint('bold', targetText(opts.to))}  limit ${opts.limit ?? DEFAULT_LIMIT}`,
   ]));
   console.log('');
   console.log([
@@ -1148,7 +1195,8 @@ function printActionHint(): void {
   console.log('');
   console.log(paint('gray', 'Examples'));
   console.log(`  ${paint('bold', 'mk c 2')} ${paint('gray', '继续第 2 条')}`);
-  console.log(`  ${paint('bold', 'mk c claude:<id> --to mms-codex --preset full')} ${paint('gray', '跨 CLI 高保真续接')}`);
+  console.log(`  ${paint('bold', 'mk c 2 --output file --preset full')} ${paint('gray', '写大文件，高保真')}`);
+  console.log(`  ${paint('bold', 'mk c claude:<id> --to mms-codex --preset full')} ${paint('gray', '剪贴板续接')}`);
   console.log(`  ${paint('bold', 'mk c --all --list')} ${paint('gray', '查看所有项目')}`);
 }
 
@@ -1171,6 +1219,9 @@ ${paint('bold', 'Scope')}
 
 ${paint('bold', 'Output')}
   --to clipboard|mms-codex|mms-claude|codex|claude
+  --output clipboard|file           clipboard=paste-sized, file=larger handoff file
+  --clipboard / --paste             alias: --output clipboard
+  --file                            alias: --output file --no-copy
   --preset compact|standard|full    compact=short, standard=default, full=high fidelity
   --print                           print generated Markdown
   --no-copy                         do not copy to clipboard
@@ -1184,6 +1235,7 @@ function printResultCard(args: {
   session: ContinuitySession;
   target: ContinuityTarget;
   preset: ContinuityPreset;
+  output: ContinuityOutput;
   filePath: string;
   chars: number;
   copied: boolean;
@@ -1191,7 +1243,7 @@ function printResultCard(args: {
 }): void {
   const copyLine = args.copyRequested
     ? args.copied ? paint('green', 'copied to clipboard') : paint('red', 'copy failed')
-    : paint('gray', 'copy skipped');
+    : args.output === 'file' ? paint('gray', 'disabled in file mode') : paint('gray', 'copy skipped');
   const launch = args.target === 'mms-codex' ? 'mms codex'
     : args.target === 'mms-claude' ? 'mms claude'
       : args.target === 'codex' ? 'codex'
@@ -1199,7 +1251,8 @@ function printResultCard(args: {
           : '';
   console.log(box('Continuity Pack Ready', [
     `session ${sourceBadge(args.session.source)} ${paint('bold', args.session.id.slice(0, 12))}  ${paint('gray', args.session.origin)}`,
-    `preset ${presetText(args.preset)}  size ${paint('bold', formatBytes(args.chars))}  target ${paint('bold', targetText(args.target))}`,
+    `output ${outputText(args.output)}  preset ${presetText(args.preset)}  size ${paint('bold', formatBytes(args.chars))}`,
+    `target ${paint('bold', targetText(args.target))}`,
     `file ${args.filePath}`,
     `clipboard ${copyLine}`,
     launch ? `next ${paint('bold', launch)} ${paint('gray', 'then paste')}` : 'next paste into any CLI',
@@ -1238,19 +1291,22 @@ export async function cmdContinuity(argv: string[]): Promise<void> {
 
   const target = await chooseTarget(opts.to);
   const preset = opts.preset ?? 'standard';
-  const context = extractSessionContext(session, preset);
-  const markdown = renderContinuityMarkdown(session, context, preset, target, opts.git !== false);
+  const outputMode = resolveOutput(opts);
+  const context = extractSessionContext(session, preset, outputMode);
+  const markdown = renderContinuityMarkdown(session, context, preset, target, outputMode, opts.git !== false);
   const filePath = writeContinuityFile(session, markdown, process.cwd());
-  const copied = opts.copy !== false ? copyToClipboard(markdown) : false;
+  const shouldCopy = outputMode === 'clipboard' && opts.copy !== false;
+  const copied = shouldCopy ? copyToClipboard(markdown) : false;
 
   printResultCard({
     session,
     target,
     preset,
+    output: outputMode,
     filePath,
     chars: markdown.length,
     copied,
-    copyRequested: opts.copy !== false,
+    copyRequested: shouldCopy,
   });
   if (opts.print) console.log('\n' + markdown);
   if (opts.launch && target !== 'clipboard') launchTarget(target);
