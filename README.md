@@ -1,3 +1,22 @@
+# MindKeeper 已迁移到 BrainKeeper
+
+> 这个项目已经更名并迁移到 **BrainKeeper**。
+>
+> New repository: https://github.com/CtriXin/brainkeeper
+>
+> 新安装命令：
+>
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/CtriXin/brainkeeper/main/install.sh | bash
+> ```
+>
+> 新 MCP server key: `brainkeeper`
+> 新主 CLI: `bk` / `brainkeeper`
+>
+> `mk`、`mindkeeper`、`dst-*`、旧 `~/.sce` 存储会继续作为 legacy compatibility 保留；新安装、新文档、新集成请使用 BrainKeeper。
+
+---
+
 # BrainKeeper
 
 > **"One who truly knows you"**
