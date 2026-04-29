@@ -1182,48 +1182,6 @@ async function choosePreset(existing: ContinuityPreset | undefined, outputMode: 
   }
 }
 
-async function chooseTarget(existing?: ContinuityTarget): Promise<ContinuityTarget> {
-  if (existing) return existing;
-  if (!process.stdin.isTTY || !process.stdout.isTTY) return 'clipboard';
-  const rl = createInterface({ input, output });
-  try {
-    console.log('');
-    console.log(box('Destination Hint', [
-      `${paint('bold', '1')} any CLI     ${paint('gray', 'no launch; just tell you to paste/read')}`,
-      `${paint('bold', '2')} mms codex   ${paint('gray', 'label pack + show next command; no auto launch')}`,
-      `${paint('bold', '3')} mms claude  ${paint('gray', 'label pack + show next command; no auto launch')}`,
-    ], Math.min(terminalWidth(), 86)));
-    const answer = (await rl.question(`${paint('bold', 'Pick destination')} ${paint('gray', '[1]')} › `)).trim();
-    if (answer === '2') return 'mms-codex';
-    if (answer === '3') return 'mms-claude';
-    return 'clipboard';
-  } finally {
-    rl.close();
-  }
-}
-
-async function chooseAdvancedOptions(opts: ParsedArgs, target: ContinuityTarget): Promise<void> {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) return;
-  if (opts.print !== undefined || opts.git === false || opts.launch !== undefined) return;
-  const rl = createInterface({ input, output });
-  try {
-    console.log('');
-    console.log(box('Options', [
-      `${paint('bold', 'Enter')} default  ${paint('gray', 'include Git State, do not print, do not launch')}`,
-      `${paint('bold', 'g')} no-git       ${paint('gray', 'omit Git State')}`,
-      `${paint('bold', 'p')} print        ${paint('gray', 'print Markdown after generating')}`,
-      `${paint('bold', 'l')} launch       ${paint('gray', target === 'clipboard' ? 'ignored for any CLI target' : 'launch target after generating')}`,
-      `${paint('gray', 'Example: gp')}`,
-    ], Math.min(terminalWidth(), 92)));
-    const answer = (await rl.question(`${paint('bold', 'Options')} ${paint('gray', '[Enter]')} › `)).trim().toLowerCase();
-    if (answer.includes('g')) opts.git = false;
-    if (answer.includes('p')) opts.print = true;
-    if (answer.includes('l')) opts.launch = true;
-  } finally {
-    rl.close();
-  }
-}
-
 function launchTarget(target: ContinuityTarget): void {
   if (target === 'mms-codex') {
     execFileSync('mms', ['codex'], { stdio: 'inherit' });
@@ -1296,7 +1254,8 @@ ${paint('bold', 'Output')}
   --launch                          launch target CLI after copy
   -h, --help                        show this help
 
-Interactive mode asks for: session -> output -> fidelity -> destination -> options.
+Interactive mode asks for only: session -> output -> fidelity.
+Destination / no-git / print / launch stay as command flags to avoid noisy prompts.
 `);
 }
 
@@ -1367,8 +1326,7 @@ export async function cmdContinuity(argv: string[]): Promise<void> {
 
   const outputMode = await chooseOutput(opts);
   const preset = await choosePreset(opts.preset, outputMode);
-  const target = await chooseTarget(opts.to);
-  await chooseAdvancedOptions(opts, target);
+  const target = opts.to || 'clipboard';
   const context = extractSessionContext(session, preset, outputMode);
   const markdown = renderContinuityMarkdown(session, context, preset, target, outputMode, opts.git !== false);
   const filePath = writeContinuityFile(session, markdown, process.cwd());
