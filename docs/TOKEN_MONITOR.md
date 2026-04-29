@@ -1,8 +1,8 @@
-# MindKeeper Token 监控与滑动窗口压缩
+# BrainKeeper Token 监控与滑动窗口压缩
 
 ## 功能概述
 
-MindKeeper 新增了轻量级 token 监控和滑动窗口压缩功能，用于：
+BrainKeeper 新增了轻量级 token 监控和滑动窗口压缩功能，用于：
 
 1. **监控对话轮次** - 跟踪当前 session 的对话轮数
 2. **自动警告** - 超过 50 轮时提示，超过 100 轮时自动建议压缩
@@ -60,7 +60,7 @@ Session: `sess-1712484000-abc1`
 
 ```bash
 # 安装 hook（全局）
-cp /path/to/mindkeeper/hooks/token-monitor-hook.sh ~/.claude/hooks/
+cp /path/to/brainkeeper/hooks/token-monitor-hook.sh ~/.claude/hooks/
 
 # 在 settings.json 中添加
 {
@@ -117,7 +117,7 @@ if (turnCount > threshold) {
 ## 文件结构
 
 ```
-mindkeeper/
+brainkeeper/
 ├── src/
 │   ├── token-monitor.ts    # Token 监控核心逻辑
 │   ├── server.ts           # MCP server（新增 tool 注册）

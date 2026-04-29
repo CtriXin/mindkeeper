@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# dst — MindKeeper CLI (distill threads)
+# dst — BrainKeeper CLI (distill threads)
 #
 # 用法:
 #   dst                      列出 pending threads（等同 dst ls）
@@ -182,7 +182,7 @@ case "${1:-}" in
     cmd_archive "$2"
     ;;
   help|-h|--help)
-    echo "dst — MindKeeper distill CLI"
+    echo "dst — BrainKeeper distill CLI"
     echo ""
     echo "用法:"
     echo "  dst                  列出 pending threads"

@@ -1,10 +1,12 @@
 {
-  "name": "mindkeeper",
-  "version": "2.3.0",
-  "description": "MindKeeper — Personal Cognitive Substrate that truly knows you",
+  "name": "brainkeeper",
+  "version": "2.4.0",
+  "description": "BrainKeeper — Personal Cognitive Substrate that truly knows you",
   "type": "module",
   "main": "dist/server.js",
   "bin": {
+    "bk": "dist/cli.js",
+    "brainkeeper": "dist/cli.js",
     "mk": "dist/cli.js",
     "mindkeeper": "dist/cli.js"
   },
@@ -17,13 +19,23 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/CtriXin/mindkeeper.git"
+    "url": "https://github.com/CtriXin/brainkeeper.git"
   },
-  "homepage": "https://github.com/CtriXin/mindkeeper",
+  "homepage": "https://github.com/CtriXin/brainkeeper",
   "license": "MIT",
+  "keywords": [
+    "mcp",
+    "memory",
+    "agent",
+    "continuity",
+    "claude",
+    "codex"
+  ],
   "files": [
     "dist/",
     "bin/",
+    "hooks/",
+    "scripts/",
     "install.sh",
     "README.md",
     "LICENSE"

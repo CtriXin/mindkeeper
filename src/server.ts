@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * MindKeeper MCP Server
+ * BrainKeeper MCP Server
  *
  * Startup tools (11): brain_bootstrap / brain_token_status / brain_token_reset / brain_checkpoint / brain_fragment / brain_link_issue / brain_sync_issue / brain_threads / brain_recall / brain_check / brain_search / brain_extend
  * Extended tools (4, loaded via brain_extend): brain_learn / brain_board / brain_list / brain_digest
@@ -30,7 +30,7 @@ import {
 const index = loadIndex();
 
 const server = new Server(
-  { name: 'mindkeeper', version: '2.3.0' },
+  { name: 'brainkeeper', version: '2.4.0' },
   { capabilities: { tools: {}, resources: {} } }
 );
 
@@ -124,14 +124,14 @@ const CORE_TOOLS = [
         task: { type: 'string', description: '可选，当前任务描述；未传时使用最近 thread' },
         thread: { type: 'string', description: '可选，显式指定 thread id' },
         project: { type: 'string', description: 'issue-tracking 中的项目目录；默认取 repo basename' },
-        issue: { type: 'string', description: 'issue slug，如 mindkeeper-fragment-memory-20260415' },
+        issue: { type: 'string', description: 'issue slug，如 brainkeeper-fragment-memory-20260415' },
       },
       required: ['repo', 'issue'],
     },
   },
   {
     name: 'brain_sync_issue',
-    description: '把当前 thread chain 的 digest 同步到 issue-tracking issue.md。依赖 brain_link_issue 和环境变量 MINDKEEPER_ISSUE_TRACKING_ROOT。',
+    description: '把当前 thread chain 的 digest 同步到 issue-tracking issue.md。依赖 brain_link_issue 和环境变量 BRAINKEEPER_ISSUE_TRACKING_ROOT（兼容 MINDKEEPER_ISSUE_TRACKING_ROOT）。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -299,9 +299,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
   resources: [
     {
-      uri: 'mindkeeper://recipes',
+      uri: 'brainkeeper://recipes',
       name: 'Recipe 知识库摘要',
       description: '所有已存储 recipe/insight 的 ID、触发词和一句话摘要。AI 可据此判断是否需要 brain_recall 获取详情。',
+      mimeType: 'text/plain',
+    },
+    {
+      uri: 'mindkeeper://recipes',
+      name: 'Recipe 知识库摘要 (legacy)',
+      description: 'Legacy alias for brainkeeper://recipes.',
       mimeType: 'text/plain',
     },
   ],
@@ -310,7 +316,7 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => ({
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const { uri } = request.params;
 
-  if (uri === 'mindkeeper://recipes') {
+  if (uri === 'brainkeeper://recipes' || uri === 'mindkeeper://recipes') {
     const recipes = index.recipes;
     if (recipes.length === 0) {
       return {
@@ -332,7 +338,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       contents: [{
         uri,
         mimeType: 'text/plain',
-        text: `MindKeeper 知识库 (${recipes.length} 条):\n${lines.join('\n')}`,
+        text: `BrainKeeper 知识库 (${recipes.length} 条):\n${lines.join('\n')}`,
       }],
     };
   }
@@ -395,7 +401,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('MindKeeper MCP server v2.2 started');
+  console.error('BrainKeeper MCP server v2.4 started');
   console.error(`Loaded ${index.recipes.length} recipes from index`);
 }
 

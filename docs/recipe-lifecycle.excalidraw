@@ -1,7 +1,7 @@
 {
   "type": "excalidraw",
   "version": 2,
-  "source": "mindkeeper",
+  "source": "brainkeeper",
   "elements": [
     {
       "type": "text",
@@ -1306,7 +1306,7 @@
       "id": "foot",
       "x": 250,
       "y": 670,
-      "text": "知识不是越多越好，而是越精准越好 — MindKeeper 的设计哲学",
+      "text": "知识不是越多越好，而是越精准越好 — BrainKeeper 的设计哲学",
       "fontSize": 18,
       "strokeColor": "#757575",
       "groupIds": [],

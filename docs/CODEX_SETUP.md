@@ -1,13 +1,13 @@
-# Codex + MindKeeper Token 监控
+# Codex + BrainKeeper Token 监控
 
 ## 安装
 
 在 Codex 项目根目录运行：
 
 ```bash
-# 1. 确保 MindKeeper MCP 已安装
+# 1. 确保 BrainKeeper MCP 已安装
 # 如果没装，运行：
-curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/CtriXin/brainkeeper/main/install.sh | bash
 
 # 2. 配置 AGENTS.md
 ```

@@ -75,7 +75,7 @@ export function loadIssueLink(rootId: string): IssueLinkRecord | null {
 }
 
 function issueTrackingRoot(): string | null {
-  const explicit = process.env.MINDKEEPER_ISSUE_TRACKING_ROOT;
+  const explicit = process.env.BRAINKEEPER_ISSUE_TRACKING_ROOT || process.env.MINDKEEPER_ISSUE_TRACKING_ROOT;
   if (!explicit) return null;
   const normalized = explicit.trim();
   if (!normalized) return null;
@@ -144,7 +144,7 @@ export function syncIssueDigest(thread: ThreadSummary): SyncIssueDigestResult {
 
   const trackingRoot = issueTrackingRoot();
   if (!trackingRoot) {
-    throw new Error('未设置 MINDKEEPER_ISSUE_TRACKING_ROOT，无法同步 issue digest。');
+    throw new Error('未设置 BRAINKEEPER_ISSUE_TRACKING_ROOT（兼容 MINDKEEPER_ISSUE_TRACKING_ROOT），无法同步 issue digest。');
   }
 
   const issueMd = issueMdPath(trackingRoot, link.project, link.issue);

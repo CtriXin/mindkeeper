@@ -34,7 +34,7 @@ trigger: /debug
 Based on {{previous}}, implement a fix.
 ```
 
-**MindKeeper 融合**: 把 Procedure 也做成 Markdown 格式，每个 step 可以指定模型层级。
+**BrainKeeper 融合**: 把 Procedure 也做成 Markdown 格式，每个 step 可以指定模型层级。
 
 ```markdown
 ---
@@ -54,12 +54,12 @@ trigger: 发现新知识
 
 ---
 
-### 2. mindkeeper-guide "下一步建议" (from BMAD)
+### 2. brainkeeper-guide "下一步建议" (from BMAD)
 
 BMAD 的 `bmad-help` skill 随时告诉你下一步该做什么：
 > "Ask `bmad-help I just finished the architecture, what do I do next?`"
 
-**MindKeeper 融合**: 实现 `mindkeeper-guide` 或 `MindKeeper，下一步？`
+**BrainKeeper 融合**: 实现 `brainkeeper-guide` 或 `BrainKeeper，下一步？`
 - 读取当前 TODO
 - 读取最近的 observations
 - 读取项目状态
@@ -73,7 +73,7 @@ BMAD 的 `bmad-help` skill 随时告诉你下一步该做什么：
 
 BMAD 根据项目复杂度自动调整规划深度。
 
-**MindKeeper 融合**: 学习回路也应该 scale-adaptive
+**BrainKeeper 融合**: 学习回路也应该 scale-adaptive
 - 小改动 → 轻量记录（evidence 直接存）
 - 中等变更 → 标准流程（capture → distill）
 - 大重构 → 完整回路（7 段全走，Thread Capsule 归档）
@@ -92,7 +92,7 @@ Vibe Kanban 给每个任务一个独立的：
 - 终端
 - Dev server
 
-**MindKeeper 融合**: Thread Capsule 也可以有类似隔离
+**BrainKeeper 融合**: Thread Capsule 也可以有类似隔离
 - 每个 thread 独立的 working memory
 - 切换 thread 时自动切换上下文
 - 完成后归档到 archive/
@@ -108,7 +108,7 @@ Vibe Kanban 给每个任务一个独立的：
 - ⚡ Fast (4x) — 代码生成
 - ◆ Smart (1x) — 复杂推理
 
-**MindKeeper 融合**: 学习回路的每个阶段可以指定模型层级
+**BrainKeeper 融合**: 学习回路的每个阶段可以指定模型层级
 - Capture → fast（识别信号）
 - Distill → fast（提取关键词）
 - Reflect → smart（深度分析）
@@ -120,15 +120,15 @@ Vibe Kanban 给每个任务一个独立的：
 
 ## 不借鉴的点
 
-- **复杂的 agent 角色系统** — MindKeeper 不是 agent 框架，是认知基础设施
-- **Kanban UI** — MindKeeper 是后端 substrate，UI 由上层决定
-- **12+ 专业化 agent** — MindKeeper 只需要一个核心：学习回路状态机
+- **复杂的 agent 角色系统** — BrainKeeper 不是 agent 框架，是认知基础设施
+- **Kanban UI** — BrainKeeper 是后端 substrate，UI 由上层决定
+- **12+ 专业化 agent** — BrainKeeper 只需要一个核心：学习回路状态机
 
 ---
 
 ## 核心区别
 
-| | BMAD / Vibe Kanban / 10x | MindKeeper |
+| | BMAD / Vibe Kanban / 10x | BrainKeeper |
 |---|--------------------------|-------|
 | 定位 | 任务执行框架 | 认知基础设施 |
 | 关注点 | 怎么做事 | 怎么学习和记忆 |
@@ -136,7 +136,7 @@ Vibe Kanban 给每个任务一个独立的：
 | 生命周期 | 任务完成即结束 | 跨会话、跨项目、跨设备持续演化 |
 
 我们不是竞争关系，是可以叠加的：
-> MindKeeper 提供记忆层，BMAD/10x 提供执行层
+> BrainKeeper 提供记忆层，BMAD/10x 提供执行层
 
 ---
 

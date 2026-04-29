@@ -1,14 +1,14 @@
 {
   "type": "excalidraw",
   "version": 2,
-  "source": "mindkeeper",
+  "source": "brainkeeper",
   "elements": [
     {
       "type": "text",
       "id": "title",
       "x": 280,
       "y": 10,
-      "text": "MindKeeper 工具全景",
+      "text": "BrainKeeper 工具全景",
       "fontSize": 32,
       "strokeColor": "#1e1e1e",
       "groupIds": [],

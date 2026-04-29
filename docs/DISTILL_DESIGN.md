@@ -1,6 +1,6 @@
 # Context Distill — 上下文蒸馏与连续性系统
 
-> MindKeeper 的核心闭环：bootstrap 读 → 工作 → distill 写 → bootstrap 读
+> BrainKeeper 的核心闭环：bootstrap 读 → 工作 → distill 写 → bootstrap 读
 
 > 当前状态（2026-03-26）：
 > 已实现 `brain_checkpoint`、`brain_bootstrap`、`brain_deep_context`，并支持 `thread id` 精确续接。
@@ -139,7 +139,7 @@ dst-20260324-aaa (task: 调研 provider routing)
 ### P3 — 未来做（想清楚再做）
 
 - [ ] **自动蒸馏** — 完全无感知，检测到 compact 即将发生时自动 distill + 提示 /clear
-- [ ] **跨项目关联** — thread 引用其他项目的 thread（如 mms 任务关联 mindkeeper 改动）
+- [ ] **跨项目关联** — thread 引用其他项目的 thread（如 mms 任务关联 brainkeeper 改动）
 - [ ] **蒸馏质量评分** — 对比蒸馏前后的信息保留度，持续优化蒸馏 prompt
 
 ## 蒸馏 Prompt 策略
@@ -160,7 +160,7 @@ dst-20260324-aaa (task: 调研 provider routing)
 - 格式化的长代码块（只保留文件名+行号+摘要）
 - 重复的确认对话
 
-## 和 MindKeeper 其他模块的关系
+## 和 BrainKeeper 其他模块的关系
 
 ```
 brain_bootstrap (读)

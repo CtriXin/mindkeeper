@@ -1,6 +1,6 @@
 # Worklog Memory Design
 
-> 目标：让 MindKeeper 不只会 `distill`，还会持续记录工作片段、允许 LLM 自主沉淀，并在需要时同步到 `issue-tracking`，同时不和 `gbrain-memory` 冲突。
+> 目标：让 BrainKeeper 不只会 `distill`，还会持续记录工作片段、允许 LLM 自主沉淀，并在需要时同步到 `issue-tracking`，同时不和 `gbrain-memory` 冲突。
 
 > 结论先行：
 > `fragment/worklog`、`LLM 自主总结`、`distill/checkpoint` 不是冲突关系，而是三层不同粒度的记忆。
@@ -131,19 +131,19 @@
 
 如果把 LLM 自主总结直接写成 `distill`，会让 checkpoint 失去“阶段边界”。
 
-### MindKeeper 和 issue-tracking 不冲突
+### BrainKeeper 和 issue-tracking 不冲突
 
-- MindKeeper 是执行态 memory substrate
+- BrainKeeper 是执行态 memory substrate
 - issue-tracking 是 archive / evidence sink
 
 前者是运行时连续性，后者是对外留档。
 
-### MindKeeper 和 gbrain-memory 不冲突
+### BrainKeeper 和 gbrain-memory 不冲突
 
-- MindKeeper 记 task continuity
+- BrainKeeper 记 task continuity
 - gbrain-memory 记 stable profile / preference
 
-MindKeeper 的 fragment / distill 可以成为 gbrain-memory 的原材料之一，但不应直接等价。
+BrainKeeper 的 fragment / distill 可以成为 gbrain-memory 的原材料之一，但不应直接等价。
 
 ---
 
@@ -350,7 +350,7 @@ interface FragmentRecord {
 
 ### 9.1 为什么不能直接自动写
 
-MindKeeper 只知道：
+BrainKeeper 只知道：
 
 - `repo`
 - `task`
@@ -369,8 +369,8 @@ MindKeeper 只知道：
 ```json
 {
   "rootId": "dst-0415-abcd12",
-  "issue": "mindkeeper-fragment-memory-20260415",
-  "project": "mindkeeper"
+  "issue": "brainkeeper-fragment-memory-20260415",
+  "project": "brainkeeper"
 }
 ```
 
@@ -398,7 +398,7 @@ MindKeeper 只知道：
 推荐策略：
 
 - `fragment`
-  - 只写 MindKeeper 本地
+  - 只写 BrainKeeper 本地
 - `reflection`
   - 可选增量同步到 issue
 - `checkpoint`
@@ -406,7 +406,7 @@ MindKeeper 只知道：
 
 也就是：
 
-`MindKeeper = 主状态层`
+`BrainKeeper = 主状态层`
 `issue-tracking = 对外摘要层`
 
 当前实现状态：
@@ -415,7 +415,7 @@ MindKeeper 只知道：
   - 显式绑定 `root -> project / issue slug`
 - 已实现 `brain_sync_issue`
   - 手动把当前 thread chain 的 digest 写入 `issue.md` 固定区块
-- 需要设置环境变量 `MINDKEEPER_ISSUE_TRACKING_ROOT`
+- 需要设置环境变量 `BRAINKEEPER_ISSUE_TRACKING_ROOT`
 - 还没有实现：
   - `checkpoint` 自动触发 issue sync
   - `reflection` 自动增量同步

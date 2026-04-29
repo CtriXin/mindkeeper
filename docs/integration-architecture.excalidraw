@@ -1,14 +1,14 @@
 {
   "type": "excalidraw",
   "version": 2,
-  "source": "mindkeeper",
+  "source": "brainkeeper",
   "elements": [
     {
       "type": "text",
       "id": "title",
       "x": 250,
       "y": 10,
-      "text": "MindKeeper 集成架构",
+      "text": "BrainKeeper 集成架构",
       "fontSize": 32,
       "strokeColor": "#1e1e1e",
       "groupIds": [],
@@ -500,7 +500,7 @@
       "y": 327,
       "width": 302.4,
       "height": 36,
-      "text": "MindKeeper MCP Server",
+      "text": "BrainKeeper MCP Server",
       "fontSize": 24,
       "fontFamily": 1,
       "textAlign": "center",

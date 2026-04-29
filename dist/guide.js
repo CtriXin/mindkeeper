@@ -1,5 +1,5 @@
 /**
- * mindkeeper-guide — 下一步建议
+ * brainkeeper-guide — 下一步建议
  *
  * 灵感来源：BMAD bmad-help
  * 设计理念：不是 AI 决定一切，是 AI 帮你理清思路

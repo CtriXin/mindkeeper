@@ -1,5 +1,5 @@
 /**
- * MindKeeper 核心类型定义
+ * BrainKeeper 核心类型定义
  *
  * v2 — Recipe 驱动
  * 知识不再是自由 markdown，而是结构化 Recipe：

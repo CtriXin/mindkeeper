@@ -145,7 +145,7 @@ function findLarkCli(): string {
 function generateRecipeId(idx: BrainIndex, project?: string): string {
   const prefix = project
     ? project.split(/[_\-/]/).filter(Boolean).pop()!.toLowerCase()
-    : 'mk';
+    : 'bk';
 
   const pattern = new RegExp(`^(?:rcp-)?${prefix}-(\\d+)$`);
   let max = 0;
@@ -591,13 +591,13 @@ export function handleCheckpoint(args: Record<string, unknown>): ToolResponse {
 
   // 推送飞书（可选，静默）
   try {
-    const envChat = process.env.MINDKEEPER_FEISHU_CHAT;
+    const envChat = process.env.BRAINKEEPER_FEISHU_CHAT || process.env.MINDKEEPER_FEISHU_CHAT;
     const target = envChat ? { type: 'chat' as const, id: envChat } : readFeishuTarget();
     if (target) {
       const larkBin = findLarkCli();
       if (larkBin) {
         const repoName = String(args.repo).split('/').pop() || '';
-        const msg = `**MindKeeper** · ${repoName}\\n${String(args.status)}\\n${result.threadId}`;
+        const msg = `**BrainKeeper** · ${repoName}\\n${String(args.status)}\\n${result.threadId}`;
         const targetFlag = target.type === 'user' ? `--user-id "${target.id}"` : `--chat-id "${target.id}"`;
         execSync(
           `printf '${msg.replace(/'/g, "'\\''")}' | xargs -0 ${larkBin} im +messages-send ${targetFlag} --as bot --markdown`,

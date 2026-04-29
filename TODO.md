@@ -1,7 +1,7 @@
-# MindKeeper TODO — 四象限
+# BrainKeeper TODO — 四象限
 
 > 最后更新：2026-03-28
-> 活跃待办请看 board: `mk bd mindkeeper`
+> 活跃待办请看 board: `mk bd brainkeeper`
 
 ---
 
@@ -89,7 +89,7 @@
 - [x] ~/.sce/ 目录结构
 - [x] 📌 pin 机制
 - [x] Procedure Markdown 格式
-- [x] mindkeeper-guide "下一步建议"
+- [x] brainkeeper-guide "下一步建议"
 - [x] Board aliases 字段支持
 - [x] Bootstrap loadThreadDetails import 修复
 - [x] v2.2: CLI 统一（mk rcp/bd/dst 简写、thread ID 完整显示）

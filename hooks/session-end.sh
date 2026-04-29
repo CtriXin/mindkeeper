@@ -1,9 +1,13 @@
 #!/bin/bash
-# Claude Code Stop hook — auto-capture mindkeeper checkpoint at session end
+# Claude Code Stop hook — auto-capture brainkeeper checkpoint at session end
 # Captures git state and writes a final fragment/thread so no work is lost.
 set -euo pipefail
 
-resolve_mindkeeper_home() {
+resolve_brainkeeper_home() {
+  if [ -n "${BRAINKEEPER_HOME:-}" ]; then
+    echo "$BRAINKEEPER_HOME"
+    return
+  fi
   if [ -n "${MINDKEEPER_HOME:-}" ]; then
     echo "$MINDKEEPER_HOME"
     return
@@ -15,7 +19,7 @@ resolve_mindkeeper_home() {
   fi
 }
 
-SCE_HOME="$(resolve_mindkeeper_home)"
+SCE_HOME="$(resolve_brainkeeper_home)"
 THREADS_DIR="$SCE_HOME/threads"
 FRAGMENTS_DIR="$SCE_HOME/fragments"
 

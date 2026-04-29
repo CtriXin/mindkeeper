@@ -11,7 +11,7 @@
 - 用户每天遇到 Claude Code context 达到上限（1M token）
 - 不想用 Context Gateway（担心隐私，怕数据外泄）
 - 已有 MMS 本地运行在 127.0.0.1:63055
-- 已有 MindKeeper 做 distill 和 thread 存储
+- 已有 BrainKeeper 做 distill 和 thread 存储
 
 ---
 
@@ -20,7 +20,7 @@
 ### 核心原则（来自 4 模型讨论共识）
 
 1. **MMS Bridge 保持无状态** — 只做路由和转发，不存压缩状态
-2. **MindKeeper 管理 Context** — 负责压缩决策和 summary 存储
+2. **BrainKeeper 管理 Context** — 负责压缩决策和 summary 存储
 3. **不修改原始对话** — 生成 immutable summary ID 供引用
 4. **用户确认折叠** — 70% 阈值时提示，用户确认后压缩
 
@@ -39,12 +39,12 @@
 │  MMS Bridge (无状态)                                         │
 │  - 模型路由                                                  │
 │  - 请求转发                                                  │
-│  - Token 计数 → MindKeeper (后台异步)                         │
+│  - Token 计数 → BrainKeeper (后台异步)                         │
 └─────────────────────┬───────────────────────────────────────┘
                       │
                       ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  MindKeeper Context Manager                                  │
+│  BrainKeeper Context Manager                                  │
 │  - brain_context_status — 返回 token 使用率                   │
 │  - brain_context_save — 后台预计算 summary                   │
 │  - brain_context_fold — 用户确认后折叠                       │
@@ -133,13 +133,13 @@ echo "运行 brain_token_status 获取详细信息..."
 
 ---
 
-## Phase 2: MindKeeper Context Manager（1-2 天）
+## Phase 2: BrainKeeper Context Manager（1-2 天）
 
 **目标**：新增 3 个 MCP tool，支持后台预计算和用户确认
 
 ### 2.1 新增文件
 
-**文件**：`mindkeeper/src/context-manager.ts`
+**文件**：`brainkeeper/src/context-manager.ts`
 
 ```typescript
 /**
@@ -198,7 +198,7 @@ export async function computeSummary(
     }]
   });
 
-  // 写入 MindKeeper thread
+  // 写入 BrainKeeper thread
   const result = checkpoint({
     repo: process.cwd(),
     task: `Context 压缩 — ${sessionId}`,
@@ -236,7 +236,7 @@ function formatMessages(messages: Array<{ role: string; content: string }>): str
 
 ### 2.2 新增 MCP Tools
 
-**文件**：`mindkeeper/src/server.ts`
+**文件**：`brainkeeper/src/server.ts`
 
 新增 tool 定义：
 
@@ -279,7 +279,7 @@ const CONTEXT_TOOLS = [
 
 ### 2.3 新增 Handler
 
-**文件**：`mindkeeper/src/handlers.ts`
+**文件**：`brainkeeper/src/handlers.ts`
 
 ```typescript
 export function handleContextStatus(args: Record<string, unknown>): ToolResponse {
@@ -350,8 +350,8 @@ async function handleRequest(req: Request) {
   const tokenCount = estimateTokens(messages);
   const sessionId = req.sessionId;
 
-  // 发送 token 计数到 MindKeeper
-  const summaryId = await fetchMindKeeperStatus(tokenCount, sessionId);
+  // 发送 token 计数到 BrainKeeper
+  const summaryId = await fetchBrainKeeperStatus(tokenCount, sessionId);
 
   // 如果有 summary，附加到请求
   if (summaryId) {
@@ -364,7 +364,7 @@ async function handleRequest(req: Request) {
   return forwardToAPI(messages);
 }
 
-async function fetchMindKeeperStatus(tokenCount: number, sessionId: string): Promise<string | null> {
+async function fetchBrainKeeperStatus(tokenCount: number, sessionId: string): Promise<string | null> {
   try {
     const response = await fetch('http://127.0.0.1:63056/context/check', {
       method: 'POST',
@@ -380,7 +380,7 @@ async function fetchMindKeeperStatus(tokenCount: number, sessionId: string): Pro
 
 ### 3.2 验收标准
 
-- [ ] Token 计数发送到 MindKeeper
+- [ ] Token 计数发送到 BrainKeeper
 - [ ] Summary ID 附加到请求
 - [ ] 失败不影响正常转发
 

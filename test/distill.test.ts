@@ -5,7 +5,7 @@ import { tmpdir } from 'os';
 import { execSync } from 'child_process';
 
 describe('distill checkpoint', () => {
-  const testDir = join(tmpdir(), `mindkeeper-distill-test-${Date.now()}`);
+  const testDir = join(tmpdir(), `brainkeeper-distill-test-${Date.now()}`);
   let originalHome: string | undefined;
 
   beforeEach(() => {

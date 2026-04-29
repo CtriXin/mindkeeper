@@ -1,7 +1,7 @@
 {
   "type": "excalidraw",
   "version": 2,
-  "source": "mindkeeper",
+  "source": "brainkeeper",
   "elements": [
     {
       "type": "text",
@@ -1066,7 +1066,7 @@
       "id": "foot",
       "x": 250,
       "y": 760,
-      "text": "一次学习，所有项目受益 — 这就是 MindKeeper 的跨项目知识复用",
+      "text": "一次学习，所有项目受益 — 这就是 BrainKeeper 的跨项目知识复用",
       "fontSize": 18,
       "strokeColor": "#757575",
       "groupIds": [],

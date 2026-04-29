@@ -1,11 +1,11 @@
 #!/bin/bash
-# MindKeeper Install Script
+# BrainKeeper Install Script
 # Fully automated — installs, configures MCP, handles edge cases.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/CtriXin/mindkeeper/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/CtriXin/brainkeeper/main/install.sh | bash
 #   bash install.sh --update
-#   bash install.sh --ref v2.3.0
+#   bash install.sh --ref v2.4.0
 
 set -euo pipefail
 
@@ -16,8 +16,9 @@ if [[ "$HOME" =~ ^(/Users/[^/]+)/\.config/mms/ ]]; then
   echo "MMS sandbox detected — using real HOME: $REAL_HOME"
 fi
 
-INSTALL_DIR="$REAL_HOME/.local/share/mindkeeper"
-REPO_URL="https://github.com/CtriXin/mindkeeper.git"
+INSTALL_DIR="$REAL_HOME/.local/share/brainkeeper"
+LEGACY_INSTALL_DIR="$REAL_HOME/.local/share/mindkeeper"
+REPO_URL="https://github.com/CtriXin/brainkeeper.git"
 UPDATE_MODE=false
 INSTALL_REF=""
 
@@ -62,8 +63,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo ""
-echo "━━━ MindKeeper Installer ━━━"
+echo "━━━ BrainKeeper Installer ━━━"
 echo ""
+if [ -d "$LEGACY_INSTALL_DIR/.git" ] && [ "$LEGACY_INSTALL_DIR" != "$INSTALL_DIR" ]; then
+  echo "Legacy MindKeeper install detected at $LEGACY_INSTALL_DIR — leaving data/code in place."
+  echo "BrainKeeper will install separately at $INSTALL_DIR and continue using ~/.sce data."
+  echo ""
+fi
 
 # ── Prerequisites ──
 for cmd in git node npm; do
@@ -85,7 +91,7 @@ checkout_requested_ref() {
     return 0
   fi
 
-  echo "Switching MindKeeper to ref: $ref"
+  echo "Switching BrainKeeper to ref: $ref"
   git fetch --tags --force origin >/dev/null 2>&1 || true
 
   if git ls-remote --exit-code --heads origin "$ref" >/dev/null 2>&1; then
@@ -128,7 +134,7 @@ if [ -d "$INSTALL_DIR/.git" ]; then
     exit 0
   fi
 else
-  echo "Cloning MindKeeper..."
+  echo "Cloning BrainKeeper..."
   mkdir -p "$(dirname "$INSTALL_DIR")"
   if [[ -n "$INSTALL_REF" ]]; then
     git clone --depth 1 --branch "$INSTALL_REF" "$REPO_URL" "$INSTALL_DIR"
@@ -163,52 +169,49 @@ configure_mcp() {
   local file="$1"
   mkdir -p "$(dirname "$file")"
 
-  if [ ! -f "$file" ]; then
-    # Create new settings file
-    cat > "$file" <<MCPEOF
-{
-  "mcpServers": {
-    "mindkeeper": {
-      "command": "node",
-      "args": ["$SERVER_PATH"]
-    }
+  node - "$file" "$SERVER_PATH" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+const serverPath = process.argv[3];
+const serverConfig = { command: 'node', args: [serverPath] };
+let cfg = {};
+let migratedLegacy = false;
+let updatedExisting = false;
+
+if (fs.existsSync(file)) {
+  try {
+    cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    const backup = `${file}.bak-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    fs.copyFileSync(file, backup);
+    cfg = {};
+    console.log(`Backed up invalid MCP config: ${backup}`);
   }
 }
-MCPEOF
-    echo "Created $file with MindKeeper MCP config."
-    return
+
+if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) cfg = {};
+if (!cfg.mcpServers || typeof cfg.mcpServers !== 'object' || Array.isArray(cfg.mcpServers)) cfg.mcpServers = {};
+
+const legacy = cfg.mcpServers.mindkeeper;
+const legacyText = JSON.stringify(legacy || {});
+if (legacy && /mindkeeper|brainkeeper/i.test(legacyText)) {
+  delete cfg.mcpServers.mindkeeper;
+  migratedLegacy = true;
+}
+if (cfg.mcpServers.brainkeeper) updatedExisting = true;
+cfg.mcpServers.brainkeeper = serverConfig;
+
+fs.writeFileSync(file, JSON.stringify(cfg, null, 2) + '\n');
+if (migratedLegacy) console.log('Migrated legacy MCP key: mindkeeper -> brainkeeper');
+else if (updatedExisting) console.log('Updated BrainKeeper MCP config');
+else console.log('Added BrainKeeper MCP config');
+NODE
+
+  if [ $? -ne 0 ]; then
+    echo "Could not auto-configure $file — add manually:"
+    echo '  "brainkeeper": { "command": "node", "args": ["'"$SERVER_PATH"'"] }'
+    return 1
   fi
-
-  # Check if mindkeeper is already configured
-  if grep -q '"mindkeeper"' "$file" 2>/dev/null; then
-    echo "MCP config already exists in $file — skipped."
-    return
-  fi
-
-  # Insert into existing mcpServers block
-  if grep -q '"mcpServers"' "$file" 2>/dev/null; then
-    # Use node to merge JSON safely
-    node -e "
-      const fs = require('fs');
-      const f = '$file';
-      const cfg = JSON.parse(fs.readFileSync(f, 'utf8'));
-      cfg.mcpServers = cfg.mcpServers || {};
-      cfg.mcpServers.mindkeeper = { command: 'node', args: ['$SERVER_PATH'] };
-      fs.writeFileSync(f, JSON.stringify(cfg, null, 2) + '\n');
-    " 2>/dev/null && echo "Added MindKeeper to $file" && return
-  fi
-
-  # No mcpServers key — add it
-  node -e "
-    const fs = require('fs');
-    const f = '$file';
-    const cfg = JSON.parse(fs.readFileSync(f, 'utf8'));
-    cfg.mcpServers = { mindkeeper: { command: 'node', args: ['$SERVER_PATH'] } };
-    fs.writeFileSync(f, JSON.stringify(cfg, null, 2) + '\n');
-  " 2>/dev/null && echo "Added MindKeeper to $file" && return
-
-  echo "Could not auto-configure $file — add manually:"
-  echo '  "mindkeeper": { "command": "node", "args": ["'"$SERVER_PATH"'"] }'
 }
 
 configure_mcp "$SETTINGS_FILE"
@@ -219,7 +222,7 @@ echo ""
 echo "Installed:  $INSTALL_DIR"
 echo "MCP config: $SETTINGS_FILE"
 echo ""
-echo "Restart your AI client to load MindKeeper."
+echo "Restart your AI client to load BrainKeeper."
 echo "Tools: brain_bootstrap, brain_checkpoint, brain_recall, brain_learn,"
 echo "       brain_list, brain_check, brain_board, brain_threads"
 echo ""

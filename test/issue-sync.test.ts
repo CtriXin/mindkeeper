@@ -4,24 +4,24 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 describe('issue sync', () => {
-  const testDir = join(tmpdir(), `mindkeeper-issue-sync-test-${Date.now()}`);
+  const testDir = join(tmpdir(), `brainkeeper-issue-sync-test-${Date.now()}`);
   const issueRoot = join(testDir, 'issue-tracking');
   let originalHome: string | undefined;
   let originalIssueRoot: string | undefined;
 
   beforeEach(() => {
     originalHome = process.env.HOME;
-    originalIssueRoot = process.env.MINDKEEPER_ISSUE_TRACKING_ROOT;
+    originalIssueRoot = process.env.BRAINKEEPER_ISSUE_TRACKING_ROOT;
     process.env.HOME = testDir;
-    process.env.MINDKEEPER_ISSUE_TRACKING_ROOT = issueRoot;
+    process.env.BRAINKEEPER_ISSUE_TRACKING_ROOT = issueRoot;
     mkdirSync(join(testDir, '.sce', 'threads'), { recursive: true });
-    mkdirSync(join(issueRoot, 'issues', 'mindkeeper', 'test-issue'), { recursive: true });
-    writeFileSync(join(issueRoot, 'issues', 'mindkeeper', 'test-issue', 'issue.md'), '# Issue\n', 'utf-8');
+    mkdirSync(join(issueRoot, 'issues', 'brainkeeper', 'test-issue'), { recursive: true });
+    writeFileSync(join(issueRoot, 'issues', 'brainkeeper', 'test-issue', 'issue.md'), '# Issue\n', 'utf-8');
   });
 
   afterEach(() => {
     process.env.HOME = originalHome;
-    process.env.MINDKEEPER_ISSUE_TRACKING_ROOT = originalIssueRoot;
+    process.env.BRAINKEEPER_ISSUE_TRACKING_ROOT = originalIssueRoot;
     if (existsSync(testDir)) {
       rmSync(testDir, { recursive: true, force: true });
     }
@@ -43,7 +43,7 @@ describe('issue sync', () => {
     const linkResult = handleLinkIssue({
       repo: '/tmp/test-repo',
       task: 'debug auth flow',
-      project: 'mindkeeper',
+      project: 'brainkeeper',
       issue: 'test-issue',
     });
     expect(linkResult.isError).not.toBe(true);
@@ -54,7 +54,7 @@ describe('issue sync', () => {
     });
     expect(syncResult.isError).not.toBe(true);
 
-    const issueMd = readFileSync(join(issueRoot, 'issues', 'mindkeeper', 'test-issue', 'issue.md'), 'utf-8');
+    const issueMd = readFileSync(join(issueRoot, 'issues', 'brainkeeper', 'test-issue', 'issue.md'), 'utf-8');
     expect(issueMd).toContain('## Mindkeeper Thread');
     expect(issueMd).toContain('## Mindkeeper Fragments');
     expect(issueMd).toContain('root: `');

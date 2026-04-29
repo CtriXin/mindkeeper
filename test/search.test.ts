@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 describe('search', () => {
-  const testDir = join(tmpdir(), `mindkeeper-search-${Date.now()}`);
+  const testDir = join(tmpdir(), `brainkeeper-search-${Date.now()}`);
   let originalHome: string | undefined;
 
   beforeEach(() => {

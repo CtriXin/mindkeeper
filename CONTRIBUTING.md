@@ -1,8 +1,8 @@
-# Contributing to MindKeeper
+# Contributing to BrainKeeper
 
 ## 贡献方式
 
-MindKeeper 是开源项目，欢迎贡献！但为了保持项目质量和方向一致性，**所有贡献必须通过 Pull Request**。
+BrainKeeper 是开源项目，欢迎贡献！但为了保持项目质量和方向一致性，**所有贡献必须通过 Pull Request**。
 
 ## PR 流程
 
@@ -57,7 +57,7 @@ chore: 杂项
 
 推荐命名：
 
-- `rcp-mindkeeper-*`：MindKeeper 自身与跨项目规则
+- `rcp-brainkeeper-*`：BrainKeeper 自身与跨项目规则
 - `rcp-lark-*`：Feishu / `lark-cli`
 - `rcp-mms-env-*`：隔离环境 / `HOME` / 启动问题
 - `rcp-<project>-*`：项目专属经验
@@ -70,4 +70,4 @@ chore: 杂项
 
 ---
 
-*MindKeeper — 真正懂你的 AI*
+*BrainKeeper — 真正懂你的 AI*

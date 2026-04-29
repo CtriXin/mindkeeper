@@ -36,8 +36,8 @@ function renderSessionIndex(repo, threads) {
     const lines = [
         `# Session Index — ${repoName}`,
         '',
-        '> MindKeeper 自动维护，按时间倒序记录最近 thread。',
-        '> 恢复：`mk dst resume <thread-id>` 或 `/cr <thread-id>`',
+        '> BrainKeeper 自动维护，按时间倒序记录最近 thread。',
+        '> 恢复：`bk dst resume <thread-id>` 或 `/cr <thread-id>`',
         '',
         '| Time | CLI | Model | Folder | Task | Status | Thread |',
         '| --- | --- | --- | --- | --- | --- | --- |',

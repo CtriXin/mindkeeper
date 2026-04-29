@@ -1,4 +1,4 @@
-# MindKeeper — 项目规则
+# BrainKeeper — 项目规则
 
 ## 铁规
 

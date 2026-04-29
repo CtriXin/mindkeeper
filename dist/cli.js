@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 /**
- * MindKeeper CLI (mk)
+ * BrainKeeper CLI (bk)
  *
- * mk                          全景：recipe + board + thread
- * mk "query"                  统一搜索
- * mk rcp [id]                 列表 / 详情（alias: recipe）
- * mk rcp rm <id>              删除
- * mk bd [project]             列表 / 详情（alias: board）
- * mk bd done <project> <id>   标记完成
- * mk bd archive <project>     归档
- * mk dst [id]                 列表 / 详情（alias: thread）
- * mk dst rm <id>              删除
- * mk dst archive <id>         归档
- * mk c                        跨 CLI 续聊（continuity pack）
+ * bk                          全景：recipe + board + thread
+ * bk "query"                  统一搜索
+ * bk rcp [id]                 列表 / 详情（alias: recipe）
+ * bk rcp rm <id>              删除
+ * bk bd [project]             列表 / 详情（alias: board）
+ * bk bd done <project> <id>   标记完成
+ * bk bd archive <project>     归档
+ * bk dst [id]                 列表 / 详情（alias: thread）
+ * bk dst rm <id>              删除
+ * bk dst archive <id>         归档
+ * bk c                        跨 CLI 续聊（continuity pack）
  */
 import { loadIndex, saveIndex, loadRecipe, deleteRecipe } from './storage.js';
 import { searchRecipes, extractKeywords } from './router.js';
@@ -55,7 +55,7 @@ function truncate(s, w) {
 }
 function printHelp() {
     const inner = 74;
-    const title = ` ${c.bold('MindKeeper')} ${c.gray('project memory / cross-session continuity')} `;
+    const title = ` ${c.bold('BrainKeeper')} ${c.gray('project memory / cross-session continuity')} `;
     const topFill = '─'.repeat(Math.max(0, inner - displayLen(title)));
     const hero = `${c.green('recipes')} + ${c.yellow('boards')} + ${c.magenta('threads')} + ${c.cyan('continuity packs')}`;
     console.log(`
@@ -64,41 +64,41 @@ ${c.cyan('│')} ${padDisplay(hero, inner)} ${c.cyan('│')}
 ${c.cyan('╰')}${c.gray('─'.repeat(inner + 2))}${c.cyan('╯')}
 
 ${c.bold('Overview')}
-  mk                              全景（各显示 5 条）
-  mk all                          全景（显示全部）
-  mk "query"                      统一搜索 recipe / thread / fragment
+  bk                              全景（各显示 5 条）
+  bk all                          全景（显示全部）
+  bk "query"                      统一搜索 recipe / thread / fragment
 
 ${c.bold('Recipes')}
-  mk rcp [all]                    列出 recipe
-  mk rcp <id>                     查看详情
-  mk rcp rm <id>                  删除
+  bk rcp [all]                    列出 recipe
+  bk rcp <id>                     查看详情
+  bk rcp rm <id>                  删除
 
 ${c.bold('Boards')}
-  mk bd [all]                     列出看板
-  mk bd <project>                 查看看板
-  mk bd rm <project>              删除看板
-  mk bd done <project> <id>       标记完成
-  mk bd archive <project>         归档
+  bk bd [all]                     列出看板
+  bk bd <project>                 查看看板
+  bk bd rm <project>              删除看板
+  bk bd done <project> <id>       标记完成
+  bk bd archive <project>         归档
 
 ${c.bold('Threads / Distill')}
-  mk dst [all]                    列出 thread（按 repo 聚合）
-  mk dst -l                       详细表格，含 time / cli / model / repo / folder
-  mk dst <id>                     查看详情
-  mk dst rm <id>                  删除
-  mk dst archive <id>             归档
-  mk dst resume <id> [--no-cd]    恢复 thread 上下文
-  mk dst sync [repo]              重建当前项目 ${SESSION_INDEX_REL_PATH}
+  bk dst [all]                    列出 thread（按 repo 聚合）
+  bk dst -l                       详细表格，含 time / cli / model / repo / folder
+  bk dst <id>                     查看详情
+  bk dst rm <id>                  删除
+  bk dst archive <id>             归档
+  bk dst resume <id> [--no-cd]    恢复 thread 上下文
+  bk dst sync [repo]              重建当前项目 ${SESSION_INDEX_REL_PATH}
 
 ${c.bold('Continuity')}
-  mk c                            交互选择 session，生成 pack 并复制
-  mk c 2                          选择列表第 2 条
-  mk c codex:<hash>               指定 Codex session
-  mk c claude:<session-id>        指定 Claude session
-  mk c --list                     列出当前目录 sessions
-  mk c --all --list               列出所有项目 sessions
-  mk c --output clipboard|file     剪贴板激进压缩 / 文件高保真
-  mk c --preset compact|standard|full
-  mk c --file --clipboard --print --no-copy --no-git --refresh --limit 20
+  bk c                            交互选择 session，生成 pack 并复制
+  bk c 2                          选择列表第 2 条
+  bk c codex:<hash>               指定 Codex session
+  bk c claude:<session-id>        指定 Claude session
+  bk c --list                     列出当前目录 sessions
+  bk c --all --list               列出所有项目 sessions
+  bk c --output clipboard|file     剪贴板激进压缩 / 文件高保真
+  bk c --preset compact|standard|full
+  bk c --file --clipboard --print --no-copy --no-git --refresh --limit 20
 `);
 }
 // ── 通用格式化 ──
@@ -221,7 +221,7 @@ function showAll(showAllItems = false) {
             console.log(`  ${icon} ${c.cyan(r.id)}: ${truncate(r.summary, 60)}${fw}`);
         }
         if (more > 0)
-            console.log(c.gray(`  … +${more} 条 (mk recipe 查看全部)`));
+            console.log(c.gray(`  … +${more} 条 (bk recipe 查看全部)`));
     }
     // Boards（只显示有待办的看板）
     const summaries = listBoardSummaries().filter(s => s.activeCount > 0);
@@ -233,7 +233,7 @@ function showAll(showAllItems = false) {
             console.log(`  ${c.cyan('bd-' + s.slug)} ${c.yellow(`${s.activeCount} 待办`)}`);
         }
         if (more > 0)
-            console.log(c.gray(`  … +${more} 个 (mk board 查看全部)`));
+            console.log(c.gray(`  … +${more} 个 (bk board 查看全部)`));
     }
     // Threads — 按 repo 聚合
     const threads = listRecentThreads(undefined, showAllItems ? 100 : 50);
@@ -274,13 +274,13 @@ function showAll(showAllItems = false) {
         console.log('暂无数据');
     }
     console.log('');
-    console.log(c.gray('mk <id> 查看  mk all 全部  mk rcp/bd/dst 分类  mk help 帮助'));
+    console.log(c.gray('bk <id> 查看  bk all 全部  bk rcp/bd/dst 分类  bk help 帮助'));
 }
 // ── recipe 子命令 ──
 function cmdRecipe() {
     const sub = args[1];
     const index = loadIndex();
-    // mk rcp — 列表（全部）
+    // bk rcp — 列表（全部）
     if (!sub || sub === 'all') {
         if (index.recipes.length === 0) {
             console.log('Recipe 库为空');
@@ -294,11 +294,11 @@ function cmdRecipe() {
         }
         return;
     }
-    // mk recipe rm <id>
+    // bk recipe rm <id>
     if (sub === 'rm') {
         const id = args[2];
         if (!id) {
-            console.log('用法: mk recipe rm <id>');
+            console.log('用法: bk recipe rm <id>');
             return;
         }
         if (!deleteRecipe(id)) {
@@ -310,7 +310,7 @@ function cmdRecipe() {
         console.log(`已删除: ${id}`);
         return;
     }
-    // mk recipe <id> — 详情
+    // bk recipe <id> — 详情
     const recipe = loadRecipe(sub);
     if (!recipe) {
         console.log(`不存在: ${sub}`);
@@ -351,7 +351,7 @@ function cmdRecipe() {
 // ── board 子命令 ──
 function cmdBoard() {
     const sub = args[1];
-    // mk bd — 列表（全部）
+    // bk bd — 列表（全部）
     if (!sub || sub === 'all') {
         const all = listBoardSummaries().filter(s => s.activeCount > 0);
         if (all.length === 0) {
@@ -363,11 +363,11 @@ function cmdBoard() {
         }
         return;
     }
-    // mk board rm <project>
+    // bk board rm <project>
     if (sub === 'rm') {
         const proj = args[2];
         if (!proj) {
-            console.log('用法: mk board rm <project>');
+            console.log('用法: bk board rm <project>');
             return;
         }
         const slug = proj.startsWith('bd-') ? proj.slice(3) : proj;
@@ -380,11 +380,11 @@ function cmdBoard() {
         console.log(`已删除看板: ${slug}`);
         return;
     }
-    // mk board archive <project>
+    // bk board archive <project>
     if (sub === 'archive') {
         const proj = args[2];
         if (!proj) {
-            console.log('用法: mk board archive <project>');
+            console.log('用法: bk board archive <project>');
             return;
         }
         const slug = proj.startsWith('bd-') ? proj.slice(3) : proj;
@@ -392,12 +392,12 @@ function cmdBoard() {
         console.log(count > 0 ? `已归档 ${count} 条` : '没有需要归档的条目');
         return;
     }
-    // mk board done <project> <id>
+    // bk board done <project> <id>
     if (sub === 'done') {
         const proj = args[2];
         const itemId = args[3];
         if (!proj || !itemId) {
-            console.log('用法: mk board done <project> <id>');
+            console.log('用法: bk board done <project> <id>');
             return;
         }
         const slug = proj.startsWith('bd-') ? proj.slice(3) : proj;
@@ -406,7 +406,7 @@ function cmdBoard() {
         return;
     }
     const project = sub.startsWith('bd-') ? sub.slice(3) : sub;
-    // mk board <project> — 详情
+    // bk board <project> — 详情
     const board = loadBoard(project);
     if (!board) {
         console.log(`看板不存在: ${project}`);
@@ -448,7 +448,7 @@ function cmdThread() {
         // Detailed list all in one table
         console.log(c.bold(`\n🧵 Thread (${all.length})\n`));
         printThreadGroups([...local, ...other], Infinity, false, true);
-        console.log(c.gray('\n\nmk dst resume <id> [--no-cd]  恢复上下文'));
+        console.log(c.gray('\n\nbk dst resume <id> [--no-cd]  恢复上下文'));
         return;
     }
     const showAllItems = sub === 'all';
@@ -462,12 +462,12 @@ function cmdThread() {
         console.log(`已同步 ${result.path} (${result.count} 条)`);
         return;
     }
-    // mk dst resume <id> [--no-cd]
+    // bk dst resume <id> [--no-cd]
     if (sub === 'resume') {
         const id = args[2];
         const noCd = args.includes('--no-cd');
         if (!id) {
-            console.log('用法: mk thread resume <id> [--no-cd]');
+            console.log('用法: bk thread resume <id> [--no-cd]');
             return;
         }
         const thread = getThreadById('', id);
@@ -494,7 +494,7 @@ function cmdThread() {
         }
         return;
     }
-    // mk dst — 按 repo 聚合列表（全部）
+    // bk dst — 按 repo 聚合列表（全部）
     if (!sub || showAllItems) {
         const all = listRecentThreads(undefined, 100);
         if (all.length === 0) {
@@ -516,11 +516,11 @@ function cmdThread() {
         }
         return;
     }
-    // mk thread rm <id>
+    // bk thread rm <id>
     if (sub === 'rm') {
         const id = args[2];
         if (!id) {
-            console.log('用法: mk thread rm <id>');
+            console.log('用法: bk thread rm <id>');
             return;
         }
         try {
@@ -531,11 +531,11 @@ function cmdThread() {
         }
         return;
     }
-    // mk thread archive <id>
+    // bk thread archive <id>
     if (sub === 'archive') {
         const id = args[2];
         if (!id) {
-            console.log('用法: mk thread archive <id>');
+            console.log('用法: bk thread archive <id>');
             return;
         }
         try {
@@ -546,7 +546,7 @@ function cmdThread() {
         }
         return;
     }
-    // mk thread <id> — 详情（复用 dst show）
+    // bk thread <id> — 详情（复用 dst show）
     try {
         const out = execSync(`dst show ${sub}`, { encoding: 'utf-8' });
         console.log(out);

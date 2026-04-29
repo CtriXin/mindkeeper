@@ -1,4 +1,4 @@
-# RTK + MindKeeper Token Monitor 完整配置指南
+# RTK + BrainKeeper Token Monitor 完整配置指南
 
 ## 快速开始（3 分钟）
 
@@ -16,11 +16,11 @@ rtk init -g --auto-patch
 
 ---
 
-### 步骤 2: 安装 MindKeeper Token Monitor（对话轮次监控）
+### 步骤 2: 安装 BrainKeeper Token Monitor（对话轮次监控）
 
 ```bash
-# 构建 MindKeeper
-cd ~/auto-skills/CtriXin-repo/mindkeeper
+# 构建 BrainKeeper
+cd ~/auto-skills/CtriXin-repo/brainkeeper
 npm run build
 
 # 复制 hook 到全局
@@ -166,7 +166,7 @@ rtk rewrite "git status"  # 应输出 rtk git status
 bash ~/.claude/hooks/token-monitor-hook.sh  # 应无输出（首次）
 ```
 
-### MindKeeper MCP 不响应
+### BrainKeeper MCP 不响应
 
 ```bash
 # 重启 Claude Code

@@ -1,5 +1,5 @@
 #!/bin/bash
-# MindKeeper + MMS Token Monitor Hook
+# BrainKeeper + MMS Token Monitor Hook
 # 在 UserPromptSubmit 时检查 token 使用状态，超过阈值自动建议压缩
 #
 # 安装方式：

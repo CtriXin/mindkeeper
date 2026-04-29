@@ -45,7 +45,7 @@ function resolveParent(input) {
         const exact = getThreadById(input.repo, input.parent);
         if (!exact) {
             // debug: parent 指定了但找不到，降级为无 parent
-            console.error(`[mindkeeper] resolveParent: parent "${input.parent}" not found, skipping`);
+            console.error(`[brainkeeper] resolveParent: parent "${input.parent}" not found, skipping`);
         }
         return exact?.id;
     }

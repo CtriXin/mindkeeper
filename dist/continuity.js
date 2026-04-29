@@ -9,8 +9,9 @@ const CACHE_VERSION = 1;
 const RECENT_HOT_DAYS = 3;
 const HEAD_SCAN_BYTES = 4 * 1024 * 1024;
 const TAIL_SCAN_BYTES = 16 * 1024 * 1024;
-const CONTINUITY_PACK_HEADER = '# MindKeeper Continuity Pack';
-const CONTINUITY_PACK_OMITTED = '[previous MindKeeper Continuity Pack omitted]';
+const CONTINUITY_PACK_HEADER = '# BrainKeeper Continuity Pack';
+const LEGACY_CONTINUITY_PACK_HEADER = '# MindKeeper Continuity Pack';
+const CONTINUITY_PACK_OMITTED = '[previous BrainKeeper Continuity Pack omitted]';
 const CONTINUITY_PACK_END_MARKER = '- 不要重复已经完成的探索；从最近未解决点继续。';
 const CLIPBOARD_PRESET_LIMITS = {
     compact: { summaries: 4, summaryChars: 420, messages: 4, tools: 6, messageChars: 700, resultChars: 0, includeToolResults: false },
@@ -244,7 +245,10 @@ function cleanText(text) {
         .trim();
 }
 function stripEmbeddedContinuityPack(text) {
-    const start = text.indexOf(CONTINUITY_PACK_HEADER);
+    const start = [CONTINUITY_PACK_HEADER, LEGACY_CONTINUITY_PACK_HEADER]
+        .map(header => text.indexOf(header))
+        .filter(index => index >= 0)
+        .sort((a, b) => a - b)[0] ?? -1;
     if (start === -1)
         return text;
     const before = text.slice(0, start).trimEnd();
@@ -1157,7 +1161,7 @@ function formatAge(ms) {
 function renderContinuityMarkdown(session, context, preset, output, includeGit) {
     const limits = limitsFor(preset, output);
     const lines = [
-        '# MindKeeper Continuity Pack',
+        '# BrainKeeper Continuity Pack',
         '',
         '你正在接手一个已有 coding session。先读取这份上下文，然后继续推进，不要从零开始。',
         '',
@@ -1377,7 +1381,7 @@ async function choosePreset(existing, outputMode) {
 function printSessionList(sessions, opts, searchAll) {
     const scope = searchAll ? 'all projects' : `current dir: ${process.cwd()}`;
     const output = resolveOutput(opts);
-    console.log(box('MindKeeper Continuity', [
+    console.log(box('BrainKeeper Continuity', [
         `${paint('cyan', 'continuity')} sits between native resume and distill.`,
         `scope ${paint('bold', scope)}`,
         `output ${outputText(output)}  preset ${presetText(opts.preset)}  limit ${opts.limit ?? DEFAULT_LIMIT}`,
@@ -1398,21 +1402,21 @@ function printSessionList(sessions, opts, searchAll) {
 function printActionHint() {
     console.log('');
     console.log(paint('gray', 'Examples'));
-    console.log(`  ${paint('bold', 'mk c 2')} ${paint('gray', '继续第 2 条')}`);
-    console.log(`  ${paint('bold', 'mk c 2 --output file --preset full')} ${paint('gray', '写大文件，高保真')}`);
-    console.log(`  ${paint('bold', 'mk c --all --list')} ${paint('gray', '查看所有项目')}`);
+    console.log(`  ${paint('bold', 'bk c 2')} ${paint('gray', '继续第 2 条')}`);
+    console.log(`  ${paint('bold', 'bk c 2 --output file --preset full')} ${paint('gray', '写大文件，高保真')}`);
+    console.log(`  ${paint('bold', 'bk c --all --list')} ${paint('gray', '查看所有项目')}`);
 }
 function printContinuityHelp() {
-    console.log(box('MindKeeper Continuity', [
+    console.log(box('BrainKeeper Continuity', [
         'Cross-CLI resume pack: native resume < continuity < distill.',
         'Reads local Claude/Codex/MMS transcripts; writes .ai/continuity/*.md.',
     ]));
     console.log(`
 ${paint('bold', 'Usage')}
-  mk c                              interactive picker, copy pack
-  mk c 2                            pick row 2 from current-dir sessions
-  mk c codex:<hash>                 resolve Codex session by hash/prefix
-  mk c claude:<session-id>          resolve Claude session by id/prefix
+  bk c                              interactive picker, copy pack
+  bk c 2                            pick row 2 from current-dir sessions
+  bk c codex:<hash>                 resolve Codex session by hash/prefix
+  bk c claude:<session-id>          resolve Claude session by id/prefix
 
 ${paint('bold', 'Scope')}
   -l, --list                        list current-dir sessions

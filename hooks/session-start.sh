@@ -1,9 +1,13 @@
 #!/bin/bash
-# Claude Code SessionStart hook — auto-inject mindkeeper bootstrap context
+# Claude Code SessionStart hook — auto-inject brainkeeper bootstrap context
 # Prints a lightweight bootstrap summary to the session startup message.
 set -euo pipefail
 
-resolve_mindkeeper_home() {
+resolve_brainkeeper_home() {
+  if [ -n "${BRAINKEEPER_HOME:-}" ]; then
+    echo "$BRAINKEEPER_HOME"
+    return
+  fi
   if [ -n "${MINDKEEPER_HOME:-}" ]; then
     echo "$MINDKEEPER_HOME"
     return
@@ -15,14 +19,14 @@ resolve_mindkeeper_home() {
   fi
 }
 
-SCE_HOME="$(resolve_mindkeeper_home)"
+SCE_HOME="$(resolve_brainkeeper_home)"
 THREADS_DIR="$SCE_HOME/threads"
 
 # Detect current repo
 REPO="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [ -z "$REPO" ] && exit 0
 
-BRANCH="$(git branch --show-current 2>/dev || git rev-parse --short HEAD 2>/dev/null || echo 'detached')"
+BRANCH="$(git branch --show-current 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo 'detached')"
 
 # Find most recent thread for this repo
 LATEST_THREAD=""
@@ -42,12 +46,12 @@ fi
 # Build startup hint
 HINT=""
 if [ -n "$LATEST_THREAD" ]; then
-  HINT="[mindkeeper] 上次任务: $LATEST_TASK (thread: $LATEST_THREAD)"
-  HINT="$HINT\n[mindkeeper] 恢复: /cr $LATEST_THREAD"
+  HINT="[brainkeeper] 上次任务: $LATEST_TASK (thread: $LATEST_THREAD)"
+  HINT="$HINT\n[brainkeeper] 恢复: /cr $LATEST_THREAD"
 fi
 
 if [ -n "$BRANCH" ]; then
-  HINT="${HINT:+$HINT\n}[mindkeeper] 当前分支: $BRANCH"
+  HINT="${HINT:+$HINT\n}[brainkeeper] 当前分支: $BRANCH"
 fi
 
 # Print to stderr so it shows in startup banner, not as user message

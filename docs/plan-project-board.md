@@ -1,8 +1,8 @@
-# MindKeeper Project Board 功能规划
+# BrainKeeper Project Board 功能规划
 
 ## 目标
 
-给 MindKeeper 添加项目级四象限看板 + 备忘 + 提醒能力，替代部分 DST thread 历史展示，让 `brain_bootstrap` 默认展示项目级状态而非对话级。
+给 BrainKeeper 添加项目级四象限看板 + 备忘 + 提醒能力，替代部分 DST thread 历史展示，让 `brain_bootstrap` 默认展示项目级状态而非对话级。
 
 ## 核心变更
 
@@ -15,8 +15,8 @@
 **board.yaml schema**：
 
 ```yaml
-project: mindkeeper          # 项目名
-repo: /path/to/mindkeeper  # 可选，关联 repo
+project: brainkeeper          # 项目名
+repo: /path/to/brainkeeper  # 可选，关联 repo
 last_updated: 2026-03-27
 stale_warning_days: 14
 
@@ -58,7 +58,7 @@ memos:
 
 ```
 项目看板:
-  mindkeeper   — 3项待办, 1项快到期(3天)
+  brainkeeper   — 3项待办, 1项快到期(3天)
   mms          — ⚠️ 18天无更新
   hive-discuss — ✅ 无待办
 ```
@@ -80,11 +80,11 @@ memos:
 
 ```
 项目看板:
-  mindkeeper   — 3项待办, 1项快到期(3天)
+  brainkeeper   — 3项待办, 1项快到期(3天)
   mms          — ⚠️ 18天无更新
 
 最近对话:
-  mindkeeper/  dst-20260327-xxx  dst-20260326-xxx
+  brainkeeper/  dst-20260327-xxx  dst-20260326-xxx
   mms/         dst-20260320-xxx
 ```
 
