@@ -24,10 +24,14 @@ export interface ContinuityOptions {
     limit?: number;
     git?: boolean;
     all?: boolean;
+    refresh?: boolean;
+    cache?: boolean;
 }
 export declare function discoverContinuitySessions(opts?: {
     cwd?: string;
     limit?: number;
     all?: boolean;
+    refresh?: boolean;
+    cache?: boolean;
 }): ContinuitySession[];
 export declare function cmdContinuity(argv: string[]): Promise<void>;

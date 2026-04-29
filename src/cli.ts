@@ -109,7 +109,7 @@ ${c.bold('Continuity')}
   mk c --all --list               列出所有项目 sessions
   mk c --output clipboard|file     剪贴板激进压缩 / 文件高保真
   mk c --preset compact|standard|full
-  mk c --file --clipboard --print --no-copy --no-git --limit 20
+  mk c --file --clipboard --print --no-copy --no-git --refresh --limit 20
 `);
 }
 

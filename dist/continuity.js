@@ -1,10 +1,12 @@
-import { existsSync, mkdirSync, openSync, readdirSync, statSync, closeSync, readSync, writeFileSync, lstatSync, } from 'fs';
-import { basename, join, resolve } from 'path';
+import { existsSync, mkdirSync, openSync, readFileSync, readdirSync, statSync, closeSync, readSync, writeFileSync, lstatSync, } from 'fs';
+import { basename, dirname, join, resolve } from 'path';
 import { execSync, spawnSync } from 'child_process';
 import { emitKeypressEvents } from 'readline';
 import { stdin as input, stdout as output } from 'process';
 import { getRealHome } from './env.js';
 const DEFAULT_LIMIT = 40;
+const CACHE_VERSION = 1;
+const RECENT_HOT_DAYS = 3;
 const HEAD_SCAN_BYTES = 4 * 1024 * 1024;
 const TAIL_SCAN_BYTES = 16 * 1024 * 1024;
 const CONTINUITY_PACK_HEADER = '# MindKeeper Continuity Pack';
@@ -66,6 +68,53 @@ function originForPath(path, envHome) {
     if (envHome && path.startsWith(envHome + '/'))
         return 'env-home';
     return 'real-home';
+}
+function cachePath(realHome) {
+    return join(realHome, '.sce', 'cache', 'continuity-sessions.json');
+}
+function isContinuitySession(value) {
+    const s = record(value);
+    if (!s)
+        return false;
+    return typeof s.id === 'string'
+        && (s.source === 'codex' || s.source === 'claude')
+        && typeof s.rawPath === 'string'
+        && typeof s.updatedAtMs === 'number'
+        && typeof s.createdAtMs === 'number'
+        && typeof s.bytes === 'number';
+}
+function loadDiscoveryCache(realHome) {
+    try {
+        const raw = JSON.parse(readFileSync(cachePath(realHome), 'utf-8'));
+        const data = record(raw);
+        if (!data || data.version !== CACHE_VERSION)
+            return undefined;
+        const roots = record(data.roots);
+        const sessions = Array.isArray(data.sessions) ? data.sessions.filter(isContinuitySession) : [];
+        return {
+            version: CACHE_VERSION,
+            generatedAtMs: typeof data.generatedAtMs === 'number' ? data.generatedAtMs : 0,
+            realHome: typeof data.realHome === 'string' ? data.realHome : realHome,
+            roots: {
+                codex: Array.isArray(roots?.codex) ? roots.codex.filter((v) => typeof v === 'string') : [],
+                claude: Array.isArray(roots?.claude) ? roots.claude.filter((v) => typeof v === 'string') : [],
+            },
+            sessions,
+        };
+    }
+    catch {
+        return undefined;
+    }
+}
+function writeDiscoveryCache(realHome, cache) {
+    try {
+        const path = cachePath(realHome);
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, JSON.stringify(cache, null, 2), 'utf-8');
+    }
+    catch {
+        // Cache is best-effort; discovery still works without it.
+    }
 }
 function walkFiles(root, match, maxDepth = 8) {
     if (!existsSync(root))
@@ -461,47 +510,173 @@ function claudeRoots(realHome, envHome) {
         ...walkDirs(join(realHome, '.config/mms/projects'), p => p.endsWith('/claude/raw/transcripts'), 5),
     ].filter(Boolean));
 }
-function findCodexSessionFiles(realHome, envHome) {
+function baseCodexRoots(realHome, envHome) {
+    return uniq([
+        join(realHome, '.codex'),
+        envHome ? join(envHome, '.codex') : '',
+        join(realHome, '.config/mms/codex-gateway/.codex'),
+    ].filter(Boolean));
+}
+function baseClaudeRoots(realHome, envHome) {
+    return uniq([
+        join(realHome, '.claude/projects'),
+        envHome ? join(envHome, '.claude/projects') : '',
+        join(realHome, '.config/mms/claude-gateway/.claude/projects'),
+    ].filter(Boolean));
+}
+function findCodexSessionFilesInRoots(roots) {
     const files = [];
-    for (const root of codexRoots(realHome, envHome)) {
+    for (const root of roots) {
         files.push(...walkFiles(join(root, 'sessions'), p => basename(p).startsWith('rollout-') && p.endsWith('.jsonl'), 8));
         files.push(...walkFiles(join(root, 'archived_sessions'), p => basename(p).startsWith('rollout-') && p.endsWith('.jsonl'), 8));
     }
     return uniq(files);
 }
-function findClaudeSessionFiles(realHome, envHome) {
+function findClaudeSessionFilesInRoots(roots) {
     const files = [];
-    for (const root of claudeRoots(realHome, envHome)) {
+    for (const root of roots) {
         files.push(...walkFiles(root, p => p.endsWith('.jsonl') && !basename(p).includes('debug') && !p.includes('/subagents/'), 8));
     }
     return uniq(files);
 }
-export function discoverContinuitySessions(opts = {}) {
-    const realHome = getRealHome();
-    const envHome = process.env.HOME || '';
-    const sessions = [];
-    for (const file of findCodexSessionFiles(realHome, envHome)) {
-        const session = parseCodexSession(file, envHome);
-        if (session)
-            sessions.push(session);
+function codexRootFromSessionFile(path) {
+    const markers = ['/sessions/', '/archived_sessions/'];
+    for (const marker of markers) {
+        const idx = path.indexOf(marker);
+        if (idx !== -1)
+            return path.slice(0, idx);
     }
-    for (const file of findClaudeSessionFiles(realHome, envHome)) {
-        const session = parseClaudeSession(file, envHome);
-        if (session)
-            sessions.push(session);
+    return undefined;
+}
+function recentDateDirs(days = RECENT_HOT_DAYS) {
+    const dirs = [];
+    const seen = new Set();
+    for (let i = 0; i < days; i++) {
+        const d = new Date(Date.now() - i * 86400000);
+        const parts = [
+            String(d.getUTCFullYear()),
+            String(d.getUTCMonth() + 1).padStart(2, '0'),
+            String(d.getUTCDate()).padStart(2, '0'),
+        ];
+        const key = parts.join('/');
+        if (!seen.has(key)) {
+            seen.add(key);
+            dirs.push(parts);
+        }
     }
+    return dirs;
+}
+function findHotCodexSessionFiles(roots) {
+    const files = [];
+    for (const root of roots) {
+        for (const bucket of ['sessions', 'archived_sessions']) {
+            for (const parts of recentDateDirs()) {
+                const dir = join(root, bucket, ...parts);
+                files.push(...walkFiles(dir, p => basename(p).startsWith('rollout-') && p.endsWith('.jsonl'), 1));
+            }
+        }
+    }
+    return uniq(files);
+}
+function findHotClaudeSessionFiles(roots, cwd) {
+    if (!cwd)
+        return [];
+    const slug = claudeProjectSlug(cwd);
+    const files = [];
+    for (const root of roots) {
+        const projectDir = join(root, slug);
+        files.push(...walkFiles(projectDir, p => p.endsWith('.jsonl') && !basename(p).includes('debug') && !p.includes('/subagents/'), 2));
+    }
+    return uniq(files);
+}
+function dedupeSessions(inputSessions) {
     const seen = new Map();
-    for (const session of sessions) {
+    for (const session of inputSessions) {
         const key = `${session.source}:${session.id}`;
         const existing = seen.get(key);
         if (!existing || existing.updatedAtMs < session.updatedAtMs)
             seen.set(key, session);
     }
+    return [...seen.values()];
+}
+function mergeSessions(base, updates) {
+    const seen = new Map();
+    for (const session of base)
+        seen.set(`${session.source}:${session.id}`, session);
+    let changed = false;
+    for (const session of updates) {
+        const key = `${session.source}:${session.id}`;
+        const existing = seen.get(key);
+        if (!existing) {
+            seen.set(key, session);
+            changed = true;
+            continue;
+        }
+        const shouldReplace = existing.updatedAtMs < session.updatedAtMs;
+        if (shouldReplace)
+            seen.set(key, session);
+        if (shouldReplace || existing.bytes !== session.bytes || existing.rawPath !== session.rawPath)
+            changed = true;
+    }
+    return { sessions: [...seen.values()], changed };
+}
+function parseSessionFiles(codexFiles, claudeFiles, envHome) {
+    const sessions = [];
+    for (const file of codexFiles) {
+        const session = parseCodexSession(file, envHome);
+        if (session)
+            sessions.push(session);
+    }
+    for (const file of claudeFiles) {
+        const session = parseClaudeSession(file, envHome);
+        if (session)
+            sessions.push(session);
+    }
+    return dedupeSessions(sessions);
+}
+function scanContinuityCache(realHome, envHome) {
+    const roots = {
+        codex: codexRoots(realHome, envHome),
+        claude: claudeRoots(realHome, envHome),
+    };
+    return {
+        version: CACHE_VERSION,
+        generatedAtMs: Date.now(),
+        realHome,
+        roots,
+        sessions: parseSessionFiles(findCodexSessionFilesInRoots(roots.codex), findClaudeSessionFilesInRoots(roots.claude), envHome),
+    };
+}
+function hotRefreshCache(cache, realHome, envHome, cwd) {
+    const roots = {
+        codex: uniq([
+            ...baseCodexRoots(realHome, envHome),
+            ...cache.roots.codex,
+            ...cache.sessions.flatMap(session => session.source === 'codex' ? [codexRootFromSessionFile(session.rawPath) || ''] : []),
+        ].filter(Boolean)),
+        claude: uniq([
+            ...baseClaudeRoots(realHome, envHome),
+            ...cache.roots.claude,
+        ].filter(Boolean)),
+    };
+    const hot = parseSessionFiles(findHotCodexSessionFiles(roots.codex), findHotClaudeSessionFiles(roots.claude, cwd), envHome);
+    if (hot.length === 0)
+        return { ...cache, roots };
+    const merged = mergeSessions(cache.sessions, hot);
+    return {
+        version: CACHE_VERSION,
+        generatedAtMs: merged.changed ? Date.now() : cache.generatedAtMs,
+        realHome,
+        roots,
+        sessions: merged.sessions,
+    };
+}
+function scopeContinuitySessions(sessions, opts) {
     const cwd = opts.cwd ? realpathish(opts.cwd) : '';
     const currentProject = cwd ? projectScope(cwd) : '';
     const scoped = opts.all || !cwd
-        ? [...seen.values()]
-        : [...seen.values()].filter(session => session.cwd && matchesProject(session.cwd, cwd, currentProject));
+        ? [...sessions]
+        : [...sessions].filter(session => session.cwd && matchesProject(session.cwd, cwd, currentProject));
     const sorted = scoped.sort((a, b) => {
         const aLocal = cwd && a.cwd ? Number(matchesProject(a.cwd, cwd, currentProject)) : 0;
         const bLocal = cwd && b.cwd ? Number(matchesProject(b.cwd, cwd, currentProject)) : 0;
@@ -510,6 +685,27 @@ export function discoverContinuitySessions(opts = {}) {
         return b.updatedAtMs - a.updatedAtMs;
     });
     return sorted.slice(0, opts.limit ?? DEFAULT_LIMIT);
+}
+export function discoverContinuitySessions(opts = {}) {
+    const realHome = getRealHome();
+    const envHome = process.env.HOME || '';
+    const useCache = opts.cache !== false;
+    if (useCache && !opts.refresh) {
+        const cached = loadDiscoveryCache(realHome);
+        if (cached) {
+            const refreshed = hotRefreshCache(cached, realHome, envHome, opts.cwd || process.cwd());
+            if (refreshed.generatedAtMs !== cached.generatedAtMs || refreshed.roots.codex.length !== cached.roots.codex.length || refreshed.roots.claude.length !== cached.roots.claude.length) {
+                writeDiscoveryCache(realHome, refreshed);
+            }
+            const scoped = scopeContinuitySessions(refreshed.sessions, opts);
+            if (scoped.length > 0 || opts.all)
+                return scoped;
+        }
+    }
+    const scanned = scanContinuityCache(realHome, envHome);
+    if (useCache)
+        writeDiscoveryCache(realHome, scanned);
+    return scopeContinuitySessions(scanned.sessions, opts);
 }
 function projectScope(cwd) {
     return realpathish(cwd).replace(/\/+$/u, '');
@@ -1086,6 +1282,10 @@ function parseArgs(argv) {
             opts.list = true;
         else if (arg === '--all')
             opts.all = true;
+        else if (arg === '--refresh')
+            opts.refresh = true;
+        else if (arg === '--no-cache')
+            opts.cache = false;
         else if (arg === '--to') {
             const value = argv[++i];
             warn(`已忽略 --to${value ? ` ${value}` : ''}：目前只支持 --output clipboard|file。`);
@@ -1218,6 +1418,8 @@ ${paint('bold', 'Scope')}
   -l, --list                        list current-dir sessions
   --all --list                      list all discoverable projects
   --limit <n>                       list/search limit, default ${DEFAULT_LIMIT}
+  --refresh                         rebuild session cache before listing
+  --no-cache                        bypass cache for this run
 
 ${paint('bold', 'Output')}
   --output clipboard|file           clipboard=paste-sized, file=larger handoff file
@@ -1259,7 +1461,14 @@ export async function cmdContinuity(argv) {
             console.log(paint('yellow', warning));
     }
     const searchAll = opts.all || Boolean(opts.ref);
-    const sessions = discoverContinuitySessions({ cwd: process.cwd(), limit: opts.limit ?? DEFAULT_LIMIT, all: searchAll });
+    const discoveryLimit = opts.ref ? Number.MAX_SAFE_INTEGER : opts.limit ?? DEFAULT_LIMIT;
+    let sessions = discoverContinuitySessions({
+        cwd: process.cwd(),
+        limit: discoveryLimit,
+        all: searchAll,
+        refresh: opts.refresh,
+        cache: opts.cache,
+    });
     if (opts.list) {
         if (sessions.length === 0) {
             console.log('没有发现可续聊 session');
@@ -1273,7 +1482,17 @@ export async function cmdContinuity(argv) {
         console.log('没有发现可续聊 session');
         return;
     }
-    const session = await chooseSession(sessions, opts.ref, opts, searchAll);
+    let session = await chooseSession(sessions, opts.ref, opts, searchAll);
+    if (!session && opts.ref && opts.cache !== false && !opts.refresh) {
+        sessions = discoverContinuitySessions({
+            cwd: process.cwd(),
+            limit: Number.MAX_SAFE_INTEGER,
+            all: true,
+            refresh: true,
+            cache: true,
+        });
+        session = await chooseSession(sessions, opts.ref, opts, true);
+    }
     if (!session) {
         console.log(opts.ref ? `找不到 session: ${opts.ref}` : '未选择 session');
         return;
