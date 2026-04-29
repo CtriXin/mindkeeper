@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, openSync, readdirSync, statSync, closeSync, readSync, writeFileSync, lstatSync, } from 'fs';
 import { basename, join, resolve } from 'path';
 import { execFileSync, execSync, spawnSync } from 'child_process';
-import { createInterface } from 'readline/promises';
+import { emitKeypressEvents } from 'readline';
 import { stdin as input, stdout as output } from 'process';
 import { getRealHome } from './env.js';
 const DEFAULT_LIMIT = 40;
@@ -761,7 +761,22 @@ function stripAnsi(text) {
 }
 function charWidth(char) {
     const code = char.codePointAt(0) || 0;
-    return code > 0x7f ? 2 : 1;
+    if (code >= 0x2500 && code <= 0x257f)
+        return 1; // box drawing
+    if (code >= 0x2190 && code <= 0x21ff)
+        return 1; // arrows
+    if (code >= 0x1100 && (code <= 0x115f ||
+        code === 0x2329 ||
+        code === 0x232a ||
+        (code >= 0x2e80 && code <= 0xa4cf) ||
+        (code >= 0xac00 && code <= 0xd7a3) ||
+        (code >= 0xf900 && code <= 0xfaff) ||
+        (code >= 0xfe10 && code <= 0xfe19) ||
+        (code >= 0xfe30 && code <= 0xfe6f) ||
+        (code >= 0xff00 && code <= 0xff60) ||
+        (code >= 0xffe0 && code <= 0xffe6)))
+        return 2;
+    return 1;
 }
 function visibleWidth(text) {
     return [...stripAnsi(text)].reduce((sum, char) => sum + charWidth(char), 0);
@@ -795,6 +810,91 @@ function box(title, body, width = terminalWidth()) {
     }
     lines.push(`╰${'─'.repeat(inner + 2)}╯`);
     return lines.join('\n');
+}
+function selectBox(title, items, selected, subtitle = '') {
+    const inner = terminalWidth() - 4;
+    const body = [];
+    if (subtitle)
+        body.push(paint('gray', subtitle));
+    body.push(paint('gray', '↑/↓ or j/k move · Enter select · 1-9 quick · Ctrl+C cancel'));
+    body.push(paint('gray', '─'.repeat(Math.min(inner, 96))));
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const active = i === selected;
+        const marker = active ? paint('green', '❯') : ' ';
+        const index = active ? paint('bold', String(i + 1).padStart(2, ' ')) : paint('gray', String(i + 1).padStart(2, ' '));
+        const label = active ? paint('bold', item.label) : item.label;
+        const detail = item.detail ? `  ${paint('gray', item.detail)}` : '';
+        body.push(`${marker} ${index} ${label}${detail}`);
+    }
+    return box(title, body);
+}
+async function selectMenu(title, items, defaultIndex = 0, subtitle = '') {
+    if (items.length === 0)
+        throw new Error(`No options for ${title}`);
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        return items[Math.max(0, Math.min(defaultIndex, items.length - 1))].value;
+    }
+    let selected = Math.max(0, Math.min(defaultIndex, items.length - 1));
+    let renderedLines = 0;
+    const stdin = input;
+    const wasRaw = Boolean(stdin.isRaw);
+    emitKeypressEvents(stdin);
+    stdin.setRawMode?.(true);
+    stdin.resume();
+    const clear = () => {
+        if (renderedLines > 0)
+            output.write(`\x1b[${renderedLines}F\x1b[J`);
+    };
+    const render = () => {
+        clear();
+        const text = selectBox(title, items, selected, subtitle);
+        output.write(`${text}\n`);
+        renderedLines = text.split('\n').length;
+    };
+    return await new Promise((resolveSelection) => {
+        const cleanup = () => {
+            stdin.off('keypress', onKey);
+            stdin.setRawMode?.(wasRaw);
+            if (!wasRaw)
+                stdin.pause();
+            output.write('\x1b[?25h');
+        };
+        const finish = (index) => {
+            clear();
+            cleanup();
+            resolveSelection(items[index].value);
+        };
+        const onKey = (str, key) => {
+            if (key.ctrl && key.name === 'c') {
+                cleanup();
+                output.write('\n');
+                process.exit(130);
+            }
+            if (key.name === 'down' || key.name === 'j') {
+                selected = (selected + 1) % items.length;
+                render();
+                return;
+            }
+            if (key.name === 'up' || key.name === 'k') {
+                selected = (selected - 1 + items.length) % items.length;
+                render();
+                return;
+            }
+            if (key.name === 'return' || key.name === 'enter') {
+                finish(selected);
+                return;
+            }
+            if (/^[1-9]$/u.test(str)) {
+                const index = Number(str) - 1;
+                if (index >= 0 && index < items.length)
+                    finish(index);
+            }
+        };
+        output.write('\x1b[?25l');
+        stdin.on('keypress', onKey);
+        render();
+    });
 }
 function sourceBadge(source) {
     return source === 'codex' ? paint('cyan', 'codex ') : paint('magenta', 'claude');
@@ -835,12 +935,17 @@ function formatBytes(chars) {
     return `${(chars / 1000).toFixed(chars < 10000 ? 1 : 0)}k chars`;
 }
 function formatSessionRow(session, index) {
+    return [
+        paint('bold', String(index).padStart(2, ' ')),
+        formatSessionColumns(session),
+    ].join('  ');
+}
+function formatSessionColumns(session) {
     const age = formatAge(session.updatedAtMs);
     const repo = extractRepoName(session.cwd);
     const summaryWidth = Math.max(24, terminalWidth() - 74);
     const summary = clipVisible(oneLine(session.summary || '(no summary)', 220), summaryWidth);
     return [
-        paint('bold', String(index).padStart(2, ' ')),
         sourceBadge(session.source),
         padVisible(paint('gray', age), 6),
         padVisible(clipVisible(repo, 18), 18),
@@ -1058,67 +1163,36 @@ async function chooseSession(sessions, ref, opts = { copy: true, preset: 'standa
         return findByRef(sessions, ref);
     if (!process.stdin.isTTY || !process.stdout.isTTY)
         return sessions[0];
-    printSessionList(sessions.slice(0, 20), opts, searchAll);
-    const rl = createInterface({ input, output });
-    try {
-        const answer = (await rl.question(`\n${paint('bold', 'Pick session')} ${paint('gray', '[1]')} › `)).trim();
-        const index = answer ? Number(answer) : 1;
-        return sessions[index - 1] || sessions[0];
-    }
-    finally {
-        rl.close();
-    }
+    const choices = sessions.slice(0, 20).map((session, index) => ({
+        value: session,
+        label: formatSessionColumns(session),
+    }));
+    return selectMenu('Step 1/3 · Session', choices, 0, searchAll ? 'all projects' : `current dir: ${process.cwd()}`);
 }
 async function chooseOutput(opts) {
     if (opts.output || opts.copy === false)
         return resolveOutput(opts);
     if (!process.stdin.isTTY || !process.stdout.isTTY)
         return resolveOutput(opts);
-    const rl = createInterface({ input, output });
-    try {
-        console.log('');
-        console.log(box('Output Mode', [
-            `${paint('bold', '1')} clipboard  ${paint('gray', 'paste-sized, auto-copy, best for immediate resume')}`,
-            `${paint('bold', '2')} file       ${paint('gray', 'larger pack, writes .ai/continuity/*.md, no auto-copy')}`,
-        ], Math.min(terminalWidth(), 92)));
-        const answer = (await rl.question(`${paint('bold', 'Pick output')} ${paint('gray', '[1]')} › `)).trim();
-        if (answer === '2' || answer.toLowerCase() === 'file') {
-            opts.output = 'file';
-            opts.copy = false;
-            return 'file';
-        }
-        opts.output = 'clipboard';
-        opts.copy = true;
-        return 'clipboard';
-    }
-    finally {
-        rl.close();
-    }
+    const selected = await selectMenu('Step 2/3 · Output Mode', [
+        { value: 'clipboard', label: `${paint('green', 'clipboard')}`, detail: 'paste-sized, auto-copy, best for immediate resume' },
+        { value: 'file', label: `${paint('yellow', 'file')}`, detail: 'larger pack, writes .ai/continuity/*.md, no auto-copy' },
+    ], 0);
+    opts.output = selected;
+    opts.copy = selected === 'clipboard';
+    return selected;
 }
 async function choosePreset(existing, outputMode) {
     if (existing)
         return existing;
     if (!process.stdin.isTTY || !process.stdout.isTTY)
         return 'standard';
-    const rl = createInterface({ input, output });
     const fileMode = outputMode === 'file';
-    try {
-        console.log('');
-        console.log(box('Fidelity', [
-            `${paint('bold', '1')} compact   ${paint('gray', fileMode ? 'small file, still has summaries' : 'short paste, fastest')}`,
-            `${paint('bold', '2')} standard  ${paint('green', 'recommended')} ${paint('gray', fileMode ? 'larger handoff, balanced' : 'paste-sized, balanced')}`,
-            `${paint('bold', '3')} full      ${paint('gray', fileMode ? 'max context, big file' : 'large paste, high fidelity')}`,
-        ], Math.min(terminalWidth(), 92)));
-        const answer = (await rl.question(`${paint('bold', 'Pick fidelity')} ${paint('gray', '[2]')} › `)).trim();
-        if (answer === '1' || answer.toLowerCase() === 'compact')
-            return 'compact';
-        if (answer === '3' || answer.toLowerCase() === 'full')
-            return 'full';
-        return 'standard';
-    }
-    finally {
-        rl.close();
-    }
+    return selectMenu('Step 3/3 · Fidelity', [
+        { value: 'compact', label: `${paint('green', 'compact')}`, detail: fileMode ? 'small file, still has summaries' : 'short paste, fastest' },
+        { value: 'standard', label: `${paint('cyan', 'standard')} ${paint('green', 'recommended')}`, detail: fileMode ? 'larger handoff, balanced' : 'paste-sized, balanced' },
+        { value: 'full', label: `${paint('yellow', 'full')}`, detail: fileMode ? 'max context, big file' : 'large paste, high fidelity' },
+    ], 1);
 }
 function launchTarget(target) {
     if (target === 'mms-codex') {
