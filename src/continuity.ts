@@ -1038,7 +1038,7 @@ function copyToClipboard(text: string): boolean {
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
-  const opts: ParsedArgs = { copy: true, preset: 'standard' };
+  const opts: ParsedArgs = { copy: true };
   const positional: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -1137,21 +1137,88 @@ async function chooseSession(
   }
 }
 
+async function chooseOutput(opts: ParsedArgs): Promise<ContinuityOutput> {
+  if (opts.output || opts.copy === false) return resolveOutput(opts);
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return resolveOutput(opts);
+  const rl = createInterface({ input, output });
+  try {
+    console.log('');
+    console.log(box('Output Mode', [
+      `${paint('bold', '1')} clipboard  ${paint('gray', 'paste-sized, auto-copy, best for immediate resume')}`,
+      `${paint('bold', '2')} file       ${paint('gray', 'larger pack, writes .ai/continuity/*.md, no auto-copy')}`,
+    ], Math.min(terminalWidth(), 92)));
+    const answer = (await rl.question(`${paint('bold', 'Pick output')} ${paint('gray', '[1]')} › `)).trim();
+    if (answer === '2' || answer.toLowerCase() === 'file') {
+      opts.output = 'file';
+      opts.copy = false;
+      return 'file';
+    }
+    opts.output = 'clipboard';
+    opts.copy = true;
+    return 'clipboard';
+  } finally {
+    rl.close();
+  }
+}
+
+async function choosePreset(existing: ContinuityPreset | undefined, outputMode: ContinuityOutput): Promise<ContinuityPreset> {
+  if (existing) return existing;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return 'standard';
+  const rl = createInterface({ input, output });
+  const fileMode = outputMode === 'file';
+  try {
+    console.log('');
+    console.log(box('Fidelity', [
+      `${paint('bold', '1')} compact   ${paint('gray', fileMode ? 'small file, still has summaries' : 'short paste, fastest')}`,
+      `${paint('bold', '2')} standard  ${paint('green', 'recommended')} ${paint('gray', fileMode ? 'larger handoff, balanced' : 'paste-sized, balanced')}`,
+      `${paint('bold', '3')} full      ${paint('gray', fileMode ? 'max context, big file' : 'large paste, high fidelity')}`,
+    ], Math.min(terminalWidth(), 92)));
+    const answer = (await rl.question(`${paint('bold', 'Pick fidelity')} ${paint('gray', '[2]')} › `)).trim();
+    if (answer === '1' || answer.toLowerCase() === 'compact') return 'compact';
+    if (answer === '3' || answer.toLowerCase() === 'full') return 'full';
+    return 'standard';
+  } finally {
+    rl.close();
+  }
+}
+
 async function chooseTarget(existing?: ContinuityTarget): Promise<ContinuityTarget> {
   if (existing) return existing;
   if (!process.stdin.isTTY || !process.stdout.isTTY) return 'clipboard';
   const rl = createInterface({ input, output });
   try {
     console.log('');
-    console.log(box('Continue Target', [
-      `${paint('bold', '1')} clipboard   ${paint('gray', 'copy pack, paste anywhere')}`,
-      `${paint('bold', '2')} mms codex   ${paint('gray', 'copy pack, then open MMS Codex')}`,
-      `${paint('bold', '3')} mms claude  ${paint('gray', 'copy pack, then open MMS Claude')}`,
+    console.log(box('Destination Hint', [
+      `${paint('bold', '1')} any CLI     ${paint('gray', 'no launch; just tell you to paste/read')}`,
+      `${paint('bold', '2')} mms codex   ${paint('gray', 'label pack + show next command; no auto launch')}`,
+      `${paint('bold', '3')} mms claude  ${paint('gray', 'label pack + show next command; no auto launch')}`,
     ], Math.min(terminalWidth(), 86)));
-    const answer = (await rl.question(`${paint('bold', 'Pick target')} ${paint('gray', '[1]')} › `)).trim();
+    const answer = (await rl.question(`${paint('bold', 'Pick destination')} ${paint('gray', '[1]')} › `)).trim();
     if (answer === '2') return 'mms-codex';
     if (answer === '3') return 'mms-claude';
     return 'clipboard';
+  } finally {
+    rl.close();
+  }
+}
+
+async function chooseAdvancedOptions(opts: ParsedArgs, target: ContinuityTarget): Promise<void> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return;
+  if (opts.print !== undefined || opts.git === false || opts.launch !== undefined) return;
+  const rl = createInterface({ input, output });
+  try {
+    console.log('');
+    console.log(box('Options', [
+      `${paint('bold', 'Enter')} default  ${paint('gray', 'include Git State, do not print, do not launch')}`,
+      `${paint('bold', 'g')} no-git       ${paint('gray', 'omit Git State')}`,
+      `${paint('bold', 'p')} print        ${paint('gray', 'print Markdown after generating')}`,
+      `${paint('bold', 'l')} launch       ${paint('gray', target === 'clipboard' ? 'ignored for any CLI target' : 'launch target after generating')}`,
+      `${paint('gray', 'Example: gp')}`,
+    ], Math.min(terminalWidth(), 92)));
+    const answer = (await rl.question(`${paint('bold', 'Options')} ${paint('gray', '[Enter]')} › `)).trim().toLowerCase();
+    if (answer.includes('g')) opts.git = false;
+    if (answer.includes('p')) opts.print = true;
+    if (answer.includes('l')) opts.launch = true;
   } finally {
     rl.close();
   }
@@ -1228,6 +1295,8 @@ ${paint('bold', 'Output')}
   --no-git                          omit Git State
   --launch                          launch target CLI after copy
   -h, --help                        show this help
+
+Interactive mode asks for: session -> output -> fidelity -> destination -> options.
 `);
 }
 
@@ -1249,13 +1318,20 @@ function printResultCard(args: {
       : args.target === 'codex' ? 'codex'
         : args.target === 'claude' ? 'claude'
           : '';
+  const next = args.output === 'file'
+    ? launch
+      ? `next ${paint('bold', launch)} ${paint('gray', 'then paste file path or ask it to read the file')}`
+      : 'next ask any CLI to read this file'
+    : launch
+      ? `next ${paint('bold', launch)} ${paint('gray', 'then paste clipboard')}`
+      : 'next paste into any CLI';
   console.log(box('Continuity Pack Ready', [
     `session ${sourceBadge(args.session.source)} ${paint('bold', args.session.id.slice(0, 12))}  ${paint('gray', args.session.origin)}`,
     `output ${outputText(args.output)}  preset ${presetText(args.preset)}  size ${paint('bold', formatBytes(args.chars))}`,
     `target ${paint('bold', targetText(args.target))}`,
     `file ${args.filePath}`,
     `clipboard ${copyLine}`,
-    launch ? `next ${paint('bold', launch)} ${paint('gray', 'then paste')}` : 'next paste into any CLI',
+    next,
   ]));
 }
 
@@ -1289,9 +1365,10 @@ export async function cmdContinuity(argv: string[]): Promise<void> {
     return;
   }
 
+  const outputMode = await chooseOutput(opts);
+  const preset = await choosePreset(opts.preset, outputMode);
   const target = await chooseTarget(opts.to);
-  const preset = opts.preset ?? 'standard';
-  const outputMode = resolveOutput(opts);
+  await chooseAdvancedOptions(opts, target);
   const context = extractSessionContext(session, preset, outputMode);
   const markdown = renderContinuityMarkdown(session, context, preset, target, outputMode, opts.git !== false);
   const filePath = writeContinuityFile(session, markdown, process.cwd());
