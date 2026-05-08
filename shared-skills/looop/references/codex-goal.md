@@ -16,8 +16,8 @@ Looop 的定位不是替代 `/goal`，而是把同一份 goal contract 落到 ag
 Use:
 
 ```bash
-python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py goal-contract --write
-python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py goal-prompt
+python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py goal-contract --write
+python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py goal-prompt
 ```
 
 Recommended mapping:

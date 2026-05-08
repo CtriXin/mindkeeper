@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import hashlib
+import json
 import subprocess
 from html import escape
 from pathlib import Path
@@ -109,6 +111,11 @@ def _looks_dangerous(path: str, full_path: Path) -> str:
     if full_path.exists() and full_path.is_file() and full_path.stat().st_size > 5_000_000:
         return "file larger than 5MB"
     return ""
+
+
+def _learning_fingerprint(summary: str, lesson_type: str, tags: list[str]) -> str:
+    raw = "|".join([clean_string(lesson_type), clean_string(summary), ",".join(sorted(tags))])
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
 
 
 class LooopRuntime:
@@ -470,6 +477,64 @@ class LooopRuntime:
             "event": event.get("event", {}),
         }
 
+    def learn(
+        self,
+        *,
+        source: str,
+        summary: str,
+        evidence: str = "",
+        tags: Optional[list[str]] = None,
+        lesson_type: str = "candidate",
+        priority: str = "P2",
+        fingerprint: str = "",
+        promote_candidate: bool = False,
+    ) -> dict[str, Any]:
+        state = self._state_or_default()
+        clean_tags = clean_list(tags)
+        clean_type = clean_string(lesson_type).lower() or "candidate"
+        if clean_type not in {"one-off", "candidate", "reusable-detail", "stable-default"}:
+            clean_type = "candidate"
+        clean_priority = clean_string(priority).upper() or "P2"
+        if clean_priority not in {"P0", "P1", "P2", "P3"}:
+            clean_priority = "P2"
+        clean_fingerprint = clean_string(fingerprint) or _learning_fingerprint(
+            summary,
+            clean_type,
+            clean_tags,
+        )
+        duplicate = self._learning_exists(clean_fingerprint)
+        entry = {
+            "timestamp": now_iso(),
+            "source": clean_string(source),
+            "summary": clean_string(summary),
+            "evidence": clean_string(evidence),
+            "tags": clean_tags,
+            "lesson_type": clean_type,
+            "priority": clean_priority,
+            "fingerprint": clean_fingerprint,
+            "duplicate": duplicate,
+            "promote_candidate": bool(promote_candidate),
+            "slice_id": clean_string(state["loop"].get("current_slice_id", "")),
+        }
+        if not duplicate:
+            append_jsonl(self.identity.session_dir / "learnings.jsonl", entry)
+        state["trace"]["latest_learning"] = entry["summary"]
+        self._save(state)
+        self._append_learning_note(state, entry)
+        self.event(
+            "learning",
+            entry["summary"],
+            detail=entry["evidence"],
+            state=state,
+        )
+        return {
+            "ok": True,
+            "action": "learn",
+            "learning": entry,
+            "learnings_path": str(self.identity.session_dir / "learnings.jsonl"),
+            "notes_path": str(self.identity.session_dir / "notes.md"),
+        }
+
     def update_quality(
         self,
         *,
@@ -719,6 +784,7 @@ class LooopRuntime:
             "quality": state["quality"],
             "loop": state["loop"],
             "notes_path": str(self.identity.session_dir / "notes.md"),
+            "learnings_path": str(self.identity.session_dir / "learnings.jsonl"),
             "recent_events": events,
         }
 
@@ -755,6 +821,7 @@ class LooopRuntime:
                 "## Loop Policy",
                 "- Work in bounded slices.",
                 "- Read notes.md before selecting the next slice.",
+                "- Record useful external or run-derived learning with learn.",
                 "- Treat complete no-op iterations as failed progress.",
                 "- Validate each slice before commit.",
                 "- Run a debugger pass before done/commit decisions.",
@@ -808,6 +875,53 @@ class LooopRuntime:
         path.open("a", encoding="utf-8").write("\n".join(lines) + "\n")
         return str(path)
 
+    def _append_learning_note(self, state: dict[str, Any], entry: dict[str, Any]) -> str:
+        path = self.identity.session_dir / "notes.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            path.write_text(
+                "\n".join(
+                    [
+                        "# Looop Notes",
+                        "",
+                        f"- Objective: {clean_string(state['goal'].get('objective', ''))}",
+                        f"- Project root: {clean_string(state['runtime'].get('project_root', ''))}",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+        lines = [
+            "",
+            "## Learning",
+            "",
+            f"- Time: {entry['timestamp']}",
+            f"- Source: {entry['source']}",
+            f"- Summary: {entry['summary']}",
+            f"- Evidence: {entry['evidence']}",
+            f"- Tags: {', '.join(entry['tags']) or '(none)'}",
+            f"- Lesson type: {entry['lesson_type']}",
+            f"- Priority: {entry['priority']}",
+            f"- Fingerprint: {entry['fingerprint']}",
+            f"- Duplicate: {str(entry['duplicate']).lower()}",
+            f"- Promote candidate: {str(entry['promote_candidate']).lower()}",
+        ]
+        path.open("a", encoding="utf-8").write("\n".join(lines) + "\n")
+        return str(path)
+
+    def _learning_exists(self, fingerprint: str) -> bool:
+        path = self.identity.session_dir / "learnings.jsonl"
+        if not path.is_file():
+            return False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            if row.get("fingerprint") == fingerprint:
+                return True
+        return False
+
     def _write_exit_summary(self, state: dict[str, Any], summary: str = "") -> str:
         timestamp = now_iso().replace(":", "").replace("+", "Z")
         path = self.identity.session_dir / "exit-summary.md"
@@ -822,6 +936,10 @@ class LooopRuntime:
             dirty = []
         milestones = sorted((self.identity.session_dir / "milestones").glob("*.md"))
         patches = sorted((self.identity.session_dir / "patches").glob("*.patch"))
+        learning_count = 0
+        learnings_path = self.identity.session_dir / "learnings.jsonl"
+        if learnings_path.is_file():
+            learning_count = len(learnings_path.read_text(encoding="utf-8").splitlines())
         lines = [
             "# Looop Exit Summary",
             "",
@@ -840,6 +958,7 @@ class LooopRuntime:
             f"- Residual uncertainty: {clean_string(state['quality'].get('residual_uncertainty', ''))}",
             f"- Dirty files at exit: {', '.join(dirty) or '(none)'}",
             f"- Notes: {self.identity.session_dir / 'notes.md'}",
+            f"- Learnings: {learning_count} ({learnings_path})",
             f"- Events: {self.identity.session_dir / 'events.jsonl'}",
             f"- Milestones: {len(milestones)}",
             f"- Patch snapshots: {len(patches)}",
@@ -877,6 +996,7 @@ class LooopRuntime:
             "latest_milestone": state["trace"]["latest_milestone"],
             "latest_commit": state["trace"]["latest_commit"],
             "latest_exit_summary": state["trace"].get("latest_exit_summary", ""),
+            "latest_learning": state["trace"].get("latest_learning", ""),
             "dirty_baseline": state["loop"].get("dirty_baseline", []),
             "dirty_current": state["loop"].get("dirty_current", []),
         }
@@ -910,7 +1030,9 @@ class LooopRuntime:
             f"  - residual_uncertainty: {_xml(state['quality'].get('residual_uncertainty'))}\n"
             f"  - latest_milestone: {_xml(state['trace'].get('latest_milestone'))}\n"
             f"  - latest_commit: {_xml(state['trace'].get('latest_commit'))}\n"
+            f"  - latest_learning: {_xml(state['trace'].get('latest_learning'))}\n"
             f"  - notes_path: {_xml(self.identity.session_dir / 'notes.md')}\n"
+            f"  - learnings_path: {_xml(self.identity.session_dir / 'learnings.jsonl')}\n"
             f"  - dirty_baseline: {_xml(', '.join(clean_list(state['loop'].get('dirty_baseline'))))}\n"
             f"  - dirty_current: {_xml(', '.join(clean_list(state['loop'].get('dirty_current'))))}\n"
             "  </current_state>\n"

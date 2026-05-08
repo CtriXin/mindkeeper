@@ -7,7 +7,7 @@ Looop ships separate adapters for Codex and Claude. Both read JSON on stdin and 
 Use:
 
 ```bash
-python3 /Users/xin/auto-skills/installed-skills/looop/scripts/codex_hook.py
+python3 /Users/xin/auto-skills/shared-skills/looop/scripts/codex_hook.py
 ```
 
 Supported events:
@@ -20,7 +20,7 @@ Supported events:
 Print a config/helper snippet:
 
 ```bash
-python3 /Users/xin/auto-skills/installed-skills/looop/scripts/install_snippets.py --host codex
+python3 /Users/xin/auto-skills/shared-skills/looop/scripts/install_snippets.py --host codex
 ```
 
 ## Claude Code
@@ -28,7 +28,7 @@ python3 /Users/xin/auto-skills/installed-skills/looop/scripts/install_snippets.p
 Use:
 
 ```bash
-python3 /Users/xin/auto-skills/installed-skills/looop/scripts/claude_hook.py
+python3 /Users/xin/auto-skills/shared-skills/looop/scripts/claude_hook.py
 ```
 
 Claude settings example:
@@ -42,7 +42,7 @@ Claude settings example:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /Users/xin/auto-skills/installed-skills/looop/scripts/claude_hook.py"
+            "command": "python3 /Users/xin/auto-skills/shared-skills/looop/scripts/claude_hook.py"
           }
         ]
       }
@@ -53,7 +53,7 @@ Claude settings example:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /Users/xin/auto-skills/installed-skills/looop/scripts/claude_hook.py"
+            "command": "python3 /Users/xin/auto-skills/shared-skills/looop/scripts/claude_hook.py"
           }
         ]
       }
@@ -64,7 +64,7 @@ Claude settings example:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /Users/xin/auto-skills/installed-skills/looop/scripts/claude_hook.py"
+            "command": "python3 /Users/xin/auto-skills/shared-skills/looop/scripts/claude_hook.py"
           }
         ]
       }
@@ -75,7 +75,7 @@ Claude settings example:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /Users/xin/auto-skills/installed-skills/looop/scripts/claude_hook.py"
+            "command": "python3 /Users/xin/auto-skills/shared-skills/looop/scripts/claude_hook.py"
           }
         ]
       }
@@ -86,7 +86,7 @@ Claude settings example:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /Users/xin/auto-skills/installed-skills/looop/scripts/claude_hook.py"
+            "command": "python3 /Users/xin/auto-skills/shared-skills/looop/scripts/claude_hook.py"
           }
         ]
       }
@@ -98,7 +98,7 @@ Claude settings example:
 Print the same snippet:
 
 ```bash
-python3 /Users/xin/auto-skills/installed-skills/looop/scripts/install_snippets.py --host claude
+python3 /Users/xin/auto-skills/shared-skills/looop/scripts/install_snippets.py --host claude
 ```
 
 Claude hook notes:

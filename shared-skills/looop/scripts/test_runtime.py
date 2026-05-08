@@ -102,6 +102,31 @@ def main() -> int:
     check("iteration result writes notes", Path(result["notes_path"]).is_file())
     check("notes include learning", "Notes preserve iteration facts" in Path(result["notes_path"]).read_text())
 
+    learning = rt.learn(
+        source="gnhf iteration prompt",
+        summary="Record no-op slices as failed progress",
+        evidence="Complete no-op iterations should not spin",
+        tags=["loop", "no-op"],
+        lesson_type="reusable-detail",
+        priority="P1",
+        promote_candidate=True,
+    )
+    check("learn writes learning log", Path(learning["learnings_path"]).is_file())
+    check("learn records priority", learning["learning"]["priority"] == "P1")
+    check("learn records lesson type", learning["learning"]["lesson_type"] == "reusable-detail")
+    check("learn updates notes", "Record no-op slices" in Path(learning["notes_path"]).read_text())
+    duplicate = rt.learn(
+        source="gnhf iteration prompt",
+        summary="Record no-op slices as failed progress",
+        evidence="duplicate smoke",
+        tags=["loop", "no-op"],
+        lesson_type="reusable-detail",
+        priority="P1",
+    )
+    check("learn detects duplicate", duplicate["learning"]["duplicate"] is True)
+    recovered_learning = rt.recovery_report()
+    check("recover includes learnings path", Path(recovered_learning["learnings_path"]).is_file())
+
     (repo / "demo.txt").write_text("two\n", encoding="utf-8")
     hook_tool = handle_request(
         "claude",

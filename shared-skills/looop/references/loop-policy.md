@@ -87,6 +87,7 @@ After 429, interruption, compaction, or model confusion, recover from:
 
 - `state.json`: current goal and next action
 - `notes.md`: compact iteration results and learnings
+- `learnings.jsonl`: evidence-backed external knowledge or run-derived lessons
 - `events.jsonl`: chronological event log
 - `milestones/*.md`: human-readable checkpoints
 - `exit-summary.md`: closeout state for handoff/review

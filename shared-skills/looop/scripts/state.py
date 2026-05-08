@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 
 SKILL_NAME = "looop"
-STATE_SCHEMA_VERSION = 2
+STATE_SCHEMA_VERSION = 3
 MODE_VALUES = {"disabled", "active"}
 EXECUTION_MODE_VALUES = {"hands-off", "companion"}
 COMMIT_POLICY_VALUES = {"auto", "manual", "disabled"}
@@ -167,6 +167,7 @@ def default_state(session_id: str, project_root: str) -> dict[str, Any]:
             "latest_milestone": "",
             "latest_commit": "",
             "latest_exit_summary": "",
+            "latest_learning": "",
             "event_count": 0,
         },
     }

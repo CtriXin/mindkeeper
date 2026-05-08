@@ -105,6 +105,21 @@ def iteration_result_command(args: argparse.Namespace) -> int:
     )
 
 
+def learn_command(args: argparse.Namespace) -> int:
+    return _print(
+        _runtime(args).learn(
+            source=args.source,
+            summary=args.summary,
+            evidence=args.evidence,
+            tags=args.tag,
+            lesson_type=args.lesson_type,
+            priority=args.priority,
+            fingerprint=args.fingerprint,
+            promote_candidate=args.promote_candidate,
+        )
+    )
+
+
 def validate_command(args: argparse.Namespace) -> int:
     return _print(
         _runtime(args).validate_command(
@@ -249,6 +264,22 @@ def build_parser() -> argparse.ArgumentParser:
     result.add_argument("--debugger", default="")
     result.add_argument("--should-fully-stop", action="store_true")
     result.set_defaults(func=iteration_result_command)
+
+    learn = sub.add_parser("learn")
+    add_common(learn)
+    learn.add_argument("--source", required=True)
+    learn.add_argument("--summary", required=True)
+    learn.add_argument("--evidence", default="")
+    learn.add_argument("--tag", action="append", default=[])
+    learn.add_argument(
+        "--lesson-type",
+        default="candidate",
+        choices=["one-off", "candidate", "reusable-detail", "stable-default"],
+    )
+    learn.add_argument("--priority", default="P2", choices=["P0", "P1", "P2", "P3"])
+    learn.add_argument("--fingerprint", default="")
+    learn.add_argument("--promote-candidate", action="store_true")
+    learn.set_defaults(func=learn_command)
 
     validate = sub.add_parser("validate")
     add_common(validate)
