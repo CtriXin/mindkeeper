@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+
+# Runtime state belongs in CODEX_HOME, not in the skill source tree.
+sessions/
+*.legacy.bak
+*.legacy-backup.json
+*.legacy-v2-backup.json

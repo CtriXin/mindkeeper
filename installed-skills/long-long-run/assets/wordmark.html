@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=520, initial-scale=1">
+    <title>Long Long Run wordmark</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      html,
+      body {
+        width: 520px;
+        height: 120px;
+        margin: 0;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+          "Helvetica Neue", Arial, sans-serif;
+      }
+
+      .stage {
+        width: 520px;
+        height: 120px;
+        display: grid;
+        place-items: center;
+      }
+
+      .wordmark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+        color: #111827;
+        font-size: 46px;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: 0;
+        transform-origin: center;
+      }
+
+      .keep,
+      .drop,
+      .gap {
+        display: inline-block;
+      }
+
+      .keep {
+        transform-origin: center;
+      }
+
+      .drop {
+        overflow: hidden;
+        padding: 12px 0;
+        margin: -12px 0;
+        white-space: nowrap;
+      }
+
+      .gap {
+        width: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="stage" aria-label="Long Long Run animated wordmark">
+      <div class="wordmark" id="wordmark">
+        <span class="keep">L</span><span class="drop">ong</span><span class="gap"></span>
+        <span class="keep">L</span><span class="drop">ong</span><span class="gap"></span>
+        <span class="keep">R</span><span class="drop">un</span>
+      </div>
+    </main>
+
+    <script>
+      const wordmark = document.getElementById("wordmark");
+      const drops = Array.from(document.querySelectorAll(".drop"));
+      const gaps = Array.from(document.querySelectorAll(".gap"));
+      const keeps = Array.from(document.querySelectorAll(".keep"));
+
+      function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+      }
+
+      function easeInOutCubic(value) {
+        const t = clamp(value, 0, 1);
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      }
+
+      function timeline(loopProgress) {
+        const t = ((loopProgress % 1) + 1) % 1;
+        if (t < 0.28) return 0;
+        if (t < 0.48) return easeInOutCubic((t - 0.28) / 0.2);
+        if (t < 0.72) return 1;
+        if (t < 0.92) return 1 - easeInOutCubic((t - 0.72) / 0.2);
+        return 0;
+      }
+
+      function measure() {
+        drops.forEach((node) => {
+          node.style.width = "auto";
+          node.dataset.fullWidth = String(node.getBoundingClientRect().width);
+        });
+
+        gaps.forEach((node) => {
+          node.dataset.fullWidth = String(node.getBoundingClientRect().width);
+        });
+      }
+
+      function render(loopProgress) {
+        const p = timeline(loopProgress);
+        const widthScale = 1 - easeInOutCubic(clamp((p - 0.2) / 0.65, 0, 1));
+        const fade = 1 - easeInOutCubic(clamp((p - 0.05) / 0.35, 0, 1));
+
+        wordmark.style.fontSize = `${46 + 12 * p}px`;
+        wordmark.style.transform = `translateY(${-1 * p}px)`;
+
+        drops.forEach((node) => {
+          const fullWidth = Number(node.dataset.fullWidth || 0);
+          node.style.width = `${fullWidth * widthScale}px`;
+          node.style.opacity = String(fade);
+          node.style.transform = `translateY(${2 * p}px)`;
+        });
+
+        gaps.forEach((node) => {
+          const fullWidth = Number(node.dataset.fullWidth || 0);
+          node.style.width = `${fullWidth * widthScale}px`;
+        });
+
+        keeps.forEach((node, index) => {
+          const drift = index === 0 ? 1 : index === 2 ? -1 : 0;
+          node.style.transform = `translateX(${drift * 2 * p}px)`;
+        });
+      }
+
+      async function boot() {
+        if (document.fonts && document.fonts.ready) {
+          await document.fonts.ready;
+        }
+
+        measure();
+        const params = new URLSearchParams(window.location.search);
+        render(Number(params.get("t") || 0));
+        document.body.dataset.ready = "true";
+      }
+
+      boot();
+    </script>
+  </body>
+</html>

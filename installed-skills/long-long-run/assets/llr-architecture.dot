@@ -1,0 +1,177 @@
+digraph LLRArchitecture {
+  graph [
+    rankdir=TB,
+    bgcolor="white",
+    pad="0.35",
+    nodesep="0.45",
+    ranksep="0.58",
+    splines=spline,
+    fontname="Helvetica",
+    label="Long Long Run Architecture",
+    labelloc=t,
+    fontsize=24,
+    fontcolor="#111827"
+  ];
+
+  node [
+    shape=box,
+    style="rounded,filled",
+    penwidth=1.4,
+    color="#CBD5E1",
+    fillcolor="#FFFFFF",
+    fontname="Helvetica",
+    fontsize=13,
+    fontcolor="#111827",
+    margin="0.14,0.09"
+  ];
+
+  edge [
+    color="#64748B",
+    penwidth=1.5,
+    arrowsize=0.75,
+    fontname="Helvetica",
+    fontsize=11,
+    fontcolor="#475569"
+  ];
+
+  user [
+    label=<
+      <B>User prompt</B><BR/>
+      Enter INC / approve ACTIVE / ask side questions
+    >,
+    fillcolor="#F8FAFC"
+  ];
+
+  codex [
+    label=<
+      <B>Codex agent</B><BR/>
+      Answers the latest message<BR ALIGN="LEFT"/>
+      Maintains the mainline<BR ALIGN="LEFT"/>
+      Chooses the next action
+    >,
+    fillcolor="#F8FAFC"
+  ];
+
+  skill [
+    label=<
+      <B>LLR skill</B><BR/>
+      SKILL.md<BR ALIGN="LEFT"/>
+      INC operating guide<BR ALIGN="LEFT"/>
+      Prompt templates
+    >,
+    fillcolor="#ECFDF5",
+    color="#0F766E"
+  ];
+
+  inc [
+    label=<
+      <B>INC mode</B><BR/>
+      Evidence-chain exploration<BR ALIGN="LEFT"/>
+      Domain calibration<BR ALIGN="LEFT"/>
+      Contract clarification<BR ALIGN="LEFT"/>
+      May remain standalone
+    >,
+    fillcolor="#E0F2FE",
+    color="#0284C7"
+  ];
+
+  active [
+    label=<
+      <B>ACTIVE mode</B><BR/>
+      Explicitly authorized mainline<BR ALIGN="LEFT"/>
+      Side-thread tolerance<BR ALIGN="LEFT"/>
+      Contract-covered continuation
+    >,
+    fillcolor="#FEF3C7",
+    color="#D97706"
+  ];
+
+  scripts [
+    label=<
+      <B>Runtime API</B><BR/>
+      state.py<BR ALIGN="LEFT"/>
+      runtime.py<BR ALIGN="LEFT"/>
+      controller.py
+    >,
+    fillcolor="#F0FDFA",
+    color="#0F766E"
+  ];
+
+  state [
+    label=<
+      <B>Session state JSON</B><BR/>
+      runtime + contract<BR ALIGN="LEFT"/>
+      thinking.evidence_chain<BR ALIGN="LEFT"/>
+      activation + progress
+    >,
+    shape=cylinder,
+    fillcolor="#F8FAFC",
+    color="#94A3B8"
+  ];
+
+  user_hook [
+    label=<
+      <B>UserPromptSubmit hook</B><BR/>
+      Injects compact LLR context<BR ALIGN="LEFT"/>
+      Reminds mode semantics
+    >,
+    fillcolor="#F5F3FF",
+    color="#7C3AED"
+  ];
+
+  stop_hook [
+    label=<
+      <B>Stop hook</B><BR/>
+      Allows INC / disabled<BR ALIGN="LEFT"/>
+      Blocks premature ACTIVE stop<BR ALIGN="LEFT"/>
+      Requires close or continue
+    >,
+    fillcolor="#F5F3FF",
+    color="#7C3AED"
+  ];
+
+  outcome [
+    label=<
+      <B>Outcome</B><BR/>
+      Continue mainline<BR ALIGN="LEFT"/>
+      Return to INC<BR ALIGN="LEFT"/>
+      Close when complete
+    >,
+    fillcolor="#F8FAFC"
+  ];
+
+  feedback [
+    label=<
+      <B>Hook feedback</B><BR/>
+      Feeds Codex with next-turn context<BR ALIGN="LEFT"/>
+      or a premature-stop prompt
+    >,
+    fillcolor="#EEF2FF",
+    color="#6366F1"
+  ];
+
+  user -> codex [label="natural language"];
+  codex -> skill [label="uses"];
+  skill -> scripts [label="runtime calls"];
+
+  codex -> inc [label="reduce uncertainty"];
+  codex -> active [label="execute authorized work"];
+  inc -> active [label="explicit user authorization"];
+
+  inc -> state [label="evidence + contract"];
+  active -> state [label="checkpoints + progress"];
+  scripts -> state [label="read / write"];
+
+  state -> user_hook [label="prompt context"];
+  state -> stop_hook [label="stop decision"];
+  user_hook -> feedback;
+  stop_hook -> feedback;
+
+  active -> outcome [label="complete / blocked / changed"];
+  outcome -> inc [label="material change", style=dashed];
+  outcome -> state [label="closure / checkpoint"];
+
+  { rank=same; inc; active; }
+  { rank=same; scripts; state; }
+  { rank=same; user_hook; stop_hook; }
+}
