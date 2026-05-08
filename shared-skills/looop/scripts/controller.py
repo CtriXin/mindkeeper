@@ -27,6 +27,14 @@ def version_command(args: argparse.Namespace) -> int:
     return _print(_runtime(args).version_info())
 
 
+def slots_command(args: argparse.Namespace) -> int:
+    return _print(_runtime(args).slots())
+
+
+def slot_info_command(args: argparse.Namespace) -> int:
+    return _print(_runtime(args).slot_info(args.name))
+
+
 def start_command(args: argparse.Namespace) -> int:
     return _print(
         _runtime(args).start(
@@ -38,6 +46,7 @@ def start_command(args: argparse.Namespace) -> int:
             execution_mode=args.execution_mode,
             commit_policy=args.commit_policy,
             max_iterations=args.max_iterations,
+            slot=args.slot,
         )
     )
 
@@ -207,9 +216,19 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(version)
     version.set_defaults(func=version_command)
 
+    slots = sub.add_parser("slots")
+    add_common(slots)
+    slots.set_defaults(func=slots_command)
+
+    slot_info = sub.add_parser("slot-info")
+    add_common(slot_info)
+    slot_info.add_argument("--name", required=True)
+    slot_info.set_defaults(func=slot_info_command)
+
     start = sub.add_parser("start")
     add_common(start)
     start.add_argument("--objective", required=True)
+    start.add_argument("--slot", default="")
     start.add_argument("--target-phase", default="")
     start.add_argument("--done-when", default="")
     start.add_argument("--owner-agent", default="")

@@ -3,7 +3,7 @@ name: looop
 description: Use when the user wants a goal-driven agent execution loop that should keep moving without repeated confirmation, run until a named phase or milestone, preserve traceable events/milestones, survive compaction/429/interruption, and auto-commit only safe self-owned validated slices. Supports Codex and Claude hook contexts.
 metadata:
   short-description: "Looop: goal-driven execution, milestones, recovery, safe commits"
-  version: "0.6.0"
+  version: "0.7.0"
 ---
 
 # Looop
@@ -56,8 +56,20 @@ python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py start \
 # 查看当前 Looop 版本
 python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py version
 
+# 查看可用 profile slots
+python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py slots
+python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py slot-info --name nightly-fix
+
 # 查看当前 session
 python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py current --project-root /path/to/repo
+
+# 按 profile slot 启动，例如 bugloop / nightly-fix
+python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py start \
+  --project-root /path/to/repo \
+  --slot nightly-fix \
+  --objective "Run a critical bug hunt" \
+  --owner-agent "web agent" \
+  --role "coordinator"
 
 # 开始一轮 slice
 python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py begin-slice --summary "Implement search settings"
@@ -114,6 +126,7 @@ python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py exit-su
 - 需要安装或接入 hook：读 [references/hook-setup.md](references/hook-setup.md)。
 - 需要判断 auto-commit / milestone / recovery 规则：读 [references/loop-policy.md](references/loop-policy.md)。
 - 需要理解 Codex `/goal` 与 Looop 的边界：读 [references/codex-goal.md](references/codex-goal.md)。
+- 需要把 bugloop / nightly-fix 这类专项能力接成插槽：读 [references/slots.md](references/slots.md)。
 - 需要让 Looop 从真实运行/外部项目里持续精进：读 [references/self-improve.md](references/self-improve.md)。
 
 ## Agent Rule

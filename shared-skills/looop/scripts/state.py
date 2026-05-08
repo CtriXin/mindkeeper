@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 
 SKILL_NAME = "looop"
-SKILL_VERSION = "0.6.0"
+SKILL_VERSION = "0.7.0"
 STATE_SCHEMA_VERSION = 4
 MODE_VALUES = {"disabled", "active"}
 EXECUTION_MODE_VALUES = {"hands-off", "companion"}
@@ -127,6 +127,10 @@ def default_state(session_id: str, project_root: str) -> dict[str, Any]:
             "done_when": "",
             "owner_agent": "",
             "role": "",
+            "profile_slot": "",
+            "profile_alias": "",
+            "profile_skill": "",
+            "profile_description": "",
             "execution_mode": "hands-off",
             "ask_policy": [
                 "Ask only for irreversible, external, cost, credential, or genuinely blocked decisions."
@@ -206,6 +210,10 @@ def normalize_state(state: dict[str, Any]) -> dict[str, Any]:
             "done_when": clean_string(goal.get("done_when", "")),
             "owner_agent": clean_string(goal.get("owner_agent", "")),
             "role": clean_string(goal.get("role", "")),
+            "profile_slot": clean_string(goal.get("profile_slot", "")),
+            "profile_alias": clean_string(goal.get("profile_alias", "")),
+            "profile_skill": clean_string(goal.get("profile_skill", "")),
+            "profile_description": clean_string(goal.get("profile_description", "")),
             "execution_mode": clean_string(
                 goal.get("execution_mode", "hands-off")
             ).lower(),

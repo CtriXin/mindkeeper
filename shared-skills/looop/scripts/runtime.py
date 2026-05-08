@@ -21,6 +21,9 @@ from state import (
 )
 
 
+SLOTS_DIR = Path(__file__).resolve().parent.parent / "slots"
+
+
 def _xml(value: object) -> str:
     return escape(clean_string(value), quote=False)
 
@@ -158,6 +161,66 @@ def _learning_scope_key(
     return clean_scope, "unspecified"
 
 
+def _clean_slot(data: dict[str, Any], path: Path) -> dict[str, Any]:
+    name = clean_string(data.get("name"))
+    aliases = clean_list(data.get("aliases"))
+    default_max = data.get("default_max_iterations", 20)
+    try:
+        default_max_iterations = int(default_max or 20)
+    except Exception:
+        default_max_iterations = 20
+    return {
+        "name": name or path.stem,
+        "aliases": aliases,
+        "description": clean_string(data.get("description")),
+        "owner_skill": clean_string(data.get("owner_skill")),
+        "owner_skill_path": clean_string(data.get("owner_skill_path")),
+        "default_target_phase": clean_string(data.get("default_target_phase")),
+        "default_done_when": clean_string(data.get("default_done_when")),
+        "default_execution_mode": clean_string(
+            data.get("default_execution_mode", "hands-off")
+        ).lower()
+        or "hands-off",
+        "default_commit_policy": clean_string(
+            data.get("default_commit_policy", "auto")
+        ).lower()
+        or "auto",
+        "default_max_iterations": default_max_iterations,
+        "run_log_hint": clean_string(data.get("run_log_hint")),
+        "safety_notes": clean_list(data.get("safety_notes")),
+        "path": str(path),
+    }
+
+
+def _load_slots() -> dict[str, dict[str, Any]]:
+    slots: dict[str, dict[str, Any]] = {}
+    if not SLOTS_DIR.is_dir():
+        return slots
+    for path in sorted(SLOTS_DIR.glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(data, dict):
+            slot = _clean_slot(data, path)
+            slots[slot["name"].lower()] = slot
+    return slots
+
+
+def _resolve_slot(name: str) -> Optional[dict[str, Any]]:
+    clean_name = clean_string(name).lower()
+    if not clean_name:
+        return None
+    slots = _load_slots()
+    if clean_name in slots:
+        return slots[clean_name]
+    for slot in slots.values():
+        aliases = {alias.lower() for alias in clean_list(slot.get("aliases"))}
+        if clean_name in aliases:
+            return slot
+    raise ValueError(f"unknown Looop slot: {name}")
+
+
 class LooopRuntime:
     def __init__(self, identity: SessionIdentity, project_root: Optional[str] = None):
         self.identity = identity
@@ -195,6 +258,23 @@ class LooopRuntime:
             "skill_version": SKILL_VERSION,
         }
 
+    def slots(self) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "skill": "looop",
+            "action": "slots",
+            "slots": list(_load_slots().values()),
+        }
+
+    def slot_info(self, name: str) -> dict[str, Any]:
+        slot = _resolve_slot(name)
+        return {
+            "ok": True,
+            "skill": "looop",
+            "action": "slot_info",
+            "slot": slot,
+        }
+
     def start(
         self,
         *,
@@ -206,7 +286,18 @@ class LooopRuntime:
         execution_mode: str = "hands-off",
         commit_policy: str = "auto",
         max_iterations: int = 20,
+        slot: str = "",
     ) -> dict[str, Any]:
+        profile = _resolve_slot(slot)
+        if profile:
+            target_phase = target_phase or profile["default_target_phase"]
+            done_when = done_when or profile["default_done_when"]
+            execution_mode = (
+                clean_string(execution_mode) or profile["default_execution_mode"]
+            )
+            commit_policy = clean_string(commit_policy) or profile["default_commit_policy"]
+            if int(max_iterations or 20) == 20:
+                max_iterations = int(profile["default_max_iterations"] or 20)
         state = self._state_or_default()
         state["runtime"]["mode"] = "active"
         state["runtime"]["project_root"] = self.project_root
@@ -217,6 +308,10 @@ class LooopRuntime:
                 "done_when": clean_string(done_when),
                 "owner_agent": clean_string(owner_agent),
                 "role": clean_string(role),
+                "profile_slot": profile["name"] if profile else "",
+                "profile_alias": clean_string(slot),
+                "profile_skill": profile["owner_skill"] if profile else "",
+                "profile_description": profile["description"] if profile else "",
                 "execution_mode": clean_string(execution_mode).lower()
                 or "hands-off",
                 "commit_policy": clean_string(commit_policy).lower() or "auto",
@@ -861,6 +956,8 @@ class LooopRuntime:
             "",
             f"- Looop version: {SKILL_VERSION}",
             f"- Objective: {clean_string(goal.get('objective', ''))}",
+            f"- Profile slot: {clean_string(goal.get('profile_slot', ''))}",
+            f"- Profile skill: {clean_string(goal.get('profile_skill', ''))}",
             f"- Target phase: {clean_string(goal.get('target_phase', ''))}",
             f"- Done when: {clean_string(goal.get('done_when', ''))}",
             f"- Owner agent: {clean_string(goal.get('owner_agent', ''))}",
@@ -1059,7 +1156,9 @@ class LooopRuntime:
             "mode": state["runtime"]["mode"],
             "status": state["loop"]["status"],
             "objective": state["goal"]["objective"],
+            "profile_slot": state["goal"].get("profile_slot", ""),
             "target_phase": state["goal"]["target_phase"],
+            "max_iterations": state["goal"].get("max_iterations", 20),
             "current_slice_id": state["loop"]["current_slice_id"],
             "next_action": state["loop"]["next_action"],
             "latest_milestone": state["trace"]["latest_milestone"],
@@ -1085,6 +1184,8 @@ class LooopRuntime:
             "  </instructions>\n\n"
             "  <current_state>\n"
             f"  - objective: {_xml(state['goal'].get('objective'))}\n"
+            f"  - profile_slot: {_xml(state['goal'].get('profile_slot'))}\n"
+            f"  - profile_skill: {_xml(state['goal'].get('profile_skill'))}\n"
             f"  - target_phase: {_xml(state['goal'].get('target_phase'))}\n"
             f"  - done_when: {_xml(state['goal'].get('done_when'))}\n"
             f"  - execution_mode: {_xml(state['goal'].get('execution_mode'))}\n"
@@ -1126,6 +1227,7 @@ class LooopRuntime:
             "  </instructions>\n\n"
             "  <current_state>\n"
             f"  - objective: {_xml(state['goal'].get('objective'))}\n"
+            f"  - profile_slot: {_xml(state['goal'].get('profile_slot'))}\n"
             f"  - target_phase: {_xml(state['goal'].get('target_phase'))}\n"
             f"  - execution_mode: {_xml(state['goal'].get('execution_mode'))}\n"
             f"  - current_slice: {_xml(state['loop'].get('current_slice'))}\n"

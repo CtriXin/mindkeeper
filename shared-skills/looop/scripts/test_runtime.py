@@ -56,6 +56,10 @@ def main() -> int:
     check("missing current is non-creating", missing["action"] == "missing")
     version = rt.version_info()
     check("version command reports skill version", version["skill_version"] == SKILL_VERSION)
+    slots = rt.slots()
+    check("slots include bugloop", any(slot["name"] == "bugloop" for slot in slots["slots"]))
+    slot_info = rt.slot_info("nightly-fix")
+    check("nightly-fix resolves to bugloop", slot_info["slot"]["name"] == "bugloop")
 
     started = rt.start(
         objective="Ship a traceable loop",
@@ -67,6 +71,19 @@ def main() -> int:
     check("start activates loop", started["mode"] == "active")
     check("start records objective", started["objective"] == "Ship a traceable loop")
     check("summary includes skill version", started["skill_version"] == SKILL_VERSION)
+
+    slot_rt = current_runtime(session_id="slot-session", project_root=str(repo))
+    slot_started = slot_rt.start(
+        objective="Run critical bug hunt",
+        slot="nightly-fix",
+        owner_agent="web agent",
+        role="coordinator",
+    )
+    check("slot start records profile", slot_started["profile_slot"] == "bugloop")
+    check("slot start applies target phase", slot_started["target_phase"] == "nightly-fix")
+    check("slot start applies max iterations", slot_started["max_iterations"] == 12)
+    slot_contract = slot_rt.goal_contract()
+    check("slot contract names profile", "Profile slot: bugloop" in slot_contract["text"])
 
     slice_result = rt.begin_slice(
         summary="Edit demo file",
