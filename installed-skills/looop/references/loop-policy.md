@@ -9,9 +9,31 @@ Each slice should be small enough to verify:
 3. implement
 4. run validation
 5. run debugger pass
-6. decide commit gate
-7. write milestone
-8. update `next_action`
+6. record `iteration-result`
+7. decide commit gate
+8. write milestone
+9. update `next_action`
+
+## Modes
+
+- `hands-off`: use when the objective is bounded, the verification path is clear, and the agent should continue without steering until the stop condition is met or a real blocker appears.
+- `companion`: use when the work is exploratory, design-heavy, research-heavy, or likely to need review between slices. Completion means "ready for host review", not automatic user acceptance.
+
+In both modes, Looop must preserve user changes and avoid destructive cleanup. Never copy GNHF-style hard reset behavior into a shared dirty worktree.
+
+## Iteration Result
+
+After each meaningful slice, record:
+
+- `success`: true only if this slice materially moved the objective forward.
+- `summary`: one concise sentence.
+- `key_changes_made`: logical outcomes, not a raw file list.
+- `key_learnings`: facts future iterations would not know from prior notes.
+- `validation`: command/result evidence or explicit reason validation could not run.
+- `debugger`: blocker/risk review result.
+- `should_fully_stop`: true only when the stop condition is fully met.
+
+A complete no-op slice is not success. If there are no file changes and no new learning worth recording, mark it as failed/no-op, stop the loop, and relaunch with a narrower slice instead of spinning.
 
 ## Debugger Pass
 
@@ -64,8 +86,10 @@ When skipping, write a milestone and include:
 After 429, interruption, compaction, or model confusion, recover from:
 
 - `state.json`: current goal and next action
+- `notes.md`: compact iteration results and learnings
 - `events.jsonl`: chronological event log
 - `milestones/*.md`: human-readable checkpoints
+- `exit-summary.md`: closeout state for handoff/review
 - commit history: safe rollback points
 
 Do not depend on chat memory for recovery.

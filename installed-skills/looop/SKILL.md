@@ -28,6 +28,7 @@ Looop 是目标驱动的 execution loop。它不是聊天记忆，也不是项�
 5. 运行 debugger pass：具体漏洞、失败场景、严重级别、修复、残余不确定性。
 6. 能安全归因给当前 agent 的改动才 auto-commit。
 7. 不能 commit 时必须写 milestone / event / patch path，让后续 agent 找得到家。
+8. 每轮结束记录 `iteration-result`，把 summary、changes、learnings、stop 判断写入 `notes.md`。
 
 只有这些情况才问用户：
 
@@ -43,7 +44,8 @@ python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py star
   --objective "Ship the requested feature" \
   --target-phase "Phase D" \
   --owner-agent "web agent" \
-  --role "coordinator"
+  --role "coordinator" \
+  --execution-mode companion
 ```
 
 常用命令：
@@ -67,18 +69,34 @@ python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py mile
 # 中断/429/压缩后恢复
 python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py recover
 
+# 生成 Looop goal contract，或给 Codex /goal 使用的 prompt
+python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py goal-contract --write
+python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py goal-prompt
+
+# 记录一轮结果，沉淀 notes.md
+python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py iteration-result \
+  --success \
+  --summary "Implemented and verified the bounded slice" \
+  --key-change "Added traceable iteration notes" \
+  --key-learning "No-op slices must stop instead of spinning"
+
 # 安全 commit gate
 python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py commit-gate \
   --validation-pass \
   --debugger-pass \
   --auto-commit \
   --message "feat(search): add advanced settings"
+
+# 写 exit summary，不依赖聊天记忆复盘
+python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py exit-summary \
+  --summary "Phase shipped with validation"
 ```
 
 ## When To Load References
 
 - 需要安装或接入 hook：读 [references/hook-setup.md](references/hook-setup.md)。
 - 需要判断 auto-commit / milestone / recovery 规则：读 [references/loop-policy.md](references/loop-policy.md)。
+- 需要理解 Codex `/goal` 与 Looop 的边界：读 [references/codex-goal.md](references/codex-goal.md)。
 
 ## Agent Rule
 

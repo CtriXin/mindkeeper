@@ -31,6 +31,7 @@ def start_command(args: argparse.Namespace) -> int:
             done_when=args.done_when,
             owner_agent=args.owner_agent,
             role=args.role,
+            execution_mode=args.execution_mode,
             commit_policy=args.commit_policy,
             max_iterations=args.max_iterations,
         )
@@ -69,6 +70,14 @@ def milestone_command(args: argparse.Namespace) -> int:
     )
 
 
+def goal_contract_command(args: argparse.Namespace) -> int:
+    return _print(_runtime(args).goal_contract(write=args.write))
+
+
+def goal_prompt_command(args: argparse.Namespace) -> int:
+    return _print(_runtime(args).codex_goal_prompt())
+
+
 def quality_command(args: argparse.Namespace) -> int:
     return _print(
         _runtime(args).update_quality(
@@ -78,6 +87,20 @@ def quality_command(args: argparse.Namespace) -> int:
             debugger_summary=args.debugger_summary,
             residual_uncertainty=args.residual_uncertainty,
             blocker=args.blocker,
+        )
+    )
+
+
+def iteration_result_command(args: argparse.Namespace) -> int:
+    return _print(
+        _runtime(args).iteration_result(
+            success=args.success,
+            summary=args.summary,
+            key_changes_made=args.key_change,
+            key_learnings=args.key_learning,
+            validation=args.validation,
+            debugger=args.debugger,
+            should_fully_stop=args.should_fully_stop,
         )
     )
 
@@ -127,6 +150,10 @@ def close_command(args: argparse.Namespace) -> int:
     return _print(_runtime(args).close(summary=args.summary))
 
 
+def exit_summary_command(args: argparse.Namespace) -> int:
+    return _print(_runtime(args).exit_summary(summary=args.summary))
+
+
 def commit_gate_command(args: argparse.Namespace) -> int:
     return _print(
         _runtime(args).commit_gate(
@@ -162,6 +189,9 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--owner-agent", default="")
     start.add_argument("--role", default="")
     start.add_argument(
+        "--execution-mode", default="hands-off", choices=["hands-off", "companion"]
+    )
+    start.add_argument(
         "--commit-policy", default="auto", choices=["auto", "manual", "disabled"]
     )
     start.add_argument("--max-iterations", type=int, default=20)
@@ -190,6 +220,15 @@ def build_parser() -> argparse.ArgumentParser:
     milestone.add_argument("--screenshot", action="append", default=[])
     milestone.set_defaults(func=milestone_command)
 
+    goal_contract = sub.add_parser("goal-contract")
+    add_common(goal_contract)
+    goal_contract.add_argument("--write", action="store_true")
+    goal_contract.set_defaults(func=goal_contract_command)
+
+    goal_prompt = sub.add_parser("goal-prompt")
+    add_common(goal_prompt)
+    goal_prompt.set_defaults(func=goal_prompt_command)
+
     quality = sub.add_parser("quality")
     add_common(quality)
     quality.add_argument("--validation-status", default="")
@@ -199,6 +238,17 @@ def build_parser() -> argparse.ArgumentParser:
     quality.add_argument("--residual-uncertainty", default="")
     quality.add_argument("--blocker", default="")
     quality.set_defaults(func=quality_command)
+
+    result = sub.add_parser("iteration-result")
+    add_common(result)
+    result.add_argument("--success", action="store_true")
+    result.add_argument("--summary", required=True)
+    result.add_argument("--key-change", action="append", default=[])
+    result.add_argument("--key-learning", action="append", default=[])
+    result.add_argument("--validation", default="")
+    result.add_argument("--debugger", default="")
+    result.add_argument("--should-fully-stop", action="store_true")
+    result.set_defaults(func=iteration_result_command)
 
     validate = sub.add_parser("validate")
     add_common(validate)
@@ -235,6 +285,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(close)
     close.add_argument("--summary", default="")
     close.set_defaults(func=close_command)
+
+    exit_summary = sub.add_parser("exit-summary")
+    add_common(exit_summary)
+    exit_summary.add_argument("--summary", default="")
+    exit_summary.set_defaults(func=exit_summary_command)
 
     commit = sub.add_parser("commit-gate")
     add_common(commit)

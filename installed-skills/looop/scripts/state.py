@@ -10,8 +10,9 @@ from typing import Any, Optional
 
 
 SKILL_NAME = "looop"
-STATE_SCHEMA_VERSION = 1
+STATE_SCHEMA_VERSION = 2
 MODE_VALUES = {"disabled", "active"}
+EXECUTION_MODE_VALUES = {"hands-off", "companion"}
 COMMIT_POLICY_VALUES = {"auto", "manual", "disabled"}
 LOOP_STATUS_VALUES = {"idle", "running", "blocked", "complete"}
 
@@ -124,6 +125,7 @@ def default_state(session_id: str, project_root: str) -> dict[str, Any]:
             "done_when": "",
             "owner_agent": "",
             "role": "",
+            "execution_mode": "hands-off",
             "ask_policy": [
                 "Ask only for irreversible, external, cost, credential, or genuinely blocked decisions."
             ],
@@ -142,6 +144,15 @@ def default_state(session_id: str, project_root: str) -> dict[str, Any]:
             "dirty_current": [],
             "touched_files": [],
             "owned_files": [],
+            "last_result": {
+                "success": False,
+                "summary": "",
+                "key_changes_made": [],
+                "key_learnings": [],
+                "validation": "",
+                "debugger": "",
+                "should_fully_stop": False,
+            },
         },
         "quality": {
             "validation_status": "unknown",
@@ -155,6 +166,7 @@ def default_state(session_id: str, project_root: str) -> dict[str, Any]:
             "latest_event": "",
             "latest_milestone": "",
             "latest_commit": "",
+            "latest_exit_summary": "",
             "event_count": 0,
         },
     }
@@ -190,6 +202,9 @@ def normalize_state(state: dict[str, Any]) -> dict[str, Any]:
             "done_when": clean_string(goal.get("done_when", "")),
             "owner_agent": clean_string(goal.get("owner_agent", "")),
             "role": clean_string(goal.get("role", "")),
+            "execution_mode": clean_string(
+                goal.get("execution_mode", "hands-off")
+            ).lower(),
             "ask_policy": clean_list(goal.get("ask_policy"))
             or base["goal"]["ask_policy"],
             "commit_policy": clean_string(goal.get("commit_policy", "auto")).lower(),
@@ -199,7 +214,12 @@ def normalize_state(state: dict[str, Any]) -> dict[str, Any]:
     )
     if base["goal"]["commit_policy"] not in COMMIT_POLICY_VALUES:
         base["goal"]["commit_policy"] = "auto"
+    if base["goal"]["execution_mode"] not in EXECUTION_MODE_VALUES:
+        base["goal"]["execution_mode"] = "hands-off"
 
+    last_result = (
+        loop.get("last_result") if isinstance(loop.get("last_result"), dict) else {}
+    )
     base["loop"].update(
         {
             "status": clean_string(loop.get("status", "idle")).lower(),
@@ -212,6 +232,17 @@ def normalize_state(state: dict[str, Any]) -> dict[str, Any]:
             "dirty_current": clean_list(loop.get("dirty_current")),
             "touched_files": clean_list(loop.get("touched_files")),
             "owned_files": clean_list(loop.get("owned_files")),
+            "last_result": {
+                "success": bool(last_result.get("success", False)),
+                "summary": clean_string(last_result.get("summary", "")),
+                "key_changes_made": clean_list(last_result.get("key_changes_made")),
+                "key_learnings": clean_list(last_result.get("key_learnings")),
+                "validation": clean_string(last_result.get("validation", "")),
+                "debugger": clean_string(last_result.get("debugger", "")),
+                "should_fully_stop": bool(
+                    last_result.get("should_fully_stop", False)
+                ),
+            },
         }
     )
     if base["loop"]["status"] not in LOOP_STATUS_VALUES:

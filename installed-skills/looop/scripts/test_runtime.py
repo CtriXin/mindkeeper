@@ -59,6 +59,7 @@ def main() -> int:
         target_phase="v0",
         owner_agent="web agent",
         role="coordinator",
+        execution_mode="companion",
     )
     check("start activates loop", started["mode"] == "active")
     check("start records objective", started["objective"] == "Ship a traceable loop")
@@ -81,6 +82,25 @@ def main() -> int:
     validation = rt.validate_command(command="test -f demo.txt", timeout=10)
     check("validate command passes", validation["status"] == "pass")
     check("validate command writes log", Path(validation["log_path"]).is_file())
+
+    goal_contract = rt.goal_contract(write=True)
+    check("goal contract writes file", Path(goal_contract["path"]).is_file())
+    check("goal contract includes objective", "Ship a traceable loop" in goal_contract["text"])
+    check("goal contract includes execution mode", "Execution mode: companion" in goal_contract["text"])
+    goal_prompt = rt.codex_goal_prompt()
+    check("goal prompt is usable for Codex", "Codex /goal contract" in goal_prompt["text"])
+
+    result = rt.iteration_result(
+        success=True,
+        summary="Validated goal bridge shape",
+        key_changes_made=["Recorded the current slice result"],
+        key_learnings=["Notes preserve iteration facts outside chat memory"],
+        validation="test -f demo.txt passed",
+        debugger="no blocker found",
+    )
+    check("iteration result records success", result["result"]["success"] is True)
+    check("iteration result writes notes", Path(result["notes_path"]).is_file())
+    check("notes include learning", "Notes preserve iteration facts" in Path(result["notes_path"]).read_text())
 
     (repo / "demo.txt").write_text("two\n", encoding="utf-8")
     hook_tool = handle_request(
@@ -166,6 +186,7 @@ def main() -> int:
 
     closed = rt.close(summary="Finished v0 test.")
     check("close disables mode", closed["mode"] == "disabled")
+    check("close writes exit summary", Path(closed["latest_exit_summary"]).is_file())
     allowed = handle_request(
         "claude",
         {"hook_event_name": "Stop", "session_id": "test-session", "cwd": str(repo)},
@@ -186,6 +207,29 @@ def main() -> int:
         text=True,
     )
     check("install snippet mentions PostToolUse", "PostToolUse" in snippet)
+
+    guard_repo = setup_repo()
+    guard_rt = current_runtime(session_id="guard-session", project_root=str(guard_repo))
+    guard_rt.start(
+        objective="Stop after one slice",
+        target_phase="guard",
+        owner_agent="web agent",
+        role="coordinator",
+        max_iterations=1,
+    )
+    guard_rt.begin_slice(summary="Allowed slice", owned_files=["demo.txt"])
+    blocked = guard_rt.begin_slice(summary="Blocked slice", owned_files=["demo.txt"])
+    check("max iteration guard blocks second slice", blocked["status"] == "blocked")
+    restarted = guard_rt.start(
+        objective="Restart cleanly",
+        target_phase="guard",
+        owner_agent="web agent",
+        role="coordinator",
+        max_iterations=1,
+    )
+    check("start resets iteration guard state", restarted["status"] == "running")
+    allowed_again = guard_rt.begin_slice(summary="Allowed after restart", owned_files=["demo.txt"])
+    check("restart allows first slice again", allowed_again["status"] == "running")
 
     print("\nALL CHECKS PASSED")
     return 0
