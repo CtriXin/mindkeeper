@@ -3,7 +3,7 @@ name: looop
 description: Use when the user wants a goal-driven agent execution loop that should keep moving without repeated confirmation, run until a named phase or milestone, preserve traceable events/milestones, survive compaction/429/interruption, and auto-commit only safe self-owned validated slices. Supports Codex and Claude hook contexts.
 metadata:
   short-description: "Looop: goal-driven execution, milestones, recovery, safe commits"
-  version: "0.7.0"
+  version: "0.8.0"
 ---
 
 # Looop
@@ -62,6 +62,12 @@ python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py slot-in
 
 # 查看当前 session
 python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py current --project-root /path/to/repo
+
+# 导出 Brainkeeper checkpoint payload；默认只生成，不自动写长期记忆
+python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py brainkeeper-export \
+  --project-root /path/to/repo \
+  --write \
+  --reason "Phase shipped"
 
 # 按 profile slot 启动，例如 bugloop / nightly-fix
 python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py start \
@@ -127,6 +133,7 @@ python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py exit-su
 - 需要判断 auto-commit / milestone / recovery 规则：读 [references/loop-policy.md](references/loop-policy.md)。
 - 需要理解 Codex `/goal` 与 Looop 的边界：读 [references/codex-goal.md](references/codex-goal.md)。
 - 需要把 bugloop / nightly-fix 这类专项能力接成插槽：读 [references/slots.md](references/slots.md)。
+- 需要把 Looop 阶段结果导出到 Brainkeeper：读 [references/brainkeeper.md](references/brainkeeper.md)。
 - 需要让 Looop 从真实运行/外部项目里持续精进：读 [references/self-improve.md](references/self-improve.md)。
 
 ## Agent Rule

@@ -206,6 +206,17 @@ def main() -> int:
         next_action="Close the loop",
     )
     check("milestone file exists", Path(milestone["path"]).is_file())
+    checkpoint = rt.brainkeeper_export(
+        write=True,
+        reason="Slice checkpoint",
+        recent_events=2,
+    )
+    check("brainkeeper export writes file", Path(checkpoint["path"]).is_file())
+    check("brainkeeper export uses checkpoint tool", checkpoint["tool"] == "brain_checkpoint")
+    check("brainkeeper export records repo", checkpoint["payload"]["repo"] == str(repo.resolve()))
+    check("brainkeeper export records task", checkpoint["payload"]["task"] == "Ship a traceable loop")
+    stored_checkpoint = json.loads(Path(checkpoint["path"]).read_text(encoding="utf-8"))
+    check("brainkeeper export stores arguments", stored_checkpoint["arguments"]["status"] == "Slice checkpoint")
 
     (repo / "parallel.txt").write_text("parallel\n", encoding="utf-8")
     rt.begin_slice(summary="Try with pre-existing dirty file", owned_files=["demo.txt"])

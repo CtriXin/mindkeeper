@@ -185,6 +185,16 @@ def exit_summary_command(args: argparse.Namespace) -> int:
     return _print(_runtime(args).exit_summary(summary=args.summary))
 
 
+def brainkeeper_export_command(args: argparse.Namespace) -> int:
+    return _print(
+        _runtime(args).brainkeeper_export(
+            write=args.write,
+            reason=args.reason,
+            recent_events=args.recent_events,
+        )
+    )
+
+
 def commit_gate_command(args: argparse.Namespace) -> int:
     return _print(
         _runtime(args).commit_gate(
@@ -358,6 +368,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(exit_summary)
     exit_summary.add_argument("--summary", default="")
     exit_summary.set_defaults(func=exit_summary_command)
+
+    brainkeeper = sub.add_parser("brainkeeper-export")
+    add_common(brainkeeper)
+    brainkeeper.add_argument("--write", action="store_true")
+    brainkeeper.add_argument("--reason", default="")
+    brainkeeper.add_argument("--recent-events", type=int, default=5)
+    brainkeeper.set_defaults(func=brainkeeper_export_command)
 
     commit = sub.add_parser("commit-gate")
     add_common(commit)

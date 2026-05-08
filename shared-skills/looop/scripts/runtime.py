@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import hashlib
 import json
+import os
 import subprocess
 from html import escape
 from pathlib import Path
@@ -66,6 +67,18 @@ def _dirty_paths(project_root: str) -> list[str]:
         if path:
             paths.append(path)
     return sorted(set(paths))
+
+
+def _changed_file_names(project_root: str) -> list[str]:
+    names: list[str] = []
+    for args in (
+        ["diff", "--name-only"],
+        ["diff", "--cached", "--name-only"],
+    ):
+        result = _run_git(project_root, args)
+        if result.returncode == 0:
+            names.extend(line.strip() for line in result.stdout.splitlines())
+    return sorted({name for name in names if name})
 
 
 def _diff_snapshot(project_root: str, session_dir: Path, slice_id: str) -> str:
@@ -159,6 +172,56 @@ def _learning_scope_key(
     if clean_scope == "global":
         return clean_scope, "*"
     return clean_scope, "unspecified"
+
+
+def _compact_items(values: list[object], *, limit: int) -> list[str]:
+    seen: set[str] = set()
+    items: list[str] = []
+    for value in values:
+        text = clean_string(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        items.append(text)
+        if len(items) >= limit:
+            break
+    return items
+
+
+def _safe_checkpoint_files(repo_root: str, values: list[str]) -> list[str]:
+    safe: list[str] = []
+    for name in values:
+        rel_path = clean_string(name)
+        if not rel_path:
+            continue
+        if _looks_dangerous(rel_path, Path(repo_root) / rel_path):
+            continue
+        safe.append(rel_path)
+    return safe
+
+
+def _detected_model() -> str:
+    for key in ("CODEX_MODEL", "OPENAI_MODEL", "MODEL"):
+        value = clean_string(os.environ.get(key, ""))
+        if value:
+            return value
+    return ""
+
+
+def _event_summaries(path: Path, *, limit: int) -> list[str]:
+    if limit <= 0 or not path.is_file():
+        return []
+    summaries: list[str] = []
+    for line in path.read_text(encoding="utf-8").splitlines()[-limit:]:
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        kind = clean_string(row.get("kind", "event"))
+        summary = clean_string(row.get("summary", ""))
+        if summary:
+            summaries.append(f"{kind}: {summary}")
+    return summaries
 
 
 def _clean_slot(data: dict[str, Any], path: Path) -> dict[str, Any]:
@@ -840,6 +903,56 @@ class LooopRuntime:
         self.event("exit_summary", path, state=state)
         return {"ok": True, "action": "exit_summary", "path": path}
 
+    def brainkeeper_export(
+        self,
+        *,
+        write: bool = False,
+        reason: str = "",
+        recent_events: int = 5,
+    ) -> dict[str, Any]:
+        state = self._state_or_default()
+        payload = self._brainkeeper_payload(
+            state,
+            reason=reason,
+            recent_events=recent_events,
+        )
+        path = ""
+        if write:
+            path = str(self.identity.session_dir / "brainkeeper-checkpoint.json")
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            Path(path).write_text(
+                json.dumps(
+                    {
+                        "tool": "brain_checkpoint",
+                        "arguments": payload,
+                        "generated_by": {
+                            "skill": "looop",
+                            "skill_version": SKILL_VERSION,
+                            "agent": clean_string(
+                                state["goal"].get("owner_agent", "")
+                            )
+                            or "web agent",
+                            "role": clean_string(state["goal"].get("role", ""))
+                            or "coordinator",
+                        },
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self.event("brainkeeper_export", path, state=state)
+        return {
+            "ok": True,
+            "action": "brainkeeper_export",
+            "bridge": "brainkeeper",
+            "tool": "brain_checkpoint",
+            "written": write,
+            "path": path,
+            "payload": payload,
+        }
+
     def commit_gate(
         self,
         *,
@@ -1132,6 +1245,102 @@ class LooopRuntime:
         ]
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return str(path)
+
+    def _brainkeeper_payload(
+        self,
+        state: dict[str, Any],
+        *,
+        reason: str = "",
+        recent_events: int = 5,
+    ) -> dict[str, Any]:
+        project_root = clean_string(state["runtime"].get("project_root", ""))
+        project_root = project_root or self.project_root
+        branch = _git_text(project_root, ["branch", "--show-current"])
+        dirty_files: list[str] = []
+        changed_files: list[str] = []
+        try:
+            repo_root = _git_root(project_root)
+            dirty_files = _dirty_paths(repo_root)
+            changed_files = _changed_file_names(repo_root)
+        except Exception:
+            repo_root = project_root
+        last_result = state["loop"].get("last_result", {})
+        status = (
+            clean_string(reason)
+            or clean_string(last_result.get("summary", ""))
+            or clean_string(state["loop"].get("status", ""))
+            or "Looop checkpoint"
+        )
+        decisions = _compact_items(
+            [
+                f"profile={state['goal'].get('profile_slot')}"
+                if state["goal"].get("profile_slot")
+                else "",
+                f"target={state['goal'].get('target_phase')}"
+                if state["goal"].get("target_phase")
+                else "",
+                f"commit={state['goal'].get('commit_policy')}",
+                f"validation={state['quality'].get('validation_status')}",
+                f"debugger={state['quality'].get('debugger_status')}",
+            ],
+            limit=5,
+        )
+        changes = _compact_items(
+            _safe_checkpoint_files(
+                repo_root,
+                changed_files
+                + dirty_files
+                + clean_list(state["loop"].get("touched_files")),
+            ),
+            limit=8,
+        )
+        findings = _compact_items(
+            [
+                last_result.get("summary", ""),
+                state["quality"].get("validation_summary", ""),
+                state["quality"].get("debugger_summary", ""),
+                state["quality"].get("residual_uncertainty", ""),
+                state["quality"].get("blocker", ""),
+                state["trace"].get("latest_learning", ""),
+            ],
+            limit=5,
+        )
+        next_items = _compact_items(
+            [
+                state["loop"].get("next_action", ""),
+                state["loop"].get("stop_condition", ""),
+                f"notes={self.identity.session_dir / 'notes.md'}",
+                f"milestone={state['trace'].get('latest_milestone')}"
+                if state["trace"].get("latest_milestone")
+                else "",
+            ],
+            limit=5,
+        )
+        payload: dict[str, Any] = {
+            "repo": repo_root,
+            "task": clean_string(state["goal"].get("objective", ""))
+            or "Looop run",
+            "status": status,
+            "branch": branch,
+            "cli": "codex",
+            "decisions": decisions,
+            "changes": changes,
+            "findings": findings,
+            "next": next_items,
+        }
+        model = _detected_model()
+        if model:
+            payload["model"] = model
+        if recent_events > 0:
+            payload["findings"] = _compact_items(
+                payload["findings"]
+                + _event_summaries(
+                    self.identity.session_dir / "events.jsonl",
+                    limit=recent_events,
+                ),
+                limit=5,
+            )
+        return payload
 
     def _commit_message(self, message: str, state: dict[str, Any]) -> str:
         subject = clean_string(message) or f"chore(looop): complete {state['loop'].get('current_slice_id') or 'slice'}"
