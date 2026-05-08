@@ -5,7 +5,7 @@
 Each slice should be small enough to verify:
 
 1. choose one concrete slice
-2. record `begin_slice`
+2. record `begin_slice`; this captures the dirty worktree baseline
 3. implement
 4. run validation
 5. run debugger pass
@@ -34,6 +34,7 @@ Auto-commit is allowed only when all are true:
 
 - Looop is active.
 - The current slice has a clear owner agent and role.
+- The current slice started from a clean dirty baseline, or every baseline dirty file is explicitly handled outside auto-commit.
 - Validation passed and the output was inspected.
 - Debugger pass has no P0/P1 blocker.
 - Dirty files are all owned by this slice/agent.
@@ -52,6 +53,7 @@ When skipping, write a milestone and include:
 
 - touched files
 - dirty files
+- patch snapshot path when a diff exists
 - validation result
 - debugger result
 - blocker

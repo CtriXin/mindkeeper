@@ -58,8 +58,14 @@ python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py begi
 # 记录事件
 python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py event --kind validation --summary "npm test passed"
 
+# 运行并记录验证命令
+python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py validate --command "npm test"
+
 # 写 milestone
 python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py milestone --summary "Search settings shipped" --validation "npm test passed" --next-action "Manual browser smoke"
+
+# 中断/429/压缩后恢复
+python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py recover
 
 # 安全 commit gate
 python3 /Users/xin/auto-skills/installed-skills/looop/scripts/controller.py commit-gate \

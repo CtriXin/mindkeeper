@@ -15,6 +15,13 @@ Supported events:
 - `UserPromptSubmit`: injects Looop context.
 - `Stop`: blocks premature stop while an active loop has a contract-covered next action.
 - `PreCompact`: records a compact checkpoint event.
+- `PreToolUse` / `PostToolUse`: records tool/file activity for traceability and ownership hints.
+
+Print a config/helper snippet:
+
+```bash
+python3 /Users/xin/auto-skills/installed-skills/looop/scripts/install_snippets.py --host codex
+```
 
 ## Claude Code
 
@@ -61,9 +68,37 @@ Claude settings example:
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/xin/auto-skills/installed-skills/looop/scripts/claude_hook.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/xin/auto-skills/installed-skills/looop/scripts/claude_hook.py"
+          }
+        ]
+      }
     ]
   }
 }
+```
+
+Print the same snippet:
+
+```bash
+python3 /Users/xin/auto-skills/installed-skills/looop/scripts/install_snippets.py --host claude
 ```
 
 Claude hook notes:

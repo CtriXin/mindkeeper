@@ -82,6 +82,15 @@ def quality_command(args: argparse.Namespace) -> int:
     )
 
 
+def validate_command(args: argparse.Namespace) -> int:
+    return _print(
+        _runtime(args).validate_command(
+            command=args.command,
+            timeout=args.timeout,
+        )
+    )
+
+
 def context_command(args: argparse.Namespace) -> int:
     return _print(_runtime(args).context_for_user_prompt())
 
@@ -96,6 +105,22 @@ def stop_decision_command(args: argparse.Namespace) -> int:
 
 def precompact_command(args: argparse.Namespace) -> int:
     return _print(_runtime(args).precompact(reason=args.reason))
+
+
+def tool_use_command(args: argparse.Namespace) -> int:
+    tool_input = json.loads(args.tool_input) if args.tool_input else {}
+    tool_output = json.loads(args.tool_output) if args.tool_output else {}
+    return _print(
+        _runtime(args).record_tool_use(
+            tool_name=args.tool_name,
+            tool_input=tool_input,
+            tool_output=tool_output,
+        )
+    )
+
+
+def recover_command(args: argparse.Namespace) -> int:
+    return _print(_runtime(args).recovery_report())
 
 
 def close_command(args: argparse.Namespace) -> int:
@@ -175,6 +200,12 @@ def build_parser() -> argparse.ArgumentParser:
     quality.add_argument("--blocker", default="")
     quality.set_defaults(func=quality_command)
 
+    validate = sub.add_parser("validate")
+    add_common(validate)
+    validate.add_argument("--command", required=True)
+    validate.add_argument("--timeout", type=int, default=120)
+    validate.set_defaults(func=validate_command)
+
     context = sub.add_parser("context")
     add_common(context)
     context.set_defaults(func=context_command)
@@ -188,6 +219,17 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(precompact)
     precompact.add_argument("--reason", default="")
     precompact.set_defaults(func=precompact_command)
+
+    tool_use = sub.add_parser("tool-use")
+    add_common(tool_use)
+    tool_use.add_argument("--tool-name", required=True)
+    tool_use.add_argument("--tool-input", default="")
+    tool_use.add_argument("--tool-output", default="")
+    tool_use.set_defaults(func=tool_use_command)
+
+    recover = sub.add_parser("recover")
+    add_common(recover)
+    recover.set_defaults(func=recover_command)
 
     close = sub.add_parser("close")
     add_common(close)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import json
 import subprocess
 from html import escape
 from pathlib import Path
@@ -41,18 +40,45 @@ def _git_root(project_root: str) -> str:
 
 
 def _dirty_paths(project_root: str) -> list[str]:
-    result = _run_git(project_root, ["status", "--porcelain=v1", "-z"])
+    result = _run_git(project_root, ["status", "--porcelain=v1"])
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "git status failed")
-    raw = result.stdout
     paths: list[str] = []
-    for record in raw.split("\0"):
-        if not record:
+    for line in result.stdout.splitlines():
+        if not line:
             continue
-        path = record[3:] if len(record) > 3 else record
+        path = line[3:] if len(line) > 3 else line
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
         if path:
             paths.append(path)
     return sorted(set(paths))
+
+
+def _diff_snapshot(project_root: str, session_dir: Path, slice_id: str) -> str:
+    status = _run_git(project_root, ["status", "--short"])
+    unstaged = _run_git(project_root, ["diff", "--binary"])
+    staged = _run_git(project_root, ["diff", "--cached", "--binary"])
+    if (
+        status.returncode != 0
+        or unstaged.returncode != 0
+        or staged.returncode != 0
+        or not (status.stdout.strip() or unstaged.stdout.strip() or staged.stdout.strip())
+    ):
+        return ""
+    safe_slice = slice_id or now_iso().replace(":", "").replace("+", "Z")
+    path = session_dir / "patches" / f"{safe_slice}.patch"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = [
+        "# git status --short",
+        status.stdout,
+        "# git diff --binary",
+        unstaged.stdout,
+        "# git diff --cached --binary",
+        staged.stdout,
+    ]
+    path.write_text("\n".join(content), encoding="utf-8")
+    return str(path)
 
 
 def _looks_dangerous(path: str, full_path: Path) -> str:
@@ -149,6 +175,12 @@ class LooopRuntime:
         state = self._state_or_default()
         iteration = int(state["loop"].get("iteration", 0)) + 1
         slice_id = f"{now_iso().replace(':', '').replace('+', 'Z')}-{iteration:03d}"
+        project_root = state["runtime"]["project_root"] or self.project_root
+        baseline: list[str] = []
+        try:
+            baseline = _dirty_paths(_git_root(project_root))
+        except Exception:
+            baseline = []
         state["runtime"]["mode"] = "active"
         state["loop"].update(
             {
@@ -158,6 +190,8 @@ class LooopRuntime:
                 "current_slice": clean_string(summary),
                 "owned_files": sorted(set(clean_list(owned_files))),
                 "touched_files": [],
+                "dirty_baseline": baseline,
+                "dirty_current": baseline,
             }
         )
         state["quality"].update(
@@ -201,6 +235,65 @@ class LooopRuntime:
         active_state["trace"]["event_count"] = int(active_state["trace"].get("event_count", 0)) + 1
         self._save(active_state)
         return {"ok": True, "action": "event", "event": entry}
+
+    def record_tool_use(
+        self,
+        *,
+        tool_name: str,
+        tool_input: object = None,
+        tool_output: object = None,
+    ) -> dict[str, Any]:
+        state = self._state_or_default()
+        if state["runtime"].get("mode") != "active":
+            return {"ok": True, "action": "noop"}
+        files = self._extract_tool_files(tool_input)
+        if files:
+            current_touched = set(clean_list(state["loop"].get("touched_files")))
+            current_owned = set(clean_list(state["loop"].get("owned_files")))
+            state["loop"]["touched_files"] = sorted(current_touched.union(files))
+            state["loop"]["owned_files"] = sorted(current_owned.union(files))
+        summary = clean_string(tool_name) or "tool"
+        detail = ""
+        if isinstance(tool_input, dict):
+            command = clean_string(tool_input.get("command", ""))
+            if command:
+                detail = command[:500]
+        if isinstance(tool_output, dict):
+            output = clean_string(tool_output.get("output", ""))
+            if output and not detail:
+                detail = output[:500]
+        return self.event(
+            "tool_use",
+            summary,
+            detail=detail,
+            touched_files=files,
+            state=state,
+        )
+
+    def _extract_tool_files(self, tool_input: object) -> list[str]:
+        if not isinstance(tool_input, dict):
+            return []
+        candidates: list[str] = []
+        for key in ("file_path", "path", "notebook_path"):
+            value = clean_string(tool_input.get(key, ""))
+            if value:
+                candidates.append(value)
+        for key in ("files", "file_paths"):
+            value = tool_input.get(key)
+            if isinstance(value, list):
+                candidates.extend(clean_list(value))
+        project_root = Path(self.project_root).resolve()
+        normalized: list[str] = []
+        for candidate in candidates:
+            path = Path(candidate).expanduser()
+            try:
+                if path.is_absolute():
+                    normalized.append(str(path.resolve().relative_to(project_root)))
+                else:
+                    normalized.append(str(path))
+            except ValueError:
+                normalized.append(str(path))
+        return sorted(set(normalized))
 
     def milestone(
         self,
@@ -268,6 +361,70 @@ class LooopRuntime:
         self._save(state)
         return self._summary("update_quality", state)
 
+    def validate_command(self, *, command: str, timeout: int = 120) -> dict[str, Any]:
+        state = self._state_or_default()
+        project_root = state["runtime"].get("project_root") or self.project_root
+        started_at = now_iso()
+        timed_out = False
+        try:
+            result = subprocess.run(
+                command,
+                shell=True,
+                cwd=project_root,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout,
+                check=False,
+            )
+            returncode = result.returncode
+            stdout = result.stdout
+            stderr = result.stderr
+        except subprocess.TimeoutExpired as exc:
+            timed_out = True
+            returncode = 124
+            stdout = clean_string(exc.stdout)
+            stderr = clean_string(exc.stderr) + f"\nTimed out after {timeout}s"
+        status = "fail" if timed_out or returncode != 0 else "pass"
+        slice_id = clean_string(state["loop"].get("current_slice_id", "")) or "noslice"
+        safe_slice = slice_id.replace(":", "").replace("+", "Z")
+        log_path = self.identity.session_dir / "validation" / f"{safe_slice}.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(
+            "\n".join(
+                [
+                    f"started_at={started_at}",
+                    f"command={command}",
+                    f"returncode={returncode}",
+                    "",
+                    "# stdout",
+                    stdout,
+                    "",
+                    "# stderr",
+                    stderr,
+                ]
+            ),
+            encoding="utf-8",
+        )
+        state["quality"]["validation_status"] = status
+        state["quality"]["validation_summary"] = (
+            f"`{command}` exited {returncode}; log: {log_path}"
+        )
+        self._save(state)
+        self.event(
+            "validation",
+            state["quality"]["validation_summary"],
+            detail=(stdout + "\n" + stderr)[-1000:],
+            state=state,
+        )
+        return {
+            "ok": True,
+            "action": "validate",
+            "status": status,
+            "returncode": returncode,
+            "log_path": str(log_path),
+        }
+
     def context_for_user_prompt(self) -> dict[str, Any]:
         state = load_state(self.identity)
         if state is None or state["runtime"]["mode"] != "active":
@@ -293,7 +450,17 @@ class LooopRuntime:
         }
 
     def precompact(self, *, reason: str = "") -> dict[str, Any]:
-        return self.event("precompact", reason or "Context compaction checkpoint.")
+        state = self._state_or_default()
+        project_root = state["runtime"].get("project_root") or self.project_root
+        try:
+            state["loop"]["dirty_current"] = _dirty_paths(_git_root(project_root))
+        except Exception:
+            pass
+        return self.event(
+            "precompact",
+            reason or "Context compaction checkpoint.",
+            state=state,
+        )
 
     def close(self, *, summary: str = "") -> dict[str, Any]:
         state = self._state_or_default()
@@ -317,14 +484,18 @@ class LooopRuntime:
         project_root = state["runtime"]["project_root"] or self.project_root
         repo_root = _git_root(project_root)
         dirty = _dirty_paths(repo_root)
+        baseline = set(clean_list(state["loop"].get("dirty_baseline")))
         owned = set(clean_list(owned_files) or clean_list(state["loop"].get("owned_files")))
+        state["loop"]["dirty_current"] = dirty
         result: dict[str, Any] = {
             "ok": True,
             "action": "commit_gate",
             "repo_root": repo_root,
+            "dirty_baseline": sorted(baseline),
             "dirty_files": dirty,
             "owned_files": sorted(owned),
             "can_commit": False,
+            "patch_path": "",
             "reasons": [],
         }
         if not dirty:
@@ -338,6 +509,12 @@ class LooopRuntime:
             result["reasons"].append("debugger pass did not pass")
         if not owned:
             result["reasons"].append("no owned files recorded")
+        persistent_baseline = sorted(baseline.intersection(dirty))
+        if persistent_baseline:
+            result["reasons"].append(
+                "dirty files existed before this slice: "
+                + ", ".join(persistent_baseline)
+            )
         outside = sorted(set(dirty) - owned)
         if outside:
             result["reasons"].append("dirty files outside owned slice: " + ", ".join(outside))
@@ -351,6 +528,17 @@ class LooopRuntime:
         if not result["reasons"]:
             result["can_commit"] = True
         if not auto_commit or not result["can_commit"]:
+            if dirty:
+                result["patch_path"] = _diff_snapshot(
+                    repo_root,
+                    self.identity.session_dir,
+                    clean_string(state["loop"].get("current_slice_id", "")),
+                )
+                if result["patch_path"]:
+                    state["quality"]["residual_uncertainty"] = (
+                        "Commit skipped; patch snapshot saved at "
+                        + result["patch_path"]
+                    )
             self.event("commit_gate", "; ".join(result["reasons"]) or "commit allowed", state=state)
             return result
 
@@ -366,10 +554,27 @@ class LooopRuntime:
         rev = _run_git(repo_root, ["rev-parse", "--short", "HEAD"])
         commit_hash = rev.stdout.strip() if rev.returncode == 0 else ""
         state["trace"]["latest_commit"] = commit_hash
+        state["loop"]["dirty_baseline"] = []
+        state["loop"]["dirty_current"] = _dirty_paths(repo_root)
         self._save(state)
         self.event("commit", commit_hash or "created commit", state=state)
         result["commit"] = commit_hash
         return result
+
+    def recovery_report(self) -> dict[str, Any]:
+        state = self._state_or_default()
+        events_path = self.identity.session_dir / "events.jsonl"
+        events: list[str] = []
+        if events_path.is_file():
+            events = events_path.read_text(encoding="utf-8").splitlines()[-10:]
+        return {
+            "ok": True,
+            "action": "recover",
+            "state": self._summary("recover", state),
+            "quality": state["quality"],
+            "loop": state["loop"],
+            "recent_events": events,
+        }
 
     def _commit_message(self, message: str, state: dict[str, Any]) -> str:
         subject = clean_string(message) or f"chore(looop): complete {state['loop'].get('current_slice_id') or 'slice'}"
@@ -398,6 +603,8 @@ class LooopRuntime:
             "next_action": state["loop"]["next_action"],
             "latest_milestone": state["trace"]["latest_milestone"],
             "latest_commit": state["trace"]["latest_commit"],
+            "dirty_baseline": state["loop"].get("dirty_baseline", []),
+            "dirty_current": state["loop"].get("dirty_current", []),
         }
 
     def _context_message(self, state: dict[str, Any]) -> str:
@@ -423,6 +630,8 @@ class LooopRuntime:
             f"  - residual_uncertainty: {_xml(state['quality'].get('residual_uncertainty'))}\n"
             f"  - latest_milestone: {_xml(state['trace'].get('latest_milestone'))}\n"
             f"  - latest_commit: {_xml(state['trace'].get('latest_commit'))}\n"
+            f"  - dirty_baseline: {_xml(', '.join(clean_list(state['loop'].get('dirty_baseline'))))}\n"
+            f"  - dirty_current: {_xml(', '.join(clean_list(state['loop'].get('dirty_current'))))}\n"
             "  </current_state>\n"
             "</looop_context>"
         )

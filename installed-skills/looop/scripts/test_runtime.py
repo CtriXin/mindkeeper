@@ -68,6 +68,7 @@ def main() -> int:
         owned_files=["demo.txt"],
     )
     check("begin slice creates id", bool(slice_result["current_slice_id"]))
+    check("begin slice records clean baseline", slice_result["dirty_baseline"] == [])
 
     context = rt.context_for_user_prompt()
     check("context injects while active", context["action"] == "inject_context")
@@ -77,13 +78,32 @@ def main() -> int:
     stop = rt.stop_decision(last_assistant_message="partial update")
     check("stop gate blocks active next action", stop["decision"] == "block")
 
+    validation = rt.validate_command(command="test -f demo.txt", timeout=10)
+    check("validate command passes", validation["status"] == "pass")
+    check("validate command writes log", Path(validation["log_path"]).is_file())
+
     (repo / "demo.txt").write_text("two\n", encoding="utf-8")
+    hook_tool = handle_request(
+        "claude",
+        {
+            "hook_event_name": "PostToolUse",
+            "session_id": "test-session",
+            "cwd": str(repo),
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(repo / "demo.txt")},
+        },
+    )
+    check("post tool hook records activity", hook_tool.get("continue") is True)
+    recovered_mid = rt.recovery_report()
+    check("recover includes touched file", "demo.txt" in recovered_mid["loop"]["touched_files"])
+
     failed_gate = rt.commit_gate(
         validation_pass=False,
         debugger_pass=True,
         auto_commit=True,
     )
     check("commit gate rejects failed validation", failed_gate["can_commit"] is False)
+    check("failed gate writes patch snapshot", bool(failed_gate.get("patch_path")))
 
     passed_gate = rt.commit_gate(
         validation_pass=True,
@@ -104,6 +124,24 @@ def main() -> int:
         next_action="Close the loop",
     )
     check("milestone file exists", Path(milestone["path"]).is_file())
+
+    (repo / "parallel.txt").write_text("parallel\n", encoding="utf-8")
+    rt.begin_slice(summary="Try with pre-existing dirty file", owned_files=["demo.txt"])
+    (repo / "demo.txt").write_text("three\n", encoding="utf-8")
+    blocked_gate = rt.commit_gate(
+        validation_pass=True,
+        debugger_pass=True,
+        auto_commit=True,
+    )
+    check("baseline dirty blocks auto commit", blocked_gate["can_commit"] is False)
+    check(
+        "baseline dirty reason is explicit",
+        any("existed before this slice" in reason for reason in blocked_gate["reasons"]),
+    )
+    git(repo, "add", "parallel.txt", "demo.txt")
+    git(repo, "commit", "-m", "test: clear baseline fixture")
+    rt.begin_slice(summary="Resume after clearing baseline", owned_files=["demo.txt"])
+    (repo / "demo.txt").write_text("four\n", encoding="utf-8")
 
     hook_context = handle_request(
         "codex",
@@ -137,6 +175,17 @@ def main() -> int:
     events_path = Path(home) / "sessions" / "test-session" / "events.jsonl"
     check("events log exists", events_path.is_file())
     check("events log has entries", len(events_path.read_text().splitlines()) >= 5)
+
+    snippet = subprocess.check_output(
+        [
+            sys.executable,
+            str(SCRIPTS / "install_snippets.py"),
+            "--host",
+            "claude",
+        ],
+        text=True,
+    )
+    check("install snippet mentions PostToolUse", "PostToolUse" in snippet)
 
     print("\nALL CHECKS PASSED")
     return 0

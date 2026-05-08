@@ -65,6 +65,14 @@ def handle_request(host: str, request: dict[str, Any]) -> dict[str, Any]:
         runtime.precompact(reason=f"{host} PreCompact hook")
         return {"continue": True}
 
+    if event_name in {"PostToolUse", "PreToolUse"}:
+        runtime.record_tool_use(
+            tool_name=str(request.get("tool_name", "")),
+            tool_input=request.get("tool_input", {}),
+            tool_output=request.get("tool_output", {}),
+        )
+        return {"continue": True}
+
     if event_name == "Stop":
         decision = runtime.stop_decision(
             last_assistant_message=str(request.get("last_assistant_message", ""))

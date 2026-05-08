@@ -138,6 +138,8 @@ def default_state(session_id: str, project_root: str) -> dict[str, Any]:
             "current_slice": "",
             "next_action": "",
             "stop_condition": "",
+            "dirty_baseline": [],
+            "dirty_current": [],
             "touched_files": [],
             "owned_files": [],
         },
@@ -206,6 +208,8 @@ def normalize_state(state: dict[str, Any]) -> dict[str, Any]:
             "current_slice": clean_string(loop.get("current_slice", "")),
             "next_action": clean_string(loop.get("next_action", "")),
             "stop_condition": clean_string(loop.get("stop_condition", "")),
+            "dirty_baseline": clean_list(loop.get("dirty_baseline")),
+            "dirty_current": clean_list(loop.get("dirty_current")),
             "touched_files": clean_list(loop.get("touched_files")),
             "owned_files": clean_list(loop.get("owned_files")),
         }
