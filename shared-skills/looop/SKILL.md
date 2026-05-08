@@ -3,7 +3,7 @@ name: looop
 description: Use when the user wants a goal-driven agent execution loop that should keep moving without repeated confirmation, run until a named phase or milestone, preserve traceable events/milestones, survive compaction/429/interruption, and auto-commit only safe self-owned validated slices. Supports Codex and Claude hook contexts.
 metadata:
   short-description: "Looop: goal-driven execution, milestones, recovery, safe commits"
-  version: "0.5.0"
+  version: "0.6.0"
 ---
 
 # Looop
@@ -90,6 +90,8 @@ python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py learn \
   --source "project postmortem or external reference" \
   --summary "Small verified slices reduce recovery cost" \
   --evidence "Observed in run notes and validation logs" \
+  --scope repo \
+  --conflicts-with "Provider-specific projects may require larger atomic slices" \
   --tag loop \
   --lesson-type candidate \
   --priority P2 \

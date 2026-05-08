@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 
 SKILL_NAME = "looop"
-SKILL_VERSION = "0.5.0"
+SKILL_VERSION = "0.6.0"
 STATE_SCHEMA_VERSION = 4
 MODE_VALUES = {"disabled", "active"}
 EXECUTION_MODE_VALUES = {"hands-off", "companion"}

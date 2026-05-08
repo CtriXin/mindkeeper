@@ -119,6 +119,8 @@ def main() -> int:
     check("learn writes learning log", Path(learning["learnings_path"]).is_file())
     check("learn records priority", learning["learning"]["priority"] == "P1")
     check("learn records lesson type", learning["learning"]["lesson_type"] == "reusable-detail")
+    check("learn defaults to repo scope", learning["learning"]["scope"] == "repo")
+    check("learn fills repo scope key", learning["learning"]["scope_key"] == str(repo.resolve()))
     check("learn updates notes", "Record no-op slices" in Path(learning["notes_path"]).read_text())
     duplicate = rt.learn(
         source="gnhf iteration prompt",
@@ -129,6 +131,19 @@ def main() -> int:
         priority="P1",
     )
     check("learn detects duplicate", duplicate["learning"]["duplicate"] is True)
+    scoped_learning = rt.learn(
+        source="provider postmortem",
+        summary="Record no-op slices as failed progress",
+        evidence="Provider-specific behavior can conflict with repo practice",
+        tags=["loop", "no-op"],
+        lesson_type="reusable-detail",
+        priority="P1",
+        scope="provider",
+        scope_key="anthropic",
+        conflicts_with=["repo default may allow verification-only no-op evidence"],
+    )
+    check("same lesson in another scope is not duplicate", scoped_learning["learning"]["duplicate"] is False)
+    check("learn records conflicts", scoped_learning["learning"]["conflicts_with"])
     recovered_learning = rt.recovery_report()
     check("recover includes learnings path", Path(recovered_learning["learnings_path"]).is_file())
 

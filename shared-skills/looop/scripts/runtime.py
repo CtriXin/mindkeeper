@@ -114,9 +114,48 @@ def _looks_dangerous(path: str, full_path: Path) -> str:
     return ""
 
 
-def _learning_fingerprint(summary: str, lesson_type: str, tags: list[str]) -> str:
-    raw = "|".join([clean_string(lesson_type), clean_string(summary), ",".join(sorted(tags))])
+LEARNING_SCOPE_VALUES = {"repo", "project", "provider", "domain", "global", "run"}
+
+
+def _learning_fingerprint(
+    summary: str,
+    lesson_type: str,
+    tags: list[str],
+    scope: str,
+    scope_key: str,
+) -> str:
+    raw = "|".join(
+        [
+            clean_string(lesson_type),
+            clean_string(scope),
+            clean_string(scope_key),
+            clean_string(summary),
+            ",".join(sorted(tags)),
+        ]
+    )
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def _learning_scope_key(
+    *,
+    scope: str,
+    scope_key: str,
+    project_root: str,
+    session_id: str,
+) -> tuple[str, str]:
+    clean_scope = clean_string(scope).lower() or "repo"
+    if clean_scope not in LEARNING_SCOPE_VALUES:
+        clean_scope = "repo"
+    clean_key = clean_string(scope_key)
+    if clean_key:
+        return clean_scope, clean_key
+    if clean_scope in {"repo", "project"}:
+        return clean_scope, project_root
+    if clean_scope == "run":
+        return clean_scope, session_id
+    if clean_scope == "global":
+        return clean_scope, "*"
+    return clean_scope, "unspecified"
 
 
 class LooopRuntime:
@@ -497,6 +536,9 @@ class LooopRuntime:
         priority: str = "P2",
         fingerprint: str = "",
         promote_candidate: bool = False,
+        scope: str = "repo",
+        scope_key: str = "",
+        conflicts_with: Optional[list[str]] = None,
     ) -> dict[str, Any]:
         state = self._state_or_default()
         clean_tags = clean_list(tags)
@@ -506,10 +548,20 @@ class LooopRuntime:
         clean_priority = clean_string(priority).upper() or "P2"
         if clean_priority not in {"P0", "P1", "P2", "P3"}:
             clean_priority = "P2"
+        clean_scope, clean_scope_key = _learning_scope_key(
+            scope=scope,
+            scope_key=scope_key,
+            project_root=clean_string(state["runtime"].get("project_root", ""))
+            or self.project_root,
+            session_id=self.identity.session_id,
+        )
+        clean_conflicts = clean_list(conflicts_with)
         clean_fingerprint = clean_string(fingerprint) or _learning_fingerprint(
             summary,
             clean_type,
             clean_tags,
+            clean_scope,
+            clean_scope_key,
         )
         duplicate = self._learning_exists(clean_fingerprint)
         entry = {
@@ -517,6 +569,9 @@ class LooopRuntime:
             "source": clean_string(source),
             "summary": clean_string(summary),
             "evidence": clean_string(evidence),
+            "scope": clean_scope,
+            "scope_key": clean_scope_key,
+            "conflicts_with": clean_conflicts,
             "tags": clean_tags,
             "lesson_type": clean_type,
             "priority": clean_priority,
@@ -909,6 +964,8 @@ class LooopRuntime:
             f"- Source: {entry['source']}",
             f"- Summary: {entry['summary']}",
             f"- Evidence: {entry['evidence']}",
+            f"- Scope: {entry['scope']} / {entry['scope_key']}",
+            f"- Conflicts with: {', '.join(entry['conflicts_with']) or '(none)'}",
             f"- Tags: {', '.join(entry['tags']) or '(none)'}",
             f"- Lesson type: {entry['lesson_type']}",
             f"- Priority: {entry['priority']}",

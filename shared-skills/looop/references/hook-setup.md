@@ -109,3 +109,5 @@ Claude hook notes:
 - Reference checked on 2026-05-08: https://code.claude.com/docs/en/hooks
 
 Do not enable both old LLR and Looop stop guards for the same session unless you intentionally want both gates.
+
+Maintenance note: `web agent` (`Role: coordinator`) switched the local Codex hook entry from legacy `long-long-run` to `looop` on 2026-05-08. The legacy implementation directory and historical sessions were intentionally preserved; only the old Codex skill symlink should be removed during migration.

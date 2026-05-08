@@ -23,6 +23,7 @@ python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py learn \
   --source "source name or URL" \
   --summary "one reusable lesson" \
   --evidence "what was observed or verified" \
+  --scope repo \
   --tag loop \
   --lesson-type candidate \
   --priority P2 \
@@ -32,6 +33,9 @@ python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py learn \
 Rules:
 
 - Prefer primary sources and local run evidence.
+- Default learning scope is `repo`; use `--scope global` only for rules that are clearly cross-project and conflict-free.
+- Use `--scope provider`, `--scope domain`, or `--scope project` when the lesson depends on a model family, product domain, company workflow, or repo convention.
+- If another valid project does the opposite thing, record `--conflicts-with "..."` and keep the lesson scoped; do not promote it to `stable-default` until the boundary condition is explicit.
 - For current external tools or changing APIs, use web-access before recording conclusions.
 - Do not promote a lesson into `SKILL.md` after one anecdote unless it fixes a P0/P1 safety issue.
 - Promote recurring lessons after at least two real runs or one directly verified source plus one local validation.
@@ -54,7 +58,8 @@ Use Hive-style priority:
 - `P2`: useful improvement.
 - `P3`: observation only.
 
-Looop computes a learning fingerprint from `lesson_type + summary + tags` unless one is provided. Repeated fingerprints are marked duplicate so future review can count recurrence without bloating the log.
+Looop computes a learning fingerprint from `lesson_type + scope + scope_key + summary + tags` unless one is provided. Repeated fingerprints are marked duplicate so future review can count recurrence without bloating the log.
+Fingerprints include `scope + scope_key`, so the same lesson can coexist across different repositories, providers, or domains without false duplicate suppression.
 
 ## Promotion Gate
 
@@ -62,6 +67,8 @@ A learning can become a stable Looop rule only when:
 
 - it has concrete evidence in `learnings.jsonl`, `notes.md`, validation logs, or source links
 - it reduces a real loop failure mode
+- it is not merely a scoped exception from one repo/provider/domain
+- any conflict has an explicit boundary condition and a concrete reason the rule should still be global
 - it does not weaken safety around user changes, credentials, destructive git, billing, or production
 - it still works when another agent resumes from scratch
 
@@ -78,3 +85,4 @@ Run a promotion review when any of these is true:
 Promotion review should rank by priority, frequency, recency, and blast-radius reduction. Promote only the strongest one to three lessons per pass.
 
 Maintenance note: added by `web agent` (`Role: coordinator`) on 2026-05-08.
+Scoped learning hardening for Looop `0.6.0` was added by `web agent` (`Role: coordinator`) on 2026-05-08 to prevent cross-project conflict pollution.

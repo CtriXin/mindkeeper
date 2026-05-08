@@ -120,6 +120,9 @@ def learn_command(args: argparse.Namespace) -> int:
             priority=args.priority,
             fingerprint=args.fingerprint,
             promote_candidate=args.promote_candidate,
+            scope=args.scope,
+            scope_key=args.scope_key,
+            conflicts_with=args.conflicts_with,
         )
     )
 
@@ -287,6 +290,13 @@ def build_parser() -> argparse.ArgumentParser:
     learn.add_argument("--priority", default="P2", choices=["P0", "P1", "P2", "P3"])
     learn.add_argument("--fingerprint", default="")
     learn.add_argument("--promote-candidate", action="store_true")
+    learn.add_argument(
+        "--scope",
+        default="repo",
+        choices=["repo", "project", "provider", "domain", "global", "run"],
+    )
+    learn.add_argument("--scope-key", default="")
+    learn.add_argument("--conflicts-with", action="append", default=[])
     learn.set_defaults(func=learn_command)
 
     validate = sub.add_parser("validate")
