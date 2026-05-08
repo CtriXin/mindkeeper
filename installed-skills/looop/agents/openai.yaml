@@ -1,0 +1,4 @@
+name: looop
+display_name: Looop
+short_description: Goal-driven execution loop with milestones, recovery, and safe commits.
+default_prompt: "Use $looop when this task should proceed toward a specified phase or milestone without repeated confirmation. Start or resume a Looop goal, split work into bounded slices, validate each slice, run a debugger pass, auto-commit only self-owned validated changes, and write event/milestone records so the work can recover after interruption or compaction. Ask the user only for high-risk or genuinely blocked decisions."
