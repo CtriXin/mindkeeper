@@ -36,6 +36,7 @@ Rules:
 - Do not promote a lesson into `SKILL.md` after one anecdote unless it fixes a P0/P1 safety issue.
 - Promote recurring lessons after at least two real runs or one directly verified source plus one local validation.
 - Keep `SKILL.md` lean; detailed patterns belong in references.
+- Every functional Looop iteration must bump `metadata.version` in `SKILL.md` and `SKILL_VERSION` in `scripts/state.py` before commit.
 
 ## Classification
 

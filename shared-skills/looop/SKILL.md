@@ -3,6 +3,7 @@ name: looop
 description: Use when the user wants a goal-driven agent execution loop that should keep moving without repeated confirmation, run until a named phase or milestone, preserve traceable events/milestones, survive compaction/429/interruption, and auto-commit only safe self-owned validated slices. Supports Codex and Claude hook contexts.
 metadata:
   short-description: "Looop: goal-driven execution, milestones, recovery, safe commits"
+  version: "0.5.0"
 ---
 
 # Looop
@@ -52,6 +53,9 @@ python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py start \
 常用命令：
 
 ```bash
+# 查看当前 Looop 版本
+python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py version
+
 # 查看当前 session
 python3 /Users/xin/auto-skills/shared-skills/looop/scripts/controller.py current --project-root /path/to/repo
 

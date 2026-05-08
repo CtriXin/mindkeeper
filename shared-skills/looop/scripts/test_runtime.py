@@ -11,6 +11,7 @@ SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
 from runtime import current_runtime  # noqa: E402
+from state import SKILL_VERSION  # noqa: E402
 from hook_adapter import handle_request  # noqa: E402
 
 
@@ -53,6 +54,8 @@ def main() -> int:
 
     missing = rt.current()
     check("missing current is non-creating", missing["action"] == "missing")
+    version = rt.version_info()
+    check("version command reports skill version", version["skill_version"] == SKILL_VERSION)
 
     started = rt.start(
         objective="Ship a traceable loop",
@@ -63,6 +66,7 @@ def main() -> int:
     )
     check("start activates loop", started["mode"] == "active")
     check("start records objective", started["objective"] == "Ship a traceable loop")
+    check("summary includes skill version", started["skill_version"] == SKILL_VERSION)
 
     slice_result = rt.begin_slice(
         summary="Edit demo file",
@@ -86,6 +90,7 @@ def main() -> int:
     goal_contract = rt.goal_contract(write=True)
     check("goal contract writes file", Path(goal_contract["path"]).is_file())
     check("goal contract includes objective", "Ship a traceable loop" in goal_contract["text"])
+    check("goal contract includes version", f"Looop version: {SKILL_VERSION}" in goal_contract["text"])
     check("goal contract includes execution mode", "Execution mode: companion" in goal_contract["text"])
     goal_prompt = rt.codex_goal_prompt()
     check("goal prompt is usable for Codex", "Codex /goal contract" in goal_prompt["text"])

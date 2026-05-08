@@ -10,7 +10,8 @@ from typing import Any, Optional
 
 
 SKILL_NAME = "looop"
-STATE_SCHEMA_VERSION = 3
+SKILL_VERSION = "0.5.0"
+STATE_SCHEMA_VERSION = 4
 MODE_VALUES = {"disabled", "active"}
 EXECUTION_MODE_VALUES = {"hands-off", "companion"}
 COMMIT_POLICY_VALUES = {"auto", "manual", "disabled"}
@@ -113,6 +114,7 @@ def default_state(session_id: str, project_root: str) -> dict[str, Any]:
         "runtime": {
             "schema_version": STATE_SCHEMA_VERSION,
             "skill": SKILL_NAME,
+            "skill_version": SKILL_VERSION,
             "session_id": session_id,
             "mode": "disabled",
             "project_root": project_root,
@@ -188,6 +190,7 @@ def normalize_state(state: dict[str, Any]) -> dict[str, Any]:
         {
             "schema_version": STATE_SCHEMA_VERSION,
             "skill": SKILL_NAME,
+            "skill_version": SKILL_VERSION,
             "mode": clean_string(runtime.get("mode", "disabled")).lower(),
             "created_at": clean_string(runtime.get("created_at", "")) or now_iso(),
             "updated_at": clean_string(runtime.get("updated_at", "")) or now_iso(),

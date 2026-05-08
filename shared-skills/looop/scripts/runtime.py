@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from state import (
     SessionIdentity,
+    SKILL_VERSION,
     append_jsonl,
     clean_list,
     clean_string,
@@ -146,6 +147,14 @@ class LooopRuntime:
             state = default_state(self.identity.session_id, self.project_root)
             self._save(state)
         return self._summary("current", state)
+
+    def version_info(self) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "skill": "looop",
+            "action": "version",
+            "skill_version": SKILL_VERSION,
+        }
 
     def start(
         self,
@@ -795,6 +804,7 @@ class LooopRuntime:
         lines = [
             "# Looop Goal Contract",
             "",
+            f"- Looop version: {SKILL_VERSION}",
             f"- Objective: {clean_string(goal.get('objective', ''))}",
             f"- Target phase: {clean_string(goal.get('target_phase', ''))}",
             f"- Done when: {clean_string(goal.get('done_when', ''))}",
@@ -943,6 +953,7 @@ class LooopRuntime:
         lines = [
             "# Looop Exit Summary",
             "",
+            f"- Looop version: {SKILL_VERSION}",
             f"- Summary: {clean_string(summary)}",
             f"- Objective: {clean_string(state['goal'].get('objective', ''))}",
             f"- Target phase: {clean_string(state['goal'].get('target_phase', ''))}",
@@ -983,6 +994,7 @@ class LooopRuntime:
         return {
             "ok": True,
             "skill": "looop",
+            "skill_version": SKILL_VERSION,
             "action": action,
             "session_id": self.identity.session_id,
             "state_path": str(self.identity.state_path),

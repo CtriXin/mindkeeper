@@ -23,6 +23,10 @@ def current_command(args: argparse.Namespace) -> int:
     return _print(_runtime(args).current(auto_create=args.auto_create))
 
 
+def version_command(args: argparse.Namespace) -> int:
+    return _print(_runtime(args).version_info())
+
+
 def start_command(args: argparse.Namespace) -> int:
     return _print(
         _runtime(args).start(
@@ -195,6 +199,10 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(current)
     current.add_argument("--auto-create", action="store_true")
     current.set_defaults(func=current_command)
+
+    version = sub.add_parser("version")
+    add_common(version)
+    version.set_defaults(func=version_command)
 
     start = sub.add_parser("start")
     add_common(start)
