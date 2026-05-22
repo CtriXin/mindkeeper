@@ -1,0 +1,1144 @@
+{
+  "run_id": "run-1775782482468",
+  "status": "partial",
+  "round": 4,
+  "completed_task_ids": [
+    "task-b",
+    "task-d",
+    "task-f",
+    "task-e",
+    "task-a",
+    "task-g",
+    "task-c"
+  ],
+  "failed_task_ids": [
+    "task-a",
+    "task-c",
+    "task-g"
+  ],
+  "review_failed_task_ids": [
+    "task-a",
+    "task-g",
+    "task-c"
+  ],
+  "merged_task_ids": [],
+  "retry_counts": {
+    "task-a": 2,
+    "task-e": 1,
+    "task-g": 2,
+    "task-c": 2
+  },
+  "replan_count": 0,
+  "task_states": {
+    "task-a": {
+      "task_id": "task-a",
+      "status": "no_op",
+      "round": 3,
+      "changed_files": [],
+      "merged": false,
+      "worker_success": true,
+      "review_passed": false,
+      "retry_count": 2,
+      "can_repair": true,
+      "can_replan": false,
+      "is_resumable": true,
+      "terminal_reason": "no_op_detected",
+      "failure_class": "no_op",
+      "last_error": "No-op task: worker reported success but changed no files."
+    },
+    "task-b": {
+      "task_id": "task-b",
+      "status": "verified",
+      "round": 3,
+      "changed_files": [
+        "src/official/upstreamProxy.mjs"
+      ],
+      "merged": false,
+      "worker_success": true,
+      "review_passed": true,
+      "retry_count": 0,
+      "can_repair": false,
+      "can_replan": false,
+      "is_resumable": true,
+      "terminal_reason": "review_passed"
+    },
+    "task-c": {
+      "task_id": "task-c",
+      "status": "no_op",
+      "round": 3,
+      "changed_files": [],
+      "merged": false,
+      "worker_success": true,
+      "review_passed": false,
+      "retry_count": 2,
+      "can_repair": true,
+      "can_replan": false,
+      "is_resumable": true,
+      "terminal_reason": "no_op_detected",
+      "failure_class": "no_op",
+      "last_error": "No-op task: worker reported success but changed no files."
+    },
+    "task-d": {
+      "task_id": "task-d",
+      "status": "verified",
+      "round": 3,
+      "changed_files": [
+        "scripts/test-official-proxy-local-exec-guard.mjs",
+        "src/broker/remoteServiceClient.mjs",
+        "src/official/upstreamProxy.mjs"
+      ],
+      "merged": false,
+      "worker_success": true,
+      "review_passed": true,
+      "retry_count": 0,
+      "can_repair": false,
+      "can_replan": false,
+      "is_resumable": true,
+      "terminal_reason": "review_passed"
+    },
+    "task-e": {
+      "task_id": "task-e",
+      "status": "verified",
+      "round": 3,
+      "changed_files": [
+        "scripts/test-runtime-id-upstream.mjs",
+        "src/official/upstreamProxy.mjs"
+      ],
+      "merged": false,
+      "worker_success": true,
+      "review_passed": true,
+      "retry_count": 1,
+      "can_repair": false,
+      "can_replan": false,
+      "is_resumable": true,
+      "terminal_reason": "review_passed"
+    },
+    "task-f": {
+      "task_id": "task-f",
+      "status": "verified",
+      "round": 3,
+      "changed_files": [
+        "src/official/runOfficialProxy.mjs",
+        "src/official/upstreamProxy.mjs"
+      ],
+      "merged": false,
+      "worker_success": true,
+      "review_passed": true,
+      "retry_count": 0,
+      "can_repair": false,
+      "can_replan": false,
+      "is_resumable": true,
+      "terminal_reason": "review_passed"
+    },
+    "task-g": {
+      "task_id": "task-g",
+      "status": "no_op",
+      "round": 3,
+      "changed_files": [],
+      "merged": false,
+      "worker_success": true,
+      "review_passed": false,
+      "retry_count": 2,
+      "can_repair": true,
+      "can_replan": false,
+      "is_resumable": true,
+      "terminal_reason": "no_op_detected",
+      "failure_class": "no_op",
+      "last_error": "No-op task: worker reported success but changed no files."
+    }
+  },
+  "task_verification_results": {
+    "task-a": [],
+    "task-b": [],
+    "task-d": [],
+    "task-e": [],
+    "task-f": [],
+    "task-g": [],
+    "task-c": []
+  },
+  "repair_history": [
+    {
+      "task_id": "task-a",
+      "round": 2,
+      "findings_count": 1,
+      "outcome": "failed",
+      "note": "worker repair execution failed"
+    },
+    {
+      "task_id": "task-e",
+      "round": 2,
+      "findings_count": 1,
+      "outcome": "fixed",
+      "note": "repair review passed"
+    },
+    {
+      "task_id": "task-g",
+      "round": 2,
+      "findings_count": 1,
+      "outcome": "failed",
+      "note": "repair review still failing"
+    },
+    {
+      "task_id": "task-c",
+      "round": 2,
+      "findings_count": 1,
+      "outcome": "failed",
+      "note": "worker repair execution failed"
+    },
+    {
+      "task_id": "task-a",
+      "round": 3,
+      "findings_count": 0,
+      "outcome": "failed",
+      "note": "repair review still failing"
+    },
+    {
+      "task_id": "task-g",
+      "round": 3,
+      "findings_count": 1,
+      "outcome": "failed",
+      "note": "repair review still failing"
+    },
+    {
+      "task_id": "task-c",
+      "round": 3,
+      "findings_count": 0,
+      "outcome": "failed",
+      "note": "repair review still failing"
+    },
+    {
+      "task_id": "task-a",
+      "round": 4,
+      "findings_count": 1,
+      "outcome": "skipped",
+      "note": "retry budget exhausted"
+    },
+    {
+      "task_id": "task-g",
+      "round": 4,
+      "findings_count": 1,
+      "outcome": "skipped",
+      "note": "retry budget exhausted"
+    },
+    {
+      "task_id": "task-c",
+      "round": 4,
+      "findings_count": 1,
+      "outcome": "skipped",
+      "note": "retry budget exhausted"
+    }
+  ],
+  "round_cost_history": [
+    {
+      "round": 1,
+      "action": "execute",
+      "cost_estimate": {
+        "opus_tokens": 0,
+        "sonnet_tokens": 0,
+        "haiku_tokens": 0,
+        "domestic_tokens": 879811,
+        "estimated_cost_usd": 0.9177052777777779
+      },
+      "token_breakdown": {
+        "stages": [
+          {
+            "stage": "planner",
+            "model": "qwen3-max",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "worker:task-a",
+            "model": "kimi-k2.5",
+            "input_tokens": 130889,
+            "output_tokens": 629
+          },
+          {
+            "stage": "worker:task-b",
+            "model": "kimi-for-coding",
+            "input_tokens": 69422,
+            "output_tokens": 4221
+          },
+          {
+            "stage": "worker:task-c",
+            "model": "kimi-k2.5",
+            "input_tokens": 190261,
+            "output_tokens": 0
+          },
+          {
+            "stage": "worker:task-d",
+            "model": "kimi-for-coding",
+            "input_tokens": 40417,
+            "output_tokens": 3708
+          },
+          {
+            "stage": "worker:task-e",
+            "model": "kimi-k2.5",
+            "input_tokens": 78373,
+            "output_tokens": 999
+          },
+          {
+            "stage": "worker:task-f",
+            "model": "glm-5-turbo",
+            "input_tokens": 155122,
+            "output_tokens": 5551
+          },
+          {
+            "stage": "worker:task-g",
+            "model": "glm-5-turbo",
+            "input_tokens": 170000,
+            "output_tokens": 2037
+          },
+          {
+            "stage": "cross-review:task-b",
+            "model": "glm-5-turbo",
+            "input_tokens": 19923,
+            "output_tokens": 64
+          },
+          {
+            "stage": "a2a:task-b",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "cross-review:task-c",
+            "model": "glm-5-turbo",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "a2a:task-c",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "cross-review:task-d",
+            "model": "glm-5-turbo",
+            "input_tokens": 6283,
+            "output_tokens": 134
+          },
+          {
+            "stage": "a2a:task-d",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "cross-review:task-f",
+            "model": "kimi-for-coding",
+            "input_tokens": 1668,
+            "output_tokens": 110
+          },
+          {
+            "stage": "a2a:task-f",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        ],
+        "total_input": 862358,
+        "total_output": 17453,
+        "actual_cost_usd": 0.9177052777777779,
+        "claude_equivalent_usd": 2.639433,
+        "savings_usd": 1.721727722222222
+      },
+      "budget_status": {
+        "monthly_limit_usd": 100,
+        "current_spent_usd": 49.10570916666667,
+        "remaining_usd": 50.89429083333333,
+        "remaining_ratio": 0.5089429083333333,
+        "warn_at": 0.2,
+        "block": false,
+        "blocked": false,
+        "warning": null
+      }
+    },
+    {
+      "round": 2,
+      "action": "repair_task",
+      "cost_estimate": {
+        "opus_tokens": 0,
+        "sonnet_tokens": 0,
+        "haiku_tokens": 0,
+        "domestic_tokens": 438231,
+        "estimated_cost_usd": 0.42825625
+      },
+      "token_breakdown": {
+        "stages": [
+          {
+            "stage": "worker:task-b",
+            "model": "kimi-for-coding",
+            "input_tokens": 69422,
+            "output_tokens": 4221
+          },
+          {
+            "stage": "worker:task-d",
+            "model": "kimi-for-coding",
+            "input_tokens": 40417,
+            "output_tokens": 3708
+          },
+          {
+            "stage": "worker:task-f",
+            "model": "glm-5-turbo",
+            "input_tokens": 155122,
+            "output_tokens": 5551
+          },
+          {
+            "stage": "worker:task-a",
+            "model": "kimi-k2.5",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "worker:task-e",
+            "model": "kimi-k2.5",
+            "input_tokens": 119910,
+            "output_tokens": 1018
+          },
+          {
+            "stage": "worker:task-g",
+            "model": "glm-5-turbo",
+            "input_tokens": 8865,
+            "output_tokens": 1815
+          },
+          {
+            "stage": "worker:task-c",
+            "model": "kimi-k2.5",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "cross-review:task-b",
+            "model": "glm-5-turbo",
+            "input_tokens": 19923,
+            "output_tokens": 64
+          },
+          {
+            "stage": "a2a:task-b",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "cross-review:task-d",
+            "model": "glm-5-turbo",
+            "input_tokens": 6283,
+            "output_tokens": 134
+          },
+          {
+            "stage": "a2a:task-d",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "cross-review:task-f",
+            "model": "kimi-for-coding",
+            "input_tokens": 1668,
+            "output_tokens": 110
+          },
+          {
+            "stage": "a2a:task-f",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "cross-review:task-e",
+            "model": "glm-5-turbo",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "a2a:task-e",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        ],
+        "total_input": 421610,
+        "total_output": 16621,
+        "actual_cost_usd": 0.42825625,
+        "claude_equivalent_usd": 1.314693,
+        "savings_usd": 0.8864367499999999
+      },
+      "budget_status": {
+        "monthly_limit_usd": 100,
+        "current_spent_usd": 49.53396541666667,
+        "remaining_usd": 50.46603458333333,
+        "remaining_ratio": 0.5046603458333333,
+        "warn_at": 0.2,
+        "block": false,
+        "blocked": false,
+        "warning": null
+      }
+    },
+    {
+      "round": 3,
+      "action": "repair_task",
+      "cost_estimate": {
+        "opus_tokens": 0,
+        "sonnet_tokens": 0,
+        "haiku_tokens": 0,
+        "domestic_tokens": 670200,
+        "estimated_cost_usd": 0.7462083333333335
+      },
+      "token_breakdown": {
+        "stages": [
+          {
+            "stage": "worker:task-b",
+            "model": "kimi-for-coding",
+            "input_tokens": 69422,
+            "output_tokens": 4221
+          },
+          {
+            "stage": "worker:task-d",
+            "model": "kimi-for-coding",
+            "input_tokens": 40417,
+            "output_tokens": 3708
+          },
+          {
+            "stage": "worker:task-f",
+            "model": "glm-5-turbo",
+            "input_tokens": 155122,
+            "output_tokens": 5551
+          },
+          {
+            "stage": "worker:task-e",
+            "model": "kimi-k2.5",
+            "input_tokens": 119910,
+            "output_tokens": 1018
+          },
+          {
+            "stage": "worker:task-a",
+            "model": "kimi-k2.5",
+            "input_tokens": 70387,
+            "output_tokens": 0
+          },
+          {
+            "stage": "worker:task-g",
+            "model": "glm-5-turbo",
+            "input_tokens": 54237,
+            "output_tokens": 1386
+          },
+          {
+            "stage": "worker:task-c",
+            "model": "kimi-k2.5",
+            "input_tokens": 115871,
+            "output_tokens": 768
+          },
+          {
+            "stage": "cross-review:task-b",
+            "model": "glm-5-turbo",
+            "input_tokens": 19923,
+            "output_tokens": 64
+          },
+          {
+            "stage": "a2a:task-b",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "cross-review:task-d",
+            "model": "glm-5-turbo",
+            "input_tokens": 6283,
+            "output_tokens": 134
+          },
+          {
+            "stage": "a2a:task-d",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "cross-review:task-f",
+            "model": "kimi-for-coding",
+            "input_tokens": 1668,
+            "output_tokens": 110
+          },
+          {
+            "stage": "a2a:task-f",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "cross-review:task-e",
+            "model": "glm-5-turbo",
+            "input_tokens": 0,
+            "output_tokens": 0
+          },
+          {
+            "stage": "a2a:task-e",
+            "model": "a2a-lenses",
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        ],
+        "total_input": 653240,
+        "total_output": 16960,
+        "actual_cost_usd": 0.7462083333333335,
+        "claude_equivalent_usd": 2.0106,
+        "savings_usd": 1.2643916666666666
+      },
+      "budget_status": {
+        "monthly_limit_usd": 100,
+        "current_spent_usd": 50.28017375,
+        "remaining_usd": 49.71982625,
+        "remaining_ratio": 0.4971982625,
+        "warn_at": 0.2,
+        "block": false,
+        "blocked": false,
+        "warning": null
+      }
+    }
+  ],
+  "policy_hook_results": [],
+  "verification_results": [],
+  "budget_status": {
+    "monthly_limit_usd": 100,
+    "current_spent_usd": 50.28017375,
+    "remaining_usd": 49.71982625,
+    "remaining_ratio": 0.4971982625,
+    "warn_at": 0.2,
+    "block": false,
+    "blocked": false,
+    "warning": null
+  },
+  "budget_warning": null,
+  "next_action": {
+    "kind": "request_human",
+    "reason": "All failed tasks exhausted retry budget. Human intervention needed.",
+    "task_ids": [
+      "task-a",
+      "task-c",
+      "task-g"
+    ]
+  },
+  "updated_at": "2026-04-10T01:23:27.074Z",
+  "transition_log": [
+    {
+      "id": "t-1775782482474-3yo9by",
+      "timestamp": "2026-04-10T00:54:42.474Z",
+      "run_id": "run-1775782482468",
+      "from_state": "init",
+      "to_state": "executing",
+      "reason": "Starting execution loop",
+      "replan_count": 0,
+      "round": 0
+    },
+    {
+      "id": "t-1775782482475-v0k8wv",
+      "timestamp": "2026-04-10T00:54:42.475Z",
+      "run_id": "run-1775782482468",
+      "from_state": "planning",
+      "to_state": "planning",
+      "reason": "Generating plan...",
+      "replan_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775782596088-n345ps",
+      "timestamp": "2026-04-10T00:56:36.088Z",
+      "run_id": "run-1775782482468",
+      "from_state": "executing",
+      "to_state": "executing",
+      "reason": "Dispatching 7 task(s) to workers...",
+      "replan_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783516848-tnin63",
+      "timestamp": "2026-04-10T01:11:56.848Z",
+      "run_id": "run-1775782482468",
+      "from_state": "executing",
+      "to_state": "executing",
+      "reason": "Reviewing 7 worker result(s)...",
+      "replan_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675188-es3ecd",
+      "timestamp": "2026-04-10T01:14:35.188Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-a",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675189-9862n5",
+      "timestamp": "2026-04-10T01:14:35.189Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-c",
+      "from_state": "worker_failed",
+      "to_state": "worker_failed",
+      "reason": "Worker execution failed",
+      "failure_class": "provider",
+      "retry_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675189-pabsru",
+      "timestamp": "2026-04-10T01:14:35.189Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-e",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675189-l95vqn",
+      "timestamp": "2026-04-10T01:14:35.189Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-g",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675189-syeeac",
+      "timestamp": "2026-04-10T01:14:35.189Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-a",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675189-e8np0l",
+      "timestamp": "2026-04-10T01:14:35.189Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-b",
+      "from_state": "verified",
+      "to_state": "verified",
+      "reason": "Review passed with changes",
+      "retry_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675190-1invtv",
+      "timestamp": "2026-04-10T01:14:35.190Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-d",
+      "from_state": "verified",
+      "to_state": "verified",
+      "reason": "Review passed with changes",
+      "retry_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675190-ij2i9b",
+      "timestamp": "2026-04-10T01:14:35.190Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-e",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675190-qxkqp6",
+      "timestamp": "2026-04-10T01:14:35.190Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-f",
+      "from_state": "verified",
+      "to_state": "verified",
+      "reason": "Review passed with changes",
+      "retry_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675190-vjuih0",
+      "timestamp": "2026-04-10T01:14:35.190Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-g",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675191-jk7fxb",
+      "timestamp": "2026-04-10T01:14:35.191Z",
+      "run_id": "run-1775782482468",
+      "from_state": "verifying",
+      "to_state": "verifying",
+      "reason": "Running suite-level verification (tests, lint)...",
+      "replan_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675191-g2qdda",
+      "timestamp": "2026-04-10T01:14:35.191Z",
+      "run_id": "run-1775782482468",
+      "from_state": "verifying",
+      "to_state": "verifying",
+      "reason": "Running merged-code verification...",
+      "replan_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675197-mcd7ui",
+      "timestamp": "2026-04-10T01:14:35.197Z",
+      "run_id": "run-1775782482468",
+      "from_state": "partial",
+      "to_state": "partial",
+      "reason": "4 task(s) failed worker execution or produced no valid diff. Attempting repair. (3 no-op task(s) detected)",
+      "replan_count": 0,
+      "round": 1
+    },
+    {
+      "id": "t-1775783675199-hzs2lc",
+      "timestamp": "2026-04-10T01:14:35.199Z",
+      "run_id": "run-1775782482468",
+      "from_state": "repairing",
+      "to_state": "repairing",
+      "reason": "Repairing 4 failed task(s)...",
+      "replan_count": 0,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975405-133pxn",
+      "timestamp": "2026-04-10T01:19:35.405Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-a",
+      "from_state": "worker_failed",
+      "to_state": "worker_failed",
+      "reason": "Worker execution failed",
+      "failure_class": "provider",
+      "retry_count": 1,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975406-0t33qr",
+      "timestamp": "2026-04-10T01:19:35.406Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-g",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 1,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975406-lnz78f",
+      "timestamp": "2026-04-10T01:19:35.406Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-c",
+      "from_state": "worker_failed",
+      "to_state": "worker_failed",
+      "reason": "Worker execution failed",
+      "failure_class": "provider",
+      "retry_count": 1,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975406-mj20zr",
+      "timestamp": "2026-04-10T01:19:35.406Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-b",
+      "from_state": "verified",
+      "to_state": "verified",
+      "reason": "Review passed with changes",
+      "retry_count": 0,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975406-nrds92",
+      "timestamp": "2026-04-10T01:19:35.406Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-d",
+      "from_state": "verified",
+      "to_state": "verified",
+      "reason": "Review passed with changes",
+      "retry_count": 0,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975407-sg0ndz",
+      "timestamp": "2026-04-10T01:19:35.407Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-f",
+      "from_state": "verified",
+      "to_state": "verified",
+      "reason": "Review passed with changes",
+      "retry_count": 0,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975407-6vwhmo",
+      "timestamp": "2026-04-10T01:19:35.407Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-a",
+      "from_state": "review_failed",
+      "to_state": "review_failed",
+      "reason": "Review failed",
+      "failure_class": "review",
+      "retry_count": 1,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975407-49bsi2",
+      "timestamp": "2026-04-10T01:19:35.407Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-e",
+      "from_state": "verified",
+      "to_state": "verified",
+      "reason": "Review passed with changes",
+      "retry_count": 1,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975407-twjp7q",
+      "timestamp": "2026-04-10T01:19:35.407Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-g",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 1,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975408-2q9vf4",
+      "timestamp": "2026-04-10T01:19:35.408Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-c",
+      "from_state": "review_failed",
+      "to_state": "review_failed",
+      "reason": "Review failed",
+      "failure_class": "review",
+      "retry_count": 1,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975409-95o1e1",
+      "timestamp": "2026-04-10T01:19:35.409Z",
+      "run_id": "run-1775782482468",
+      "from_state": "verifying",
+      "to_state": "verifying",
+      "reason": "Running suite-level verification (tests, lint)...",
+      "replan_count": 0,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975409-pe2ehx",
+      "timestamp": "2026-04-10T01:19:35.409Z",
+      "run_id": "run-1775782482468",
+      "from_state": "verifying",
+      "to_state": "verifying",
+      "reason": "Running merged-code verification...",
+      "replan_count": 0,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975413-rtk6ui",
+      "timestamp": "2026-04-10T01:19:35.413Z",
+      "run_id": "run-1775782482468",
+      "from_state": "partial",
+      "to_state": "partial",
+      "reason": "3 task(s) failed worker execution or produced no valid diff. Attempting repair. (1 no-op task(s) detected)",
+      "replan_count": 0,
+      "round": 2
+    },
+    {
+      "id": "t-1775783975414-eebbnd",
+      "timestamp": "2026-04-10T01:19:35.414Z",
+      "run_id": "run-1775782482468",
+      "from_state": "repairing",
+      "to_state": "repairing",
+      "reason": "Repairing 3 failed task(s)...",
+      "replan_count": 0,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207065-4qrl6m",
+      "timestamp": "2026-04-10T01:23:27.065Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-a",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 2,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207065-48yxzj",
+      "timestamp": "2026-04-10T01:23:27.065Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-g",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 2,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207065-m8m1lq",
+      "timestamp": "2026-04-10T01:23:27.065Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-c",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 2,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207065-n6aaj0",
+      "timestamp": "2026-04-10T01:23:27.065Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-b",
+      "from_state": "verified",
+      "to_state": "verified",
+      "reason": "Review passed with changes",
+      "retry_count": 0,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207066-kd1ng3",
+      "timestamp": "2026-04-10T01:23:27.066Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-d",
+      "from_state": "verified",
+      "to_state": "verified",
+      "reason": "Review passed with changes",
+      "retry_count": 0,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207066-2khqmn",
+      "timestamp": "2026-04-10T01:23:27.066Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-f",
+      "from_state": "verified",
+      "to_state": "verified",
+      "reason": "Review passed with changes",
+      "retry_count": 0,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207066-576x5j",
+      "timestamp": "2026-04-10T01:23:27.066Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-e",
+      "from_state": "verified",
+      "to_state": "verified",
+      "reason": "Review passed with changes",
+      "retry_count": 1,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207066-hrdhg5",
+      "timestamp": "2026-04-10T01:23:27.066Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-a",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 2,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207066-rse0md",
+      "timestamp": "2026-04-10T01:23:27.066Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-g",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 2,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207067-lf1ow0",
+      "timestamp": "2026-04-10T01:23:27.067Z",
+      "run_id": "run-1775782482468",
+      "task_id": "task-c",
+      "from_state": "no_op",
+      "to_state": "no_op",
+      "reason": "No file changes produced",
+      "failure_class": "no_op",
+      "retry_count": 2,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207067-dbxgq8",
+      "timestamp": "2026-04-10T01:23:27.067Z",
+      "run_id": "run-1775782482468",
+      "from_state": "verifying",
+      "to_state": "verifying",
+      "reason": "Running suite-level verification (tests, lint)...",
+      "replan_count": 0,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207068-xjmvv7",
+      "timestamp": "2026-04-10T01:23:27.068Z",
+      "run_id": "run-1775782482468",
+      "from_state": "verifying",
+      "to_state": "verifying",
+      "reason": "Running merged-code verification...",
+      "replan_count": 0,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207072-kwakoe",
+      "timestamp": "2026-04-10T01:23:27.072Z",
+      "run_id": "run-1775782482468",
+      "from_state": "partial",
+      "to_state": "partial",
+      "reason": "3 task(s) failed worker execution or produced no valid diff. Attempting repair. (3 no-op task(s) detected)",
+      "replan_count": 0,
+      "round": 3
+    },
+    {
+      "id": "t-1775784207074-bh2cf8",
+      "timestamp": "2026-04-10T01:23:27.074Z",
+      "run_id": "run-1775782482468",
+      "from_state": "repairing",
+      "to_state": "repairing",
+      "reason": "Repairing 3 failed task(s)...",
+      "replan_count": 0,
+      "round": 4
+    }
+  ],
+  "current_plan_id": "plan-1775782553003",
+  "_smokeResults": {
+    "task-a": true,
+    "task-b": true,
+    "task-d": true,
+    "task-e": true,
+    "task-f": true,
+    "task-g": true,
+    "task-c": true
+  },
+  "final_summary": "4/7 reviews passed; 3 failed; verification passed; no-op tasks: 3; $2.0922 (saved $3.8726 vs Claude)."
+}

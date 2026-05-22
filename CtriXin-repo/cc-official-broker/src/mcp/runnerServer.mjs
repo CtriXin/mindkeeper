@@ -1,19 +1,60 @@
+import os from "node:os"
 import { createRequire } from "node:module"
 import path from "node:path"
-import { pathToFileURL } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 
 import { loadConfig } from "../config.mjs"
 import { executeToolCall, normalizeRunnerTools } from "../runner/toolExecutor.mjs"
 
+function appendCandidate(candidates, seen, value) {
+  const next = String(value || "").trim()
+  if (!next || seen.has(next)) {
+    return
+  }
+  seen.add(next)
+  candidates.push(next)
+}
+
+function appendAncestorCandidates(candidates, seen, startPath) {
+  let current = path.resolve(String(startPath || "."))
+  while (current && current !== path.dirname(current)) {
+    appendCandidate(candidates, seen, current)
+    appendCandidate(candidates, seen, path.join(current, "node_modules"))
+    current = path.dirname(current)
+  }
+  appendCandidate(candidates, seen, current)
+  appendCandidate(candidates, seen, path.join(current, "node_modules"))
+}
+
+function buildResolutionCandidates() {
+  const candidates = []
+  const seen = new Set()
+  const moduleFile = fileURLToPath(import.meta.url)
+  const moduleDir = path.dirname(moduleFile)
+  const repoRoot = path.resolve(moduleDir, "../..")
+  const homeDir = os.userInfo().homedir || os.homedir()
+
+  for (const seed of [
+    process.cwd(),
+    moduleDir,
+    repoRoot,
+    path.resolve(repoRoot, ".."),
+    path.resolve(repoRoot, "../.."),
+    homeDir,
+    path.join(homeDir, "auto-skills", "CtriXin-repo", "hive"),
+    path.join(homeDir, "auto-skills", "CtriXin-repo", "mindkeeper"),
+    path.join(homeDir, "ImagePrepMCP", "figma-smart-image-mcp"),
+    path.join(homeDir, "auto-skills", "excalidraw-mcp")
+  ]) {
+    appendAncestorCandidates(candidates, seen, seed)
+  }
+
+  return candidates
+}
+
 function resolveSdkModule(specifier) {
   const require = createRequire(import.meta.url)
-  const candidates = [
-    process.cwd(),
-    path.resolve(process.cwd(), "node_modules"),
-    path.resolve(process.cwd(), "../hive"),
-    path.resolve(process.cwd(), "../mindkeeper"),
-    path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../..")
-  ]
+  const candidates = buildResolutionCandidates()
 
   for (const base of candidates) {
     try {

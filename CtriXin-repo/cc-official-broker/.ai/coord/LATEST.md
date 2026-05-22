@@ -1,6 +1,6 @@
 # Latest
 
-- 时间：2026-04-09T01:20+0800
+- 时间：2026-04-10T09:30+0800
 - 当前主线：`local official Claude Code CLI -> self-hosted gateway -> server official runtime pool`
 - 主线仓：`cc-official-broker`
 - 底座仓：`cc-mcp-bridge`
@@ -50,6 +50,26 @@
   - 代码改动：profile generator 新增 remote auth env hooks；live profile resolver 会保留显式空 `CC_BROKER_REMOTE_CLAUDE_CONTAINER_NAME=''`
   - 当前真实 baseline：host=`23.95.30.199`，runtime=`cc-static-1`，egress=`72.1.179.98`
   - handoff：`./handoffs/2026-04-09T004445+0800-14-mms-profile-live-env-alignment.md`
+- **15 official:proxy local-exec guard 已完成（收口修正）**
+  - 结论：`official:proxy` 现在会在 write/bash/edit 意图下执行本地能力边界检查：缺少 injected runner 能力直接 `409 fail-fast`；远端 planner 返回 final 冒充成功会被拦截。
+  - 关键修正：优先把 mutating builtin (`Write`/`Edit`/`Bash`) 映射到 `mcp__cc-official-broker-runner__*`，避免落到远端 `/workspace` 路径。
+  - follow-up 放宽（已收紧）：只有 matched tool_result 才视为本地执行已完成，unresolved tool_result 不再自动放行。
+  - filename intent 扩展：`把 README.md 改成`、`在 src/foo.ts 里加`、`change <filename>` 等路径型表达现在也会触发 local write guard。
+  - 验证：7/7 test cases PASS；runtime-id upstream PASS。
+- **15e official:proxy 中文 create-file 入口 已收口**
+  - 结论：用户截图里的“乱码输出 + 本地没生成 helloworld.html”已经定位并修到主链里，问题不在 runtime，而在中文 create-file intent 漏识别 + planner 噪音透传。
+  - 关键修正：`upstreamProxy` 现支持中文 create-file intent（如“添加一个 foo.html，里面写 hi”），并在 remote planner 返回乱码时本地回退到 deterministic `write_file` / final decision。
+  - 额外收口：坏 planner turn 不再继续持久化 `previous_response_id/remote_session_id`，避免后续 follow-up 被污染。
+  - 真实复验：`helloworld-final-smoke.html` 已在本机 `/Users/xin/tmp-official-proxy-e2e/` 写出，transcript 最终 assistant 返回 `DONE`。
+- **15d official:proxy 本地 runner e2e 已完成**
+  - 结论：阻塞本地 write 的最后一跳不是 runtime / auth，而是本机 injected runner MCP server 实际 `Failed to connect`；现已修正。
+  - 根因：`src/mcp/runnerServer.mjs` 在 native worktree + gateway 临时 HOME 下无法稳定解析 `@modelcontextprotocol/sdk`，导致 session 虽写入 `.claude.json`，但 Claude 实际不会 advertise 可用 runner tools。
+  - 当前真实验收：`claude mcp list` 已显示 `cc-official-broker-runner ... Connected`；`official:proxy --print` 已在 `/Users/xin/tmp-official-proxy-e2e/` 完成本机 `write/read/bash/edit` 四类端到端验证。
+  - 额外说明：你看到的 `maximum number of unified exec processes` 只是 Codex CLI harness 自身告警，不是 bridge 故障。
+- **15c official:proxy MultiEdit/NotebookEdit 收口 已完成**
+  - 结论：当前 modern official CLI 已真实 advertise `MultiEdit` / `NotebookEdit`；这两个 builtin 之前未纳入 local-exec guard，确实是“本地 write 没有完全收口到 runner”的剩余漏口。
+  - 关键修正：`official:proxy` 现会隐藏并 remap `MultiEdit` / `NotebookEdit` 到 `mcp__cc-official-broker-runner__apply_patch`，统一走本地 writable scope。
+  - 验证：新增 2 个 guard cases 后 `test-official-proxy-local-exec-guard` 变为 `10/10 PASS`；额外做了本机 `write_file` smoke，文件真实落地到本地 repo `tmp/local-write-smoke/agent-local-write.txt`。
 - 可选增强已记录：`CLIProxyAPI` 只作为 future `gateway facade` 备选，不进入当前最快主线，不替代现有 runtime control plane
 - 下一任务建议：把 `MMS` 仓里的 launcher 真正接到 `[[broker_profiles]] -> export env -> 启动 Claude Code`
 - 下一任务建议：保持 `CLIProxyAPI` 只做 facade 备选，不动当前 runtime control plane 主线

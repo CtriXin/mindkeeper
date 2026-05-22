@@ -1,0 +1,20 @@
+{
+  "generated_at": "2026-04-10T00:56:36.094Z",
+  "run_id": "run-1775782482468",
+  "plan_id": "plan-1775782553003",
+  "task_id": "task-a",
+  "task_objective": "读取所有指定的上下文文件（AGENTS.md、LATEST.md、TASK_BOARD.md、BRANCHES_WORKTREES.md、DISTILL_RECOVERY.md、HANDBOOK.md 相关段落），然后检查当前 git diff 和 src/official/upstreamProxy.mjs 的实际代码，确认 worker 已落地的修正是否完整且方向正确。输出一份简洁评估：哪些修正已到位、哪些有遗漏或方向偏差。评估结果写入 .ai/coord/LATEST.md 的 Review 区段。",
+  "round": 1,
+  "is_repair": true,
+  "selected_files": [
+    ".ai/coord/LATEST.md"
+  ],
+  "prompt_fragments": [
+    "strict_file_boundary",
+    "acceptance_checklist"
+  ],
+  "prompt_policy_version": "worker-policy-v1",
+  "upstream_context": [],
+  "assigned_model": "kimi-k2.5",
+  "assigned_provider": "kimi"
+}

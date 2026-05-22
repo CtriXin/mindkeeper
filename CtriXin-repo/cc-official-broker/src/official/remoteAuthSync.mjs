@@ -85,21 +85,29 @@ function parseRemoteAuthBundle(raw = "") {
   }
 }
 
-function hasUsableOauth(bundle) {
-  return Boolean(bundle?.oauth?.accessToken) &&
-    Number(bundle?.oauth?.expiresAt || 0) > Date.now() + 60_000 &&
-    bundle.oauth.scopes.includes("user:profile") &&
+function hasRequiredOauthScopes(bundle) {
+  return bundle.oauth.scopes.includes("user:profile") &&
     bundle.oauth.scopes.includes("user:inference")
 }
 
+function hasValidAccessToken(bundle) {
+  return Boolean(bundle?.oauth?.accessToken) &&
+    Number(bundle?.oauth?.expiresAt || 0) > Date.now() + 60_000
+}
+
+function hasUsableOauth(bundle) {
+  return hasRequiredOauthScopes(bundle) &&
+    (hasValidAccessToken(bundle) || Boolean(bundle?.oauth?.refreshToken))
+}
+
 function describeOauthReadiness(bundle) {
-  if (!bundle?.oauth?.accessToken) {
-    return "remote auth bundle is missing oauth access token"
+  if (!bundle?.oauth?.accessToken && !bundle?.oauth?.refreshToken) {
+    return "remote auth bundle is missing oauth access token and refresh token"
   }
-  if (Number(bundle?.oauth?.expiresAt || 0) <= Date.now() + 60_000) {
+  if (!hasValidAccessToken(bundle) && !bundle?.oauth?.refreshToken) {
     return "remote auth bundle exists but oauth access token is expired"
   }
-  if (!bundle.oauth.scopes.includes("user:profile") || !bundle.oauth.scopes.includes("user:inference")) {
+  if (!hasRequiredOauthScopes(bundle)) {
     return "remote auth bundle is missing required oauth scopes"
   }
   return ""
@@ -219,18 +227,16 @@ export function probeRemoteAuthBundle(config) {
         )
       })
     )
-    const hasProfileScope = bundle.oauth.scopes.includes("user:profile")
-    const hasInferenceScope = bundle.oauth.scopes.includes("user:inference")
-    const available = Boolean(bundle.oauth.accessToken) && hasProfileScope && hasInferenceScope
-    const expired = Number(bundle.oauth.expiresAt || 0) <= Date.now() + 60_000
+    const available = hasUsableOauth(bundle)
+    const expired = !hasValidAccessToken(bundle)
 
     return {
       configured: true,
-      available: available && !expired,
+      available,
       ssh_target: sshTarget,
       auth_dir: buildAuthDir(config),
       reason: available
-        ? expired
+        ? expired && !bundle.oauth.refreshToken
           ? "remote auth bundle exists but oauth access token is expired"
           : ""
         : "remote auth bundle is missing required oauth scopes",

@@ -19,4 +19,5 @@
 | review_done | single-agent | high | codex-main | 做 `official:attach` -> live broker 真实联调 | `./prompts/12-agent-official-attach-live-broker.md` | live-configured broker 已跑到 `protocol_ok_model_error`；最小 blocker 为 remote auth source 仍指向 disabled org |
 | review_done | single-agent | high | codex-main | 做 live auth source alignment 并复跑 `official:attach` | `./prompts/13-agent-live-auth-source-alignment.md` | 已完成；status=`protocol_and_model_ok`，返回 `LIVE_ATTACH_OK` |
 | review_done | integration | medium | codex-main | 收口 MMS profile/live env 并修空 container override | n/a | 已完成；`mms:profile:print/install` 与 `broker:live` 对齐 live baseline，显式空 `container_name` 不再退回旧值 |
+| review_done | single-agent | high | codex-main | 修 official:proxy “写类 turn 落远端 /workspace” 方向性错误 | n/a | 已完成最小修正：planner final 冒充成功拦截、缺本地 write/bash/edit 能力 fail-fast、mutating builtin 映射到 injected runner、补充验证脚本 |
 | pending | single-agent | medium | codex-main | 评估把 `CLIProxyAPI` 改造成 gateway facade 的最小接法 | n/a | 可选增强；只在主线跑稳后再做，定位是 facade，不替代 runtime control plane |

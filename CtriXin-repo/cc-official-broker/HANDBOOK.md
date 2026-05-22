@@ -534,6 +534,33 @@ MMS(local)
     - 再下发 `Write tmp/official-tools-default.txt`
     - 最后返回 `OK`
 
+## Iteration 2026-04-11 18:25 +0800
+
+- type:
+  - official:proxy zh create-file fallback
+  - planner noise containment
+- decision:
+  - 中文 create-file 请求（如“在当前文件夹添加一个 foo.html，里面写 hi”）不能再只依赖 remote planner 首轮 JSON；现在会先做本地 deterministic shortcut / fallback。
+  - 当 remote planner 返回 `✻...` 这类噪音文本时，proxy 不再原样透传到前台，而是优先回退到本地可推断的 `write_file` 或 final literal。
+  - noisy planner turn 不再持久化 `previous_response_id/remote_session_id`，避免坏 turn 污染下一轮。
+- note:
+  - 真实 transcript 已验证中文 prompt 可在本机生成 `helloworld-final-smoke.html`，并最终回 `DONE`。
+  - 当前用户若再用同类中文提示词测试，验收口径应以“本机是否真落文件”为准，而不是看中途是否出现 planner 噪音。
+
+## Iteration 2026-04-11 17:14 +0800
+
+- type:
+  - official:proxy local runner e2e
+  - runner MCP sdk resolution
+- decision:
+  - `official:proxy` 本地 runner 注入是否成功，不能只看隔离 `.claude.json` 是否写入 `mcpServers`；必须额外看真实 health。
+  - 当前 native worktree 下，真正卡点是 `src/mcp/runnerServer.mjs` 无法稳定解析 `@modelcontextprotocol/sdk`，因此 `claude mcp list` 会显示 `Failed to connect`，local tools 实际不会 advertise 到 official session。
+  - 现已把 runner SDK 解析改成：优先基于真实用户 home 与共享依赖仓 (`hive` / `mindkeeper` / 现有 MCP 项目) 做 fallback，不再误跟 gateway 临时 `HOME`。
+  - 现已用真实 `official:proxy --print` 在 `/Users/xin/tmp-official-proxy-e2e/` 完成本机 `write_file` / `bash` / `read_file` / `edit(write_file overwrite)` 端到端验证。
+- note:
+  - `maximum number of unified exec processes` 是 Codex CLI harness 告警，不是 broker / runner / runtime 故障。
+  - 当前 server runtime 仍建议固定走 `cc-static-4`；`cc-static-1` 仍有 Docker container name conflict，不能当 live baseline。
+
 ## Iteration 2026-04-07 21:10 +0800
 
 - type:

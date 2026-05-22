@@ -9,6 +9,33 @@ import {
   postRemoteAgentEvent
 } from "../broker/remoteServiceClient.mjs"
 
+class PlannerBoundaryError extends Error {
+  constructor(message, { status = 409, type = "invalid_request_error", code = "planner_boundary_violation" } = {}) {
+    super(message)
+    this.name = "PlannerBoundaryError"
+    this.status = status
+    this.type = type
+    this.code = code
+  }
+}
+
+const RUNNER_TOOL_PREFIX = "mcp__cc-official-broker-runner__"
+const RUNNER_TOOL = {
+  bash: `${RUNNER_TOOL_PREFIX}bash`,
+  writeFile: `${RUNNER_TOOL_PREFIX}write_file`,
+  applyPatch: `${RUNNER_TOOL_PREFIX}apply_patch`
+}
+
+const BUILTIN_MUTATION_TO_RUNNER = new Map([
+  ["Bash", RUNNER_TOOL.bash],
+  ["Write", RUNNER_TOOL.writeFile],
+  ["Edit", RUNNER_TOOL.applyPatch],
+  ["MultiEdit", RUNNER_TOOL.applyPatch],
+  ["NotebookEdit", RUNNER_TOOL.applyPatch]
+])
+
+const FILE_EXT_PATTERN = "(?:ts|js|mjs|json|md|txt|yaml|yml|toml|py|go|rs|vue|jsx|tsx|css|html|sh|env|lock|conf|ini|cfg)"
+
 function jsonResponse(res, status, payload) {
   const body = JSON.stringify(payload)
   res.writeHead(status, {
@@ -32,12 +59,14 @@ async function writeDebugDump(name, payload) {
   await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8")
 }
 
-function writeAnthropicError(res, status, message, type = "api_error") {
+function writeAnthropicError(res, status, message, type = "api_error", code = "") {
+  const normalizedCode = String(code || "").trim()
   jsonResponse(res, status, {
     type: "error",
     error: {
       type,
-      message: String(message || "unknown error")
+      message: String(message || "unknown error"),
+      ...(normalizedCode ? { code: normalizedCode } : {})
     }
   })
 }
@@ -295,6 +324,8 @@ function selectPlannerTools(tools = []) {
   }
   if (names.has("mcp__cc-official-broker-runner__apply_patch")) {
     hideBuiltins.add("Edit")
+    hideBuiltins.add("MultiEdit")
+    hideBuiltins.add("NotebookEdit")
   }
 
   for (const tool of list) {
@@ -368,6 +399,423 @@ function extractUserAsk(messages = []) {
   return ""
 }
 
+function getAvailableToolNames(tools = []) {
+  return new Set((Array.isArray(tools) ? tools : []).map(tool => String(tool?.name || "")).filter(Boolean))
+}
+
+function normalizeToolChoiceName(toolChoice) {
+  if (toolChoice && typeof toolChoice === "object" && (toolChoice.type === "tool" || toolChoice.type === "function")) {
+    return String(toolChoice.name || "")
+  }
+  return ""
+}
+
+function findLatestUserTextMessageIndex(messages = []) {
+  const list = Array.isArray(messages) ? messages : []
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const message = list[index]
+    if (!message || message.role !== "user") {
+      continue
+    }
+    const hasText = normalizeMessageContent(message.content).some(
+      block => block?.type === "text" && sanitizeClaudeText(block.text || "", 2000)
+    )
+    if (hasText) {
+      return index
+    }
+  }
+  return -1
+}
+
+function latestMessageIsToolResultOnly(messages = []) {
+  const list = Array.isArray(messages) ? messages : []
+  const last = list[list.length - 1]
+  if (!last || last.role !== "user") {
+    return false
+  }
+
+  const blocks = normalizeMessageContent(last.content)
+  if (!blocks.length) {
+    return false
+  }
+
+  let hasToolResult = false
+  for (const block of blocks) {
+    if (block?.type === "tool_result") {
+      hasToolResult = true
+      continue
+    }
+    if (block?.type === "text" && !sanitizeClaudeText(block.text || "", 2000)) {
+      continue
+    }
+    return false
+  }
+
+  return hasToolResult
+}
+
+function buildToolNameByUseId(messages = []) {
+  const mapping = new Map()
+  for (const message of Array.isArray(messages) ? messages : []) {
+    for (const block of normalizeMessageContent(message.content)) {
+      if (block?.type !== "tool_use") {
+        continue
+      }
+      const id = String(block.id || "").trim()
+      const name = String(block.name || "").trim()
+      if (id && name) {
+        mapping.set(id, name)
+      }
+    }
+  }
+  return mapping
+}
+
+function evaluateToolResultEvidence(messages = [], startIndex = -1, expectedToolNames = []) {
+  const list = Array.isArray(messages) ? messages : []
+  const expected = new Set((Array.isArray(expectedToolNames) ? expectedToolNames : []).map(name => String(name || "")).filter(Boolean))
+  const toolNameByUseId = buildToolNameByUseId(list)
+  let totalToolResults = 0
+  let matchedToolResults = 0
+  let unresolvedToolResults = 0
+
+  for (let messageIndex = Math.max(0, startIndex + 1); messageIndex < list.length; messageIndex += 1) {
+    const message = list[messageIndex] || {}
+    for (const block of normalizeMessageContent(message.content)) {
+      if (block?.type !== "tool_result") {
+        continue
+      }
+
+      totalToolResults += 1
+      const toolUseId = String(block.tool_use_id || "").trim()
+      const toolName = toolUseId ? toolNameByUseId.get(toolUseId) : ""
+      if (!toolName) {
+        unresolvedToolResults += 1
+        continue
+      }
+      if (expected.has(toolName)) {
+        matchedToolResults += 1
+      }
+    }
+  }
+
+  return {
+    totalToolResults,
+    matchedToolResults,
+    unresolvedToolResults
+  }
+}
+
+function hasSatisfiedLocalExecution(messages = [], latestUserAskIndex = -1, expectedToolNames = []) {
+  if (latestUserAskIndex < 0) {
+    return false
+  }
+
+  const evidence = evaluateToolResultEvidence(messages, latestUserAskIndex, expectedToolNames)
+  // Only matched tool_results count as satisfied.
+  // Unresolved tool_results (tool_use_id not found in history) are NOT sufficient —
+  // they may come from history truncation or unrelated tool calls.
+  return evidence.matchedToolResults > 0
+}
+
+function stripOuterQuotes(value = "") {
+  const text = String(value || "").trim()
+  if (!text) {
+    return ""
+  }
+
+  return text.replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, "").trim()
+}
+
+function extractExactReplyLiteral(userAsk = "") {
+  const ask = String(userAsk || "").trim()
+  if (!ask) {
+    return ""
+  }
+
+  const patterns = [
+    /(?:只回复|只输出|回复时只写|最后只回复)\s*["'“”‘’`]?([A-Za-z0-9._-]+)["'“”‘’`]?/i,
+    /reply\s+with\s+exactly\s+["'“”‘’`]?([A-Za-z0-9._-]+)["'“”‘’`]?/i
+  ]
+  for (const pattern of patterns) {
+    const match = ask.match(pattern)
+    if (match?.[1]) {
+      return String(match[1]).trim()
+    }
+  }
+  return ""
+}
+
+function looksLikePlannerNoise(text = "") {
+  const raw = String(text || "").trim()
+  if (!raw) {
+    return false
+  }
+  if (/[✻✶✽✢]/.test(raw)) {
+    return true
+  }
+  const compact = raw.replace(/\s+/g, "")
+  if (!compact) {
+    return false
+  }
+  const shortFragments = raw
+    .split(/\n+/)
+    .map(line => line.trim())
+    .filter(Boolean)
+  return shortFragments.length >= 3 && shortFragments.every(line => line.length <= 4)
+}
+
+function extractCreateFileIntent(userAsk = "") {
+  const ask = String(userAsk || "").trim()
+  if (!ask) {
+    return null
+  }
+
+  const fileMatch = ask.match(new RegExp(`([A-Za-z0-9_./-]+\\.${FILE_EXT_PATTERN})\\b`, "i"))
+  if (!fileMatch?.[1]) {
+    return null
+  }
+
+  if (
+    !/(?:创建|新建|添加|生成|写一个|加(?:一个|个)?|create|add|write)/i.test(ask)
+  ) {
+    return null
+  }
+
+  let content = ""
+  const markers = [
+    /(?:里面写|内容(?:写成|是)?|文件内容(?:写成|是)?|写入|写上?)\s*([\s\S]+)$/i,
+    /with\s+(?:exactly\s+)?(?:content|text)\s*[:：]?\s*([\s\S]+)$/i
+  ]
+  for (const pattern of markers) {
+    const match = ask.match(pattern)
+    if (!match?.[1]) {
+      continue
+    }
+    content = String(match[1] || "").trim()
+    break
+  }
+
+  if (content) {
+    content = content
+      .split(/(?:。|，|；|,|;)\s*(?:用本地工具|使用本地工具|完成后|然后|最后|并|再|只回复|只输出|reply with exactly)/i)[0]
+      .split(/\r?\n/)[0]
+      .trim()
+  }
+
+  return {
+    path: String(fileMatch[1]).trim(),
+    content: stripOuterQuotes(content)
+  }
+}
+
+function inferDecisionFromUserAsk(userAsk = "", availableTools = [], policy = {}) {
+  const available = getAvailableToolNames(availableTools)
+  const createFile = extractCreateFileIntent(userAsk)
+  if (policy?.requireToolDecision && createFile?.path) {
+    const toolName = available.has(RUNNER_TOOL.writeFile)
+      ? RUNNER_TOOL.writeFile
+      : available.has("Write")
+        ? "Write"
+        : ""
+    if (toolName) {
+      return {
+        type: "tool_use",
+        name: toolName,
+        arguments:
+          toolName === RUNNER_TOOL.writeFile
+            ? {
+                path: createFile.path,
+                content: createFile.content || ""
+              }
+            : {
+                file_path: createFile.path,
+                content: createFile.content || ""
+              },
+        prelude: ""
+      }
+    }
+  }
+
+  const exactReply = extractExactReplyLiteral(policy?.userAsk || userAsk)
+  if (exactReply && looksLikePlannerNoise(policy?.rawPlannerText || "")) {
+    return {
+      type: "final",
+      content: exactReply
+    }
+  }
+
+  return null
+}
+
+function buildLocalShortcutDecision(request = {}, availableTools = [], plannerPolicy = {}) {
+  const userAsk = String(plannerPolicy?.userAsk || extractUserAsk(request.messages || []) || "").trim()
+  if (!/[一-龥]/.test(userAsk) || !/(?:在当前|里面写|添加|新建|创建)/.test(userAsk)) {
+    return null
+  }
+  const createFile = extractCreateFileIntent(userAsk)
+  if (!createFile?.path) {
+    return null
+  }
+
+  const messages = Array.isArray(request.messages) ? request.messages : []
+  const latestUserAskIndex = findLatestUserTextMessageIndex(messages)
+  const completionTools = [
+    RUNNER_TOOL.writeFile,
+    RUNNER_TOOL.applyPatch,
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "NotebookEdit"
+  ]
+
+  if (!hasSatisfiedLocalExecution(messages, latestUserAskIndex, completionTools)) {
+    return inferDecisionFromUserAsk(userAsk, availableTools, {
+      ...plannerPolicy,
+      requireToolDecision: true
+    })
+  }
+
+  return {
+    type: "final",
+    content: extractExactReplyLiteral(userAsk) || `已在当前目录创建 ${createFile.path}`
+  }
+}
+
+function shouldRequireLocalFileMutationTool(userAsk = "", explicitToolName = "") {
+  const ask = String(userAsk || "")
+  const explicit = String(explicitToolName || "")
+  if (
+    explicit === "Write" ||
+    explicit === "Edit" ||
+    explicit === "MultiEdit" ||
+    explicit === "NotebookEdit" ||
+    explicit === RUNNER_TOOL.writeFile ||
+    explicit === RUNNER_TOOL.applyPatch
+  ) {
+    return true
+  }
+
+  // Filename/path intent patterns — detect file mutation intent via filename presence
+  const filenamePatterns = [
+    // "把 README.md ... 改成", "把 src/foo.ts ... 加"
+    new RegExp(`把.{0,60}\\.${FILE_EXT_PATTERN}\\b.{0,30}(?:改|加|删|修|替换)`),
+    // "在 src/foo.ts 里加/删/改"
+    new RegExp(`在.{0,60}\\.${FILE_EXT_PATTERN}\\b.{0,30}里?(?:加|删|改|插入)`),
+    // "添加一个 foo.html", "新建 bar.md"
+    new RegExp(`(?:创建|新建|添加|生成|加(?:一个|个)?).{0,20}\\.${FILE_EXT_PATTERN}\\b`),
+    // "修改这个文件", "编辑下面的文件"
+    /(?:修改|编辑|更新|改一下|改下)(?:这个|下面的|下面这个)?(?:文件|file)/,
+    // English: "change/update/edit <filename>", "add line to src/foo.ts"
+    new RegExp(`\\b(?:change|update|edit|modify|add|remove|delete|replace)\\b.{0,50}\\.${FILE_EXT_PATTERN}\\b`, "i"),
+    // English: "create/write <filename>"
+    new RegExp(`\\b(?:create|write|append)\\b.{0,50}\\.${FILE_EXT_PATTERN}\\b`, "i")
+  ]
+
+  const patterns = [
+    /\b(create|write|append|overwrite)\b.{0,30}\b(file|files)\b/i,
+    /\b(edit|modify|update|patch|replace|delete|remove|rename)\b.{0,30}\b(file|files)\b/i,
+    /\bapply[_\s-]?patch\b/i,
+    /(创建|新建|写入|追加|覆盖).{0,12}(文件|file)/,
+    /(修改|编辑|替换|补丁|删除|重命名).{0,12}(文件|file)/
+  ]
+  return (
+    patterns.some(pattern => pattern.test(ask)) ||
+    filenamePatterns.some(pattern => pattern.test(ask)) ||
+    Boolean(extractCreateFileIntent(ask))
+  )
+}
+
+function shouldRequireLocalBashTool(userAsk = "", explicitToolName = "") {
+  const ask = String(userAsk || "")
+  const explicit = String(explicitToolName || "")
+  if (explicit === "Bash" || explicit === RUNNER_TOOL.bash) {
+    return true
+  }
+
+  const patterns = [
+    /\b(run|execute)\b.{0,30}\b(command|bash|shell|script|npm|pnpm|yarn|node|python|git|make|cargo)\b/i,
+    /\b(bash|shell|terminal)\b.{0,20}\b(command|script)\b/i,
+    /(执行|运行).{0,12}(命令|bash|shell|脚本|终端)/
+  ]
+  return patterns.some(pattern => pattern.test(ask))
+}
+
+function buildPlannerPolicy(request = {}, availableTools = []) {
+  const messages = Array.isArray(request.messages) ? request.messages : []
+  const userAsk = extractUserAsk(request.messages || [])
+  const latestUserAskIndex = findLatestUserTextMessageIndex(messages)
+  const explicitToolName = normalizeToolChoiceName(normalizeToolChoice(request.tool_choice))
+  const availableNames = getAvailableToolNames(availableTools)
+  const requiredGroups = []
+
+  if (shouldRequireLocalFileMutationTool(userAsk, explicitToolName)) {
+    requiredGroups.push({
+      label: "local write/edit",
+      advertisedTools: [RUNNER_TOOL.writeFile, RUNNER_TOOL.applyPatch],
+      completionTools: [
+        RUNNER_TOOL.writeFile,
+        RUNNER_TOOL.applyPatch,
+        "Write",
+        "Edit",
+        "MultiEdit",
+        "NotebookEdit"
+      ]
+    })
+  }
+
+  if (shouldRequireLocalBashTool(userAsk, explicitToolName)) {
+    requiredGroups.push({
+      label: "local bash",
+      advertisedTools: [RUNNER_TOOL.bash],
+      completionTools: [RUNNER_TOOL.bash, "Bash"]
+    })
+  }
+
+  const missingGroups = requiredGroups.filter(
+    group => !group.advertisedTools.some(toolName => availableNames.has(toolName))
+  )
+  const pendingGroups = requiredGroups.filter(
+    group => !hasSatisfiedLocalExecution(messages, latestUserAskIndex, group.completionTools)
+  )
+
+  return {
+    userAsk,
+    requireToolDecision: pendingGroups.length > 0,
+    requiredGroups,
+    pendingGroups,
+    missingGroups
+  }
+}
+
+function mapMutatingBuiltinToRunner(toolName = "", availableTools = []) {
+  const name = String(toolName || "")
+  const mapped = BUILTIN_MUTATION_TO_RUNNER.get(name)
+  if (!mapped) {
+    return name
+  }
+
+  const availableNames = getAvailableToolNames(availableTools)
+  return availableNames.has(mapped) ? mapped : name
+}
+
+function validatePlannerPolicy(policy = {}) {
+  const missingGroups = Array.isArray(policy?.missingGroups) ? policy.missingGroups : []
+  if (!missingGroups.length) {
+    return
+  }
+
+  const labels = missingGroups.map(group => String(group.label || "required local tool")).join(", ")
+  throw new PlannerBoundaryError(
+    `local execution guard blocked this request: missing advertised ${labels} capability in this session/profile`,
+    {
+      status: 409,
+      type: "invalid_request_error",
+      code: "missing_local_execution_capability"
+    }
+  )
+}
+
 function buildPlannerPrompt(request = {}) {
   const tools = selectPlannerTools(request.tools)
   const transcript = summarizeAnthropicMessages(request.messages || [])
@@ -386,6 +834,8 @@ function buildPlannerPrompt(request = {}) {
     "Never claim the session is read-only, advisory-only, or unable to use tools.",
     "Decide the single best next action.",
     "If the answer depends on reading a file, searching code, or running a command, you MUST return type=tool_use.",
+    "If the user asks to create/edit files or run shell commands, you MUST emit a tool_use decision and wait for tool_result.",
+    "Never claim a write/edit/bash action succeeded unless it was executed via tool_use + tool_result in this session.",
     "Never describe an intended tool action in plain text. Return the tool call instead.",
     "When returning type=final, keep content concise, complete, and under 1200 Chinese characters.",
     "Do not truncate JSON, do not use code fences, and do not wrap the JSON in extra commentary.",
@@ -632,64 +1082,146 @@ function inferDecisionFromCcMeta(payload = {}, availableTools = []) {
   return null
 }
 
-function parsePlannerDecision(payload = {}, availableTools = []) {
+function parsePlannerDecision(payload = {}, availableTools = [], policy = {}) {
   const blocks = extractResponsesBlocks(payload)
   const text = blocks
     .filter(block => block.type === "text")
     .map(block => String(block.text || ""))
     .join("\n")
     .trim()
+  const enrichedPolicy = {
+    ...policy,
+    rawPlannerText: text
+  }
 
   const parsed = tryParseJsonObject(text)
   const available = new Set((availableTools || []).map(tool => String(tool?.name || "")))
+  const resolveAllowedToolName = rawName => {
+    const original = String(rawName || "")
+    if (!original) {
+      return ""
+    }
+    const mapped = mapMutatingBuiltinToRunner(original, availableTools)
+    if (available.has(original) || available.has(mapped)) {
+      return mapped
+    }
+    return ""
+  }
 
-  if (parsed?.type === "tool_use" && available.has(String(parsed.name || ""))) {
-    return {
+  const finalizeDecision = decision => {
+    if (!decision || typeof decision !== "object") {
+      return decision
+    }
+
+    if (decision.type === "tool_use") {
+      const mappedName = mapMutatingBuiltinToRunner(decision.name, availableTools)
+      return {
+        ...decision,
+        name: mappedName
+      }
+    }
+
+    if (decision.type === "final" && policy?.requireToolDecision) {
+      throw new PlannerBoundaryError(
+        "remote planner returned final text for a turn that requires local write/bash/edit execution",
+        {
+          status: 409,
+          type: "invalid_request_error",
+          code: "planner_final_blocked_for_local_execution"
+        }
+      )
+    }
+
+    return decision
+  }
+
+  const parsedToolName = resolveAllowedToolName(parsed?.name)
+  if (parsed?.type === "tool_use" && parsedToolName) {
+    return finalizeDecision({
       type: "tool_use",
-      name: String(parsed.name || ""),
+      name: parsedToolName,
       arguments: parsed.arguments && typeof parsed.arguments === "object" ? parsed.arguments : {},
       prelude: String(parsed.prelude || "").trim()
-    }
+    })
   }
 
   if (parsed?.type === "final") {
-    return {
+    return finalizeDecision({
       type: "final",
       content: String(parsed.content || "").trim()
-    }
+    })
   }
 
   const salvaged = trySalvagePlannerDecision(text, availableTools)
-  if (salvaged?.type === "tool_use" && available.has(String(salvaged.name || ""))) {
-    return {
+  const salvagedToolName = resolveAllowedToolName(salvaged?.name)
+  if (salvaged?.type === "tool_use" && salvagedToolName) {
+    return finalizeDecision({
       type: "tool_use",
-      name: String(salvaged.name || ""),
+      name: salvagedToolName,
       arguments: salvaged.arguments && typeof salvaged.arguments === "object" ? salvaged.arguments : {},
       prelude: String(salvaged.prelude || "").trim()
-    }
+    })
   }
 
   if (salvaged?.type === "final") {
-    return {
+    return finalizeDecision({
       type: "final",
       content: String(salvaged.content || "").trim()
-    }
+    })
   }
 
   const inferred = inferDecisionFromCcMeta(payload, availableTools)
-  if (inferred?.type === "tool_use" && available.has(String(inferred.name || ""))) {
-    return {
+  const inferredToolName = resolveAllowedToolName(inferred?.name)
+  if (inferred?.type === "tool_use" && inferredToolName) {
+    return finalizeDecision({
       type: "tool_use",
-      name: String(inferred.name || ""),
+      name: inferredToolName,
       arguments: inferred.arguments && typeof inferred.arguments === "object" ? inferred.arguments : {},
       prelude: ""
-    }
+    })
   }
 
-  return {
+  const userInferred = inferDecisionFromUserAsk(enrichedPolicy.userAsk || "", availableTools, enrichedPolicy)
+  const userInferredToolName = resolveAllowedToolName(userInferred?.name)
+  if (enrichedPolicy.requireToolDecision && userInferred?.type === "tool_use" && userInferredToolName) {
+    return finalizeDecision({
+      type: "tool_use",
+      name: userInferredToolName,
+      arguments:
+        userInferred.arguments && typeof userInferred.arguments === "object" ? userInferred.arguments : {},
+      prelude: String(userInferred.prelude || "").trim()
+    })
+  }
+  if (userInferred?.type === "final") {
+    return finalizeDecision({
+      type: "final",
+      content: String(userInferred.content || "").trim()
+    })
+  }
+
+  if (enrichedPolicy?.requireToolDecision) {
+    throw new PlannerBoundaryError(
+      "remote planner did not return a valid tool_use/final decision JSON for a local execution turn",
+      {
+        status: 502,
+        type: "api_error",
+        code: "planner_invalid_decision_payload"
+      }
+    )
+  }
+
+  return finalizeDecision({
     type: "final",
     content: text
-  }
+  })
+}
+
+function extractPlannerResponseText(payload = {}) {
+  return extractResponsesBlocks(payload)
+    .filter(block => block.type === "text")
+    .map(block => String(block.text || ""))
+    .join("\n")
+    .trim()
 }
 
 function contentBlockToResponses(block, role = "user") {
@@ -928,8 +1460,35 @@ function buildAnthropicMessage({
   responseMode = null
 }) {
   let blocks = []
-  if (responseMode?.kind === "tool_orchestrator") {
-    const decision = parsePlannerDecision(payload, responseMode.availableTools || [])
+  if (responseMode?.kind === "local_shortcut") {
+    const decision = responseMode.decision || { type: "final", content: "(empty)" }
+    if (decision.type === "tool_use") {
+      if (decision.prelude) {
+        blocks.push({
+          type: "text",
+          text: decision.prelude
+        })
+      }
+      blocks.push({
+        type: "tool_use",
+        id: `toolu_${randomUUID().replace(/-/g, "")}`,
+        name: decision.name,
+        input: decision.arguments || {}
+      })
+    } else {
+      blocks = [
+        {
+          type: "text",
+          text: decision.content || "(empty)"
+        }
+      ]
+    }
+  } else if (responseMode?.kind === "tool_orchestrator") {
+    const decision = parsePlannerDecision(
+      payload,
+      responseMode.availableTools || [],
+      responseMode.plannerPolicy || {}
+    )
     if (decision.type === "tool_use") {
       if (decision.prelude) {
         blocks.push({
@@ -1117,6 +1676,23 @@ async function fetchRemoteModels(config) {
 function buildRemoteResponsesBody(config, state, request) {
   const messages = request.messages || []
   const tools = selectPlannerTools(request.tools)
+  const plannerPolicy = buildPlannerPolicy(request, tools)
+  validatePlannerPolicy(plannerPolicy)
+  const localShortcutDecision = tools.length
+    ? buildLocalShortcutDecision(request, tools, plannerPolicy)
+    : null
+
+  if (localShortcutDecision) {
+    return {
+      remoteRequest: null,
+      responseMode: {
+        kind: "local_shortcut",
+        decision: localShortcutDecision,
+        plannerPolicy
+      }
+    }
+  }
+
   const basePayload = {
     model: config.remoteServiceModel || request.model || "claude-opus-4-6",
     stream: false,
@@ -1148,9 +1724,21 @@ function buildRemoteResponsesBody(config, state, request) {
       },
       responseMode: {
         kind: "tool_orchestrator",
-        availableTools: tools
+        availableTools: tools,
+        plannerPolicy
       }
     }
+  }
+
+  if (plannerPolicy.requireToolDecision) {
+    throw new PlannerBoundaryError(
+      "local execution guard blocked this request: local write/bash/edit intent requires advertised tools in this session/profile",
+      {
+        status: 409,
+        type: "invalid_request_error",
+        code: "local_execution_tools_not_advertised"
+      }
+    )
   }
 
   const payload = {
@@ -1265,15 +1853,25 @@ export async function startOfficialUpstreamProxy(config, overrides = {}) {
         }
 
         await writeDebugDump("anthropic-request", body || {})
-        await writeDebugDump("remote-request", builtPayload)
 
-        const remotePayload = await fetchRemoteJson(config, builtPayload)
-        await writeDebugDump("remote-response", remotePayload)
-        state.previousResponseId = String(remotePayload.id || state.previousResponseId || "")
-        state.remoteSessionId = String(remotePayload.cc_meta?.meta?.remote_session_id || state.remoteSessionId || "")
+        let remotePayload = null
+        if (builtPayload) {
+          await writeDebugDump("remote-request", builtPayload)
+
+          remotePayload = await fetchRemoteJson(config, builtPayload)
+          await writeDebugDump("remote-response", remotePayload)
+          const plannerText =
+            built.responseMode?.kind === "tool_orchestrator" ? extractPlannerResponseText(remotePayload) : ""
+          const shouldPersistRemotePlannerState =
+            !(built.responseMode?.kind === "tool_orchestrator" && looksLikePlannerNoise(plannerText))
+          if (shouldPersistRemotePlannerState) {
+            state.previousResponseId = String(remotePayload.id || state.previousResponseId || "")
+            state.remoteSessionId = String(remotePayload.cc_meta?.meta?.remote_session_id || state.remoteSessionId || "")
+          }
+        }
 
         const message = buildAnthropicMessage({
-          payload: remotePayload,
+          payload: remotePayload || {},
           requestedModel: String(body?.model || ""),
           responseId: state.previousResponseId,
           remoteSessionId: state.remoteSessionId,
@@ -1300,11 +1898,11 @@ export async function startOfficialUpstreamProxy(config, overrides = {}) {
             remote_session_id: state.remoteSessionId || "",
             input_preview: inputPreview,
             output_preview: textOutput,
-            usage: remotePayload.cc_meta?.usage || remotePayload.usage || null,
-            cost_usd: remotePayload.cc_meta?.cost_usd ?? null,
+            usage: remotePayload?.cc_meta?.usage || remotePayload?.usage || null,
+            cost_usd: remotePayload?.cc_meta?.cost_usd ?? null,
             target_model: String(body?.model || config.remoteServiceModel || ""),
-            runtime_id: remotePayload.cc_meta?.meta?.runtime_id || "",
-            reused_remote_session: Boolean(remotePayload.cc_meta?.meta?.reused_remote_session)
+            runtime_id: remotePayload?.cc_meta?.meta?.runtime_id || "",
+            reused_remote_session: Boolean(remotePayload?.cc_meta?.meta?.reused_remote_session)
           })
         }
 
@@ -1315,12 +1913,19 @@ export async function startOfficialUpstreamProxy(config, overrides = {}) {
 
         jsonResponse(res, 200, message)
       } catch (error) {
+        const plannerError = error instanceof PlannerBoundaryError ? error : null
         await mirrorAgentEvent(config, buildMirrorRouting(config, state.sessionId), "turn.failed", {
           request_id: `official-fail-${Date.now().toString(36)}`,
           remote_session_id: state.remoteSessionId || "",
           error: error instanceof Error ? error.message : String(error)
         })
-        writeAnthropicError(res, 500, error instanceof Error ? error.message : String(error))
+        writeAnthropicError(
+          res,
+          plannerError?.status || 500,
+          error instanceof Error ? error.message : String(error),
+          plannerError?.type || "api_error",
+          plannerError?.code || ""
+        )
       }
       return
     }

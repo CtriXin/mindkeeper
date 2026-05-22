@@ -11,3 +11,4 @@
 - 当前主线 worktree：`/Users/xin/auto-skills-wt-cc-official-broker-native`
 - 当前主线 branch：`feature/cc-official-broker-native-gateway-mainline`
 - 当前恢复重点：按 `docs/NATIVE_GATEWAY_ACCEPTANCE_SPEC.md` 切 implementation slicing，优先 C3 -> C5 -> C1
+- 最新补充重点：`official:proxy` 已加 local execution guard（write/bash/edit 必须走本地 injected runner）；恢复时优先关注 `src/official/upstreamProxy.mjs` 与 `scripts/test-official-proxy-local-exec-guard.mjs`

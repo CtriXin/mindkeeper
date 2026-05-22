@@ -6,9 +6,11 @@ import { fileURLToPath } from "node:url"
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises"
 
 import {
+  getClaudeAuthStatus,
   getClaudeVersion,
   resolveClaudeBinary
 } from "./claudeBinary.mjs"
+import { syncRemoteAuthBundle } from "./remoteAuthSync.mjs"
 import { startOfficialUpstreamProxy } from "./upstreamProxy.mjs"
 import {
   findOfficialProxySessionRecord,
@@ -102,6 +104,22 @@ function mergePlainObjects(...items) {
     if (item && typeof item === "object" && !Array.isArray(item)) {
       Object.assign(next, item)
     }
+  }
+  return next
+}
+
+function stripPersistedAuthState(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {}
+  }
+
+  const next = { ...value }
+  for (const key of [
+    "oauthAccount",
+    "cachedExtraUsageDisabledReason",
+    "penguinModeOrgEnabled"
+  ]) {
+    delete next[key]
   }
   return next
 }
@@ -215,9 +233,11 @@ async function createIsolatedClaudeConfig(proxy, options = {}) {
     path.join(sourceConfigDir, ".claude", "settings.json")
   ]
 
-  const persistedClaudeJson = await readJsonFile(path.join(configDir, ".claude.json"), {})
+  const persistedClaudeJson = stripPersistedAuthState(
+    await readJsonFile(path.join(configDir, ".claude.json"), {})
+  )
   const sourceClaudeJson = await readJsonFile(sourceClaudeJsonPath, {})
-  const nextClaudeJson = mergePlainObjects(sourceClaudeJson, persistedClaudeJson)
+  const nextClaudeJson = mergePlainObjects(persistedClaudeJson, sourceClaudeJson)
   const currentMcpServers =
     nextClaudeJson?.mcpServers && typeof nextClaudeJson.mcpServers === "object"
       ? { ...nextClaudeJson.mcpServers }
@@ -271,6 +291,7 @@ export async function runOfficialProxy(config, overrides = {}) {
   if (!version.ok) {
     throw new Error(version.error || "failed to read official claude version")
   }
+  const localAuth = getClaudeAuthStatus(binary.path)
 
   const projectRoot = path.resolve(overrides.projectRoot || config.workspaceRoot || process.cwd())
   const rememberedSession = await loadLastSessionRecord(config, { projectRoot })
@@ -302,8 +323,25 @@ export async function runOfficialProxy(config, overrides = {}) {
     remoteSessionId: wantsResume ? resumeState.remote_session_id || "" : ""
   })
   const wantsBypass = Boolean(overrides.bypassPermissions || config.claudeBypassPermissions || overrides.printPrompt)
+  let remoteAuth = null
+  try {
+    remoteAuth = await syncRemoteAuthBundle(config)
+  } catch (error) {
+    if (!localAuth.ok || !localAuth.loggedIn) {
+      throw new Error(
+        `unable to sync remote claude auth bundle for official_proxy: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
+  }
   const isolatedConfig = await createIsolatedClaudeConfig(proxy, {
-    baseEnv: process.env,
+    baseEnv: remoteAuth?.auth_dir
+      ? {
+          ...process.env,
+          CLAUDE_CONFIG_DIR: remoteAuth.auth_dir
+        }
+      : process.env,
     config,
     bypassPermissions: wantsBypass
   })
