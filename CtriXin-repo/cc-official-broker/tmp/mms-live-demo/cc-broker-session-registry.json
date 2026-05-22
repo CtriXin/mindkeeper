@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "sessions": {
+    "xin::mac::personal::/Users/xin/auto-skills/CtriXin-repo/cc-official-broker": {
+      "owner_user_id": "xin",
+      "device_id": "mac",
+      "workspace_id": "personal",
+      "project_root": "/Users/xin/auto-skills/CtriXin-repo/cc-official-broker",
+      "session_id": "mms-mnn7h1yh",
+      "runner_key": "xin:mac:personal",
+      "broker_base_url": "http://127.0.0.1:57936",
+      "remote_service": {
+        "enabled": true,
+        "label": "",
+        "base_url": "http://82.156.121.141:18081",
+        "endpoint": "responses",
+        "model": "claude-opus-4-6",
+        "response_id": "resp_resp-1775481015097",
+        "previous_response_id": "resp_resp-1775480993822",
+        "remote_session_id": "e98e7e29-2e60-40c8-afa5-58008137f07b",
+        "reused_remote_session": true,
+        "usage": {
+          "input_tokens": 4,
+          "output_tokens": 122,
+          "total_tokens": 126,
+          "cache_read_tokens": 14790,
+          "cache_write_tokens": 344,
+          "cache_hit": true,
+          "supported": true
+        },
+        "cost_usd": 0.012615
+      },
+      "updated_at": "2026-04-06T13:10:33.265Z"
+    }
+  }
+}

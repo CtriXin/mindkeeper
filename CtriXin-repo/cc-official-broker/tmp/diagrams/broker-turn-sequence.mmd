@@ -1,0 +1,36 @@
+sequenceDiagram
+    autonumber
+    participant User as 你
+    participant MMS as client MMS
+    participant Broker as Broker
+    participant SMMS as server-side MMS(未来)
+    participant Remote as official Claude/Opus
+    participant Runner as Local Runner
+    participant Files as 本地文件/Git/Shell
+
+    User->>MMS: 输入需求
+    MMS->>Broker: 选择 profile + 发起 session/prompt
+    Broker->>SMMS: 带上 device/workspace/session 信息
+    SMMS->>Remote: 选择一组远端 OAuth/runtime
+    Remote-->>SMMS: 开始推理
+    SMMS-->>Broker: 返回流式输出 / tool 需求
+
+    alt 只是聊天回答
+        Broker-->>MMS: 直接回流式文本
+        MMS-->>User: 看到回答
+    else 需要本地读文件/搜索/bash
+        Broker->>Runner: tool.call
+        Runner->>Files: 读文件 / 搜索 / bash / git
+        Files-->>Runner: 结果
+        Runner-->>Broker: tool.result
+        Broker->>SMMS: 把结果回灌远端会话
+        SMMS->>Remote: 继续推理
+        Remote-->>SMMS: 基于本地结果继续回答
+        SMMS-->>Broker: 最终输出
+        Broker-->>MMS: 流式回显
+        MMS-->>User: 看到最终答案
+    end
+
+    Note over Broker: Broker 不负责“最强推理”\nBroker 负责中间调度/隔离/记账/桥接
+    Note over Remote: Remote 不直接碰你的本地文件系统
+    Note over Runner: Runner 只负责在你本机动手

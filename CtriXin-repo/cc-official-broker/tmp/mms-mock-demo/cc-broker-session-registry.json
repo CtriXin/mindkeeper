@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "sessions": {
+    "xin::mac::personal::/Users/xin/auto-skills/CtriXin-repo/cc-official-broker": {
+      "owner_user_id": "xin",
+      "device_id": "mac",
+      "workspace_id": "personal",
+      "project_root": "/Users/xin/auto-skills/CtriXin-repo/cc-official-broker",
+      "session_id": "mms-mnml0u3f",
+      "runner_key": "xin:mac:personal",
+      "broker_base_url": "http://127.0.0.1:63199",
+      "remote_service": {
+        "enabled": true,
+        "label": "mock-remote-runtime",
+        "base_url": "http://127.0.0.1:62375",
+        "endpoint": "responses",
+        "model": "claude-opus-4-6",
+        "response_id": "resp-3de1526c",
+        "previous_response_id": "",
+        "remote_session_id": "mock-remote-ba73327c",
+        "reused_remote_session": false,
+        "usage": {
+          "supported": true,
+          "input_tokens": 8,
+          "output_tokens": 12,
+          "total_tokens": 20,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "cache_hit": false
+        },
+        "cost_usd": 0.0002
+      },
+      "updated_at": "2026-04-06T02:40:23.883Z"
+    },
+    "xin::mac::personal::/Users/xin/auto-skills-wt-cc-worker-v1/CtriXin-repo/cc-official-broker": {
+      "owner_user_id": "xin",
+      "device_id": "mac",
+      "workspace_id": "personal",
+      "project_root": "/Users/xin/auto-skills-wt-cc-worker-v1/CtriXin-repo/cc-official-broker",
+      "session_id": "mms-mnnydyxg",
+      "runner_key": "xin:mac:personal",
+      "broker_base_url": "http://127.0.0.1:62864",
+      "remote_service": null,
+      "updated_at": "2026-04-07T01:41:24.724Z"
+    }
+  }
+}

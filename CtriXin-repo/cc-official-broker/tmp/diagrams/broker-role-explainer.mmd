@@ -1,0 +1,46 @@
+flowchart LR
+    subgraph Client[Client 侧]
+        U[你 / 多台电脑]
+        MMS[client MMS\n本地入口]
+        LH[Local Runner\n本地文件 / 命令 / Git]
+    end
+
+    subgraph Middle[中间层]
+        B[Broker\n会话路由 / 设备鉴权 / 隔离 / 统计 / tool bridge]
+    end
+
+    subgraph Server[Server 侧]
+        SM[server-side MMS\n未来可做多 OAuth / 多 runtime 调度]
+        RS[Remote Runtime Service\n把请求转成远端 runtime 调用]
+        OCC[official Claude Code runtime\n真实 OAuth / 真正推理与远端 session]
+    end
+
+    U --> MMS
+    MMS -->|选择 profile| B
+    B -->|普通 prompt / session| SM
+    SM -->|选中一组 OAuth / runtime| RS
+    RS --> OCC
+
+    OCC -->|需要读文件 / 跑命令| B
+    B -->|tool.call / tool.result| LH
+    LH --> B
+    B --> OCC
+
+    B -. 负责 .-> R1[1. device_key 鉴权]
+    B -. 负责 .-> R2[2. session truth]
+    B -. 负责 .-> R3[3. workspace/device 隔离]
+    B -. 负责 .-> R4[4. usage stats]
+
+    MMS -. 不负责 .-> X1[不直接做远端 OAuth]
+    LH -. 不负责 .-> X2[不做远端推理]
+    OCC -. 不直接看到 .-> X3[你的本机文件系统]
+
+    classDef client fill:#E8F4FF,stroke:#1F6FEB,color:#0B1F33
+    classDef middle fill:#FFF4E5,stroke:#D97706,color:#3B2200
+    classDef server fill:#EAF7EA,stroke:#2F855A,color:#123524
+    classDef note fill:#F7F7F7,stroke:#999,color:#333,stroke-dasharray: 3 3
+
+    class U,MMS,LH client
+    class B middle
+    class SM,RS,OCC server
+    class R1,R2,R3,R4,X1,X2,X3 note

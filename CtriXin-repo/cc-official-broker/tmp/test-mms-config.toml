@@ -1,0 +1,19 @@
+[[broker_profiles]]
+id = "official-broker-personal"
+name = "Official Broker Personal"
+enabled = true
+broker_base_url = "http://127.0.0.1:8787"
+entry_mode = "shell"
+device_key_env = "MMS_BROKER_DEVICE_KEY_PERSONAL"
+owner_user_id = "xin"
+device_id = "mac"
+workspace_id = "personal"
+remote_runtime = "official-claude-code"
+remote_service_label = "server-live-runtime"
+remote_service_base_url = "http://82.156.121.141:18081"
+remote_service_endpoint = "responses"
+remote_service_model = "claude-opus-4-6"
+remote_service_bearer_token_env = "MMS_REMOTE_SERVICE_TOKEN_PERSONAL"
+broker_repo_path = "/Users/xin/auto-skills/CtriXin-repo/cc-official-broker"
+runner_tools = ["pwd", "git_status", "read_file", "search"]
+runner_writable_scope = "none"

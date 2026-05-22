@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Broker Turn Sequence</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f3;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+    }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #f3f4f6 0%, #f8fafc 100%);
+      color: var(--text);
+    }
+    .wrap {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    p {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .diagram-shell {
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid #eef0f4;
+      border-radius: 12px;
+      background: #fffef7;
+    }
+    pre.mermaid {
+      margin: 0;
+      min-width: max-content;
+    }
+    .mermaid svg {
+      max-width: none !important;
+      height: auto !important;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Broker Turn Sequence</h1>
+      <p>Open this file in a browser to view the Mermaid diagram.</p>
+      <div class="diagram-shell">
+        <pre class="mermaid">sequenceDiagram
+    autonumber
+    participant User as 你
+    participant MMS as client MMS
+    participant Broker as Broker
+    participant SMMS as server-side MMS(未来)
+    participant Remote as official Claude/Opus
+    participant Runner as Local Runner
+    participant Files as 本地文件/Git/Shell
+
+    User-&gt;&gt;MMS: 输入需求
+    MMS-&gt;&gt;Broker: 选择 profile + 发起 session/prompt
+    Broker-&gt;&gt;SMMS: 带上 device/workspace/session 信息
+    SMMS-&gt;&gt;Remote: 选择一组远端 OAuth/runtime
+    Remote--&gt;&gt;SMMS: 开始推理
+    SMMS--&gt;&gt;Broker: 返回流式输出 / tool 需求
+
+    alt 只是聊天回答
+        Broker--&gt;&gt;MMS: 直接回流式文本
+        MMS--&gt;&gt;User: 看到回答
+    else 需要本地读文件/搜索/bash
+        Broker-&gt;&gt;Runner: tool.call
+        Runner-&gt;&gt;Files: 读文件 / 搜索 / bash / git
+        Files--&gt;&gt;Runner: 结果
+        Runner--&gt;&gt;Broker: tool.result
+        Broker-&gt;&gt;SMMS: 把结果回灌远端会话
+        SMMS-&gt;&gt;Remote: 继续推理
+        Remote--&gt;&gt;SMMS: 基于本地结果继续回答
+        SMMS--&gt;&gt;Broker: 最终输出
+        Broker--&gt;&gt;MMS: 流式回显
+        MMS--&gt;&gt;User: 看到最终答案
+    end
+
+    Note over Broker: Broker 不负责“最强推理”\nBroker 负责中间调度/隔离/记账/桥接
+    Note over Remote: Remote 不直接碰你的本地文件系统
+    Note over Runner: Runner 只负责在你本机动手
+</pre>
+      </div>
+    </div>
+  </div>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: "loose",
+      theme: "default",
+      flowchart: {
+        useMaxWidth: false,
+        htmlLabels: true
+      }
+    });
+  </script>
+</body>
+</html>

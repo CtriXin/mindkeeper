@@ -1,0 +1,38 @@
+[ui]
+language = "zh"
+
+[provider]
+default = "default"
+
+[[providers]]
+id = "default"
+name = "Default Gateway"
+protocols = ["anthropic_messages", "openai_chat_completions"]
+supported_clis = ["claude", "codex", "qwen", "kimi"]
+enabled = true
+
+[user]
+role = "全部模型"
+
+[recommend]
+models = ["claude-sonnet-4-6", "qwen3-coder-plus", "gpt-4o-mini"]
+
+[[broker_profiles]]
+id = "official-broker-demo"
+name = "Official Broker Demo"
+enabled = true
+broker_base_url = "http://127.0.0.1:62864"
+device_key_env = "MMS_BROKER_DEVICE_KEY_DEMO"
+owner_user_id = "xin"
+device_id = "mac"
+workspace_id = "personal"
+remote_runtime = "official-claude-code"
+remote_service_label = "mock-remote-runtime"
+remote_service_base_url = "http://127.0.0.1:62863"
+remote_service_endpoint = "responses"
+remote_service_model = "claude-opus-4-6"
+broker_repo_path = "/Users/xin/auto-skills-wt-cc-worker-v1/CtriXin-repo/cc-official-broker"
+runner_tools = ["pwd", "git_status", "read_file", "search", "bash", "write_file", "apply_patch"]
+runner_writable_scope = "workspace"
+note = "workspace=/Users/xin/auto-skills-wt-cc-worker-v1/CtriXin-repo/cc-official-broker"
+

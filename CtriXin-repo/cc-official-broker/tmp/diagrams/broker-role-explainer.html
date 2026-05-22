@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Broker Role Explainer</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f3;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+    }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #f3f4f6 0%, #f8fafc 100%);
+      color: var(--text);
+    }
+    .wrap {
+      width: 100%;
+      max-width: none;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    p {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .diagram-shell {
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid #eef0f4;
+      border-radius: 12px;
+      background: #fffef7;
+    }
+    pre.mermaid {
+      margin: 0;
+      min-width: max-content;
+    }
+    .mermaid svg {
+      max-width: none !important;
+      height: auto !important;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Broker Role Explainer</h1>
+      <p>Open this file in a browser to view the Mermaid diagram.</p>
+      <div class="diagram-shell">
+        <pre class="mermaid">flowchart LR
+    subgraph Client[Client 侧]
+        U[你 / 多台电脑]
+        MMS[client MMS\n本地入口]
+        LH[Local Runner\n本地文件 / 命令 / Git]
+    end
+
+    subgraph Middle[中间层]
+        B[Broker\n会话路由 / 设备鉴权 / 隔离 / 统计 / tool bridge]
+    end
+
+    subgraph Server[Server 侧]
+        SM[server-side MMS\n未来可做多 OAuth / 多 runtime 调度]
+        RS[Remote Runtime Service\n把请求转成远端 runtime 调用]
+        OCC[official Claude Code runtime\n真实 OAuth / 真正推理与远端 session]
+    end
+
+    U --&gt; MMS
+    MMS --&gt;|选择 profile| B
+    B --&gt;|普通 prompt / session| SM
+    SM --&gt;|选中一组 OAuth / runtime| RS
+    RS --&gt; OCC
+
+    OCC --&gt;|需要读文件 / 跑命令| B
+    B --&gt;|tool.call / tool.result| LH
+    LH --&gt; B
+    B --&gt; OCC
+
+    B -. 负责 .-&gt; R1[1. device_key 鉴权]
+    B -. 负责 .-&gt; R2[2. session truth]
+    B -. 负责 .-&gt; R3[3. workspace/device 隔离]
+    B -. 负责 .-&gt; R4[4. usage stats]
+
+    MMS -. 不负责 .-&gt; X1[不直接做远端 OAuth]
+    LH -. 不负责 .-&gt; X2[不做远端推理]
+    OCC -. 不直接看到 .-&gt; X3[你的本机文件系统]
+
+    classDef client fill:#E8F4FF,stroke:#1F6FEB,color:#0B1F33
+    classDef middle fill:#FFF4E5,stroke:#D97706,color:#3B2200
+    classDef server fill:#EAF7EA,stroke:#2F855A,color:#123524
+    classDef note fill:#F7F7F7,stroke:#999,color:#333,stroke-dasharray: 3 3
+
+    class U,MMS,LH client
+    class B middle
+    class SM,RS,OCC server
+    class R1,R2,R3,R4,X1,X2,X3 note
+</pre>
+      </div>
+    </div>
+  </div>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: "loose",
+      theme: "default",
+      flowchart: {
+        useMaxWidth: false,
+        htmlLabels: true
+      }
+    });
+  </script>
+</body>
+</html>
