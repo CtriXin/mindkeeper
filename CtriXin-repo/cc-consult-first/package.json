@@ -1,0 +1,14 @@
+{
+  "name": "cc-consult-first",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Consult-first client for remote official Claude Code brain",
+  "type": "module",
+  "scripts": {
+    "help": "node src/index.mjs help",
+    "doctor": "node src/index.mjs doctor",
+    "consult": "node src/index.mjs consult",
+    "session:state": "node src/index.mjs session:state",
+    "test": "node --test"
+  }
+}
