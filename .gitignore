@@ -29,3 +29,6 @@ Ctri-model-switch/
 
 # 生成输出
 out/
+
+# 重装备份区(含 secrets tarball,绝不入仓)
+mac-rebuild-keep/
