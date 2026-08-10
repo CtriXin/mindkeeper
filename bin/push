@@ -5,7 +5,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: push [-m "commit message"] [--feature <name>] [--ab <name>] [--no-marker] [--dry-run] [--no-notify]
+Usage: push [-m "commit message"] [--feature <name>] [--ab <name>] [--no-marker] [--tag <type/desc>] [--dry-run] [--no-notify]
 
 Environment:
   FEISHU_WEBHOOK      Feishu bot webhook URL. If set, can send notify.
@@ -16,7 +16,7 @@ Environment:
   PUSH_FEATURE        Marker value for feature (lower priority than CLI args).
   PUSH_AB             Marker value for ab (lower priority than CLI args).
   PUSH_MARKER_MODE    Marker mode: none|feature|ab.
-  PUSH_NON_INTERACTIVE If set to 1, skip interactive marker prompt.
+  PUSH_NON_INTERACTIVE If set to 1, skip interactive prompts.
 
 Local pre-hook search order (first match):
   1) $PUSH_LOCAL_HOOK
@@ -47,81 +47,12 @@ json_escape() {
   printf '%s' "$s"
 }
 
-load_marker_options() {
-  local options_file="$1"
-  local marker_type="$2"
-
-  if [[ ! -f "$options_file" ]]; then
-    return 0
-  fi
-
-  if ! command -v node >/dev/null 2>&1; then
-    return 0
-  fi
-
-  node -e '
-const fs = require("fs");
-const file = process.argv[1];
-const key = process.argv[2];
-try {
-  const raw = fs.readFileSync(file, "utf8");
-  const json = JSON.parse(raw);
-  const arr = Array.isArray(json[key]) ? json[key] : [];
-  for (const item of arr) {
-    if (typeof item === "string" && item.trim()) {
-      console.log(item.trim());
-    }
-  }
-} catch (_) {}
-' "$options_file" "$marker_type"
-}
-
-prompt_marker_value() {
-  local marker_type="$1"
-  local options_file="$2"
-  local value=""
-  local opts=()
-  local line=""
-
-  while IFS= read -r line; do
-    opts+=("$line")
-  done < <(load_marker_options "$options_file" "$marker_type")
-
-  if [[ ${#opts[@]} -gt 0 ]]; then
-    echo "请选择 ${marker_type}：" >&2
-    echo "0. 手动输入" >&2
-    local i=1
-    for item in "${opts[@]}"; do
-      echo "${i}. ${item}" >&2
-      i=$((i + 1))
-    done
-
-    read -r -p "请输入 ${marker_type} 选项序号（或直接输入名称，回车=手动输入）: " marker_choice
-    marker_choice=$(trim "${marker_choice:-}")
-
-    if [[ "$marker_choice" =~ ^[0-9]+$ ]] && [[ "$marker_choice" -ge 1 ]] && [[ "$marker_choice" -le ${#opts[@]} ]]; then
-      value="${opts[$((marker_choice - 1))]}"
-      echo "$value"
-      return 0
-    fi
-
-    if [[ -n "$marker_choice" && ! "$marker_choice" =~ ^[0-9]+$ ]]; then
-      value="$marker_choice"
-      echo "$value"
-      return 0
-    fi
-  fi
-
-  read -r -p "请输入 ${marker_type} 名称(直接回车取消): " value
-  value=$(trim "$value")
-  echo "$value"
-}
-
 commit_message=""
 notify_flag="auto"
 cli_feature=""
 cli_ab=""
 cli_no_marker=0
+cli_tag=""
 dry_run=0
 
 while [[ $# -gt 0 ]]; do
@@ -141,6 +72,10 @@ while [[ $# -gt 0 ]]; do
     --no-marker)
       cli_no_marker=1
       shift
+      ;;
+    --tag)
+      cli_tag="${2:-}"
+      shift 2
       ;;
     --dry-run)
       dry_run=1
@@ -180,10 +115,10 @@ fi
 
 cd "$repo_root"
 
+# --- Marker resolution (CLI/ENV only, no interactive prompt) ---
 marker_mode=""
 marker_value=""
 
-# Priority: CLI > ENV > Interactive > none
 if [[ "$cli_no_marker" == "1" ]]; then
   marker_mode="none"
 elif [[ -n "$cli_feature" ]]; then
@@ -212,32 +147,6 @@ else
     marker_mode="ab"
     marker_value="$env_ab"
   fi
-
-  if [[ -z "$marker_mode" ]] && [[ "${PUSH_NON_INTERACTIVE:-0}" != "1" ]]; then
-    echo "请选择发布标记："
-    echo "0. 不加标记（默认）"
-    echo "1. feature"
-    echo "2. ab"
-    read -r -p "请输入标记类型序号(默认0): " marker_choice
-    marker_choice=${marker_choice:-0}
-
-    options_file="$repo_root/scripts/push.options.json"
-    if [[ "$marker_choice" == "1" ]]; then
-      marker_mode="feature"
-      marker_value="$(prompt_marker_value "feature" "$options_file")"
-      if [[ -z "$marker_value" ]]; then
-        marker_mode="none"
-      fi
-    elif [[ "$marker_choice" == "2" ]]; then
-      marker_mode="ab"
-      marker_value="$(prompt_marker_value "ab" "$options_file")"
-      if [[ -z "$marker_value" ]]; then
-        marker_mode="none"
-      fi
-    else
-      marker_mode="none"
-    fi
-  fi
 fi
 
 if [[ -z "$marker_mode" ]]; then
@@ -249,11 +158,7 @@ if [[ "$marker_mode" != "none" && -z "$marker_value" ]]; then
     echo "非交互模式下，${marker_mode} 不能为空"
     exit 2
   fi
-  read -r -p "请输入 ${marker_mode} 名称(直接回车取消): " marker_value
-  marker_value="$(trim "$marker_value")"
-  if [[ -z "$marker_value" ]]; then
-    marker_mode="none"
-  fi
+  marker_mode="none"
 fi
 
 if [[ "$marker_mode" == "feature" ]]; then
@@ -269,17 +174,26 @@ else
   unset PUSH_FEATURE PUSH_AB
 fi
 
+# --- Step 1: Commit message (ask early, before branch switch) ---
+has_changes=0
+if ! git diff --quiet || ! git diff --cached --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+  has_changes=1
+fi
+
+if [[ "$has_changes" == "1" && -z "$commit_message" && "$dry_run" != "1" ]]; then
+  read -r -p "请输入提交信息 (默认: update): " commit_message
+  commit_message=$(trim "${commit_message:-}")
+  if [[ -z "$commit_message" ]]; then
+    commit_message="update"
+  fi
+fi
+
 # --- 部署名称/服务名处理 ---
-# .deploy-service: 用于 deploy 默认服务名（推荐）
-# .deploy-name: 兼容历史用法（审批文案等）
-# .deploy-path: 用于 deploy 默认 path（可为空）
 deploy_service_file=".deploy-service"
 deploy_name_file=".deploy-name"
 deploy_path_file=".deploy-path"
 reconfigure_deploy=0
 
-# 历史兼容：旧版本会把部署配置写入 .gitignore，导致不同项目/分支共享本地配置。
-# 现在统一移除这些忽略项，并在本次 push 中重新询问配置。
 if [[ -f ".gitignore" ]]; then
   gitignore_tmp=$(mktemp)
   awk -v s="$deploy_service_file" -v n="$deploy_name_file" -v p="$deploy_path_file" '
@@ -330,21 +244,21 @@ else
   fi
 fi
 
-# 若读取到的是旧文件，自动补写新文件，便于 deploy 默认读取。
 if [[ -n "${deploy_name:-}" && ! -f "$deploy_service_file" ]]; then
   echo "$deploy_name" > "$deploy_service_file"
 fi
 
-# path 首次录入（含历史项目补录）：
-# 仅在 .deploy-path 文件不存在时触发；可输入空值，但必须走一次输入步骤。
 if [[ "$reconfigure_deploy" == "1" || ! -f "$deploy_path_file" ]]; then
   echo "请确认本项目是否需要执行上传命令。"
   current_deploy_path=""
   if [[ -f "$deploy_path_file" ]]; then
     current_deploy_path=$(cat "$deploy_path_file")
   fi
-  read -r -p "请输入部署 path (可留空；当前: ${current_deploy_path}，直接回车保持不变): " input_path
-  echo "${input_path}" > "$deploy_path_file"
+  read -r -p "请输入部署 path (可留空自动获取；当前：${current_deploy_path}，直接回车跳过): " input_path
+  # 只有用户输入时才保存，留空则让 scmp_cli.py 自动获取
+  if [[ -n "$input_path" ]]; then
+    echo "${input_path}" > "$deploy_path_file"
+  fi
 fi
 
 deploy_path=""
@@ -437,7 +351,7 @@ if [[ "${PUSH_SKIP_BUMP:-0}" != "1" && $current_branch =~ [0-9]+\.[0-9]+ ]]; the
   fi
 fi
 
-# Build hook paths first (for dry-run preview)
+# Build hook paths
 pre_hook_path=""
 if [[ -n "${PUSH_LOCAL_HOOK:-}" ]]; then
   pre_hook_path="$PUSH_LOCAL_HOOK"
@@ -487,7 +401,7 @@ if [[ "$dry_run" == "1" ]]; then
   if [[ -n "$commit_message" ]]; then
     echo "[dry-run] 将执行: git commit -m \"$commit_message\""
   else
-    echo "[dry-run] 将在运行时询问提交信息"
+    echo "[dry-run] 无变更需提交"
   fi
   echo "[dry-run] 将执行: git push (或首次 push -u origin <branch>)"
   if [[ "$notify_flag" != "no" ]]; then
@@ -514,7 +428,7 @@ if [[ -n "$pre_hook_path" ]]; then
 fi
 
 # Stage all changes
-if ! git diff --quiet || ! git diff --cached --quiet; then
+if ! git diff --quiet || ! git diff --cached --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
   git add -A
 fi
 
@@ -522,12 +436,9 @@ fi
 if git diff --cached --quiet; then
   echo "没有可提交的变更"
 else
+  # commit_message already collected in Step 1; fallback to default
   if [[ -z "$commit_message" ]]; then
-    read -r -p "请输入提交信息: " commit_message
-  fi
-  if [[ -z "$commit_message" ]]; then
-    echo "提交信息不能为空"
-    exit 1
+    commit_message="update"
   fi
   git commit -m "$commit_message"
 fi
@@ -543,6 +454,51 @@ fi
 changed_files=""
 if git rev-parse HEAD~1 >/dev/null 2>&1; then
   changed_files=$(git diff --name-only HEAD~1 HEAD | tr '\n' ',' | sed 's/,$//')
+fi
+
+# --- Tag (optional, after push) ---
+tag_name=""
+if [[ -n "$cli_tag" ]]; then
+  # CLI: --tag "feature/xxx" or --tag "feature"
+  if [[ "$cli_tag" == */* ]]; then
+    tag_name="$cli_tag-$(date +%Y%m%d)"
+  else
+    tag_name="$cli_tag"
+  fi
+elif [[ "${PUSH_NON_INTERACTIVE:-0}" != "1" ]]; then
+  echo ""
+  echo "是否打 tag？"
+  echo "0. 跳过（默认）"
+  echo "1. feature"
+  echo "2. bugfix"
+  echo "3. hotfix"
+  echo "4. release"
+  read -r -p "选择 tag 类型 (默认0): " tag_choice
+  tag_choice=${tag_choice:-0}
+
+  if [[ "$tag_choice" != "0" ]]; then
+    case "$tag_choice" in
+      1) tag_type="feature" ;;
+      2) tag_type="bugfix" ;;
+      3) tag_type="hotfix" ;;
+      4) tag_type="release" ;;
+      *) tag_type="$tag_choice" ;;
+    esac
+
+    read -r -p "输入 tag 描述 (回车跳过): " tag_desc
+    tag_desc=$(trim "${tag_desc:-}")
+
+    if [[ -n "$tag_desc" ]]; then
+      tag_name="${tag_type}/${tag_desc}-$(date +%Y%m%d)"
+    fi
+  fi
+fi
+
+if [[ -n "$tag_name" ]]; then
+  echo "创建 tag: $tag_name"
+  git tag "$tag_name"
+  git push origin "$tag_name"
+  echo "Tag $tag_name 已推送"
 fi
 
 # Notify (Feishu)
@@ -564,8 +520,12 @@ if [[ -n "${FEISHU_WEBHOOK:-}" && "$notify_flag" != "no" ]]; then
     elif [[ "$marker_mode" == "ab" ]]; then
       marker_notify="\\nAB: ${marker_value}"
     fi
+    tag_notify=""
+    if [[ -n "$tag_name" ]]; then
+      tag_notify="\\nTag: ${tag_name}"
+    fi
     curl -sS -X POST -H "Content-Type: application/json" \
-      -d "{\"msg_type\": \"text\", \"content\": {\"text\": \"🚀 推送通知\\n项目: ${project_name}\\n分支: ${current_branch}${marker_notify}\\n提交信息: ${commit_message:-无}\\n更新文件: ${changed_files}\"}}" \
+      -d "{\"msg_type\": \"text\", \"content\": {\"text\": \"🚀 推送通知\\n项目: ${project_name}\\n分支: ${current_branch}${marker_notify}${tag_notify}\\n提交信息: ${commit_message:-无}\\n更新文件: ${changed_files}\"}}" \
       "$FEISHU_WEBHOOK" >/dev/null
     echo "飞书通知已发送"
   fi

@@ -1,240 +1,328 @@
-# Project Architecture Documentation
+# Auto-Skills Project Structure v1
 
-This document provides a comprehensive overview of the Auto-Skills project architecture, detailing the relationships between components and how they work together.
+This document is the project-level structure baseline for future incremental reads. It supersedes the old deployment-only architecture overview as the first file to read when resuming system work.
 
-## High-Level Architecture
+## Snapshot
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Auto-Skills Project                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────────┐    ┌──────────────────────────────┐   │
-│  │   bin/ Scripts  │────│     Global Operations      │   │
-│  │                 │    │                              │   │
-│  │ • deploy        │    │ • PATH integration         │   │
-│  │ • push          │    │ • Cross-component workflow │   │
-│  │ • lookup        │    │ • Notification system      │   │
-│  │ • etc.          │    │                              │   │
-│  └─────────────────┘    └──────────────────────────────┘   │
-│              │                                             │
-│              ▼                                             │
-│  ┌─────────────────────────────────────────────────────────┤
-│  │                  Core Components                       │
-├─ │ ┌─────────────────┐    ┌──────────────────────────────┐ │
-│  │ │Domain Tool Core │    │     SCMP Deploy Tools      │ │
-│  │ │                 │    │                              │ │
-│  │ │ • Excel parsing │────│ • Authentication           │ │
-│  │ │ • Config gen.   │    │ • Service discovery        │ │
-│  │ │ • Ad mapping    │    │ • Deployment automation    │ │
-│  │ │ • Templates     │    │ • CI/CD integration        │ │
-│  │ └─────────────────┘    └──────────────────────────────┘ │
-│  │                                                         │
-│  └─────────────────────────────────────────────────────────┘
-│                              │                             │
-│                              ▼                             │
-│  ┌─────────────────────────────────────────────────────────┤
-│  │               Infrastructure Layer                     │
-├─ │ ┌─────────────────┐    ┌──────────────────────────────┐ │
-│  │ │  Backup/Skills  │    │        Utilities           │ │
-│  │ │                 │    │                              │ │
-│  │ │ • Config backup │    │ • Knowledge wiki           │ │
-│  │ │ • Skills system │    │ • Development tools        │ │
-│  │ │ • Templates     │    │ • Helper scripts           │ │
-│  │ └─────────────────┘    └──────────────────────────────┘ │
-│  │                                                         │
-│  └─────────────────────────────────────────────────────────┘
-└─────────────────────────────────────────────────────────────┘
+| Field | Value |
+| --- | --- |
+| Baseline time | 2026-06-12T01:42:03Z |
+| Repo root | `/Users/xin/auto-skills` |
+| Branch | `feature/worktree-management` |
+| Baseline HEAD | `7624b927244ee250886b785881cf63e1e6691a3b` |
+| HEAD commit time | `2026-05-08T19:03:37+08:00` |
+| HEAD subject | `feat(looop): export brainkeeper checkpoints` |
+| Baseline source docs | `/Users/xin/Library/Mobile Documents/com~apple~CloudDocs/ARCHITECTURE_REDUCTION_LEDGER_2026-06-11.md`, `/Users/xin/Library/Mobile Documents/com~apple~CloudDocs/ARCHITECTURE_REDUCTION_REVIEW_2026-06-11.md` |
+
+Working tree note: the repo is dirty at this snapshot, but the Mission Control surgery candidate paths checked in this pass were clean: `shared-skills/mission-control`, `CtriXin-repo/review-hub`, `CtriXin-repo/interview`, `CtriXin-repo/digger`, `CtriXin-repo/redline-guard`, `CtriXin-repo/level-up`, and `CtriXin-repo/mommy`.
+
+## Incremental Read Protocol
+
+For the next iteration, do not reread the whole repo by default.
+
+1. Read this file first.
+2. Check `git status --short` and compare current `git rev-parse HEAD` with the baseline HEAD above.
+3. If the HEAD or relevant files changed, read only changed paths plus the owning module docs.
+4. For Mission Control work, treat `shared-skills/mission-control/references/work-contract.json` as executable truth; `SKILL.md` is operating guidance.
+5. For review-flow work, read the specific adapter docs only: `review-hub`, `digger`, `redline-guard`, `level-up`.
+6. If fresh-session continuity is needed, read `.agent.local/continuity/pickup.md`, `active.json`, then the active checkpoint.
+
+## Architecture Principle
+
+The reduction direction is consistent with the 2026-06-11 architecture reduction docs:
+
+```text
+One lifecycle authority.
+One runtime authority.
+One knowledge authority.
+One continuity authority.
+One source authority.
+One verification authority.
+One evidence archive.
+Domain ops only where truly domain-specific.
 ```
 
-## Component Relationships
+Do not add another top-level coordinator unless one existing top-level coordinator is retired.
 
-### 1. Domain Tool Core ←→ SCMP Deploy Tools
+## Authority Map
 
-The Domain Tool Core and SCMP Deploy Tools work closely together:
+| Authority | Owner | Role |
+| --- | --- | --- |
+| Task lifecycle | Mission Control | Classify, route, block, resume, close task phases. |
+| Runtime/model/session | MMS | Model/provider/protocol/session/rescue authority. |
+| Durable knowledge | xmem | Verified/inferred/stale facts, invariants, pitfalls, preflight blockers. |
+| Continuity state | Handover / agent continuity v1 | Active task, pickup, owner, next action, checkpoint source of truth. |
+| Source/requirements | Creator Gate inside Mission Control | Source accounting, source pack, requirement ledger, acceptance contract. |
+| Verification/done claim | Work Gate inside Mission Control | QA, atomic checks, manual_pending, closeout status. |
+| Scoped implementation | Executor / current coding agent | Edit only inside allowed scope and evidence packet. |
+| Evidence archive | Issue Recorder | Timeline, source, fix evidence, verification, reusable lessons. |
+| Domain ops | SCMP Ops, Feishu Ops | Deploy/source/read-back only for their domain. |
+| Review evidence | Review Hub, Digger, Redline Guard | Produce review/audit evidence; do not own final done or deploy authority. |
+| Experiment loop | Level Up | L3 local autopilot and PR packet evidence; not merge/deploy authority. |
 
-- **Domain Tool Core** generates configuration files that may be deployed using SCMP
-- **SCMP Deploy Tools** consume the configuration artifacts produced by Domain Tool Core
-- Both use the global anchor system for coordination
-- Share common workflow patterns (configuration → validation → deployment)
+## Core Flow
 
-### 2. bin/ Scripts ←→ All Components
-
-The global scripts provide unified access to all components:
-
-- **deploy** integrates with SCMP Deploy Tools and respects Domain Tool Core outputs
-- **push** coordinates git operations across all components
-- **lookup** provides unified search across all domain configurations
-
-### 3. Backup/Skills ←→ Core Components
-
-Provides safety and extensibility layers:
-
-- **Backup** preserves configuration states from Domain Tool Core
-- **Skills** extend functionality of all core components
-- **Templates** provide reusable patterns across the system
-
-## Data Flow
-
-### Configuration Generation Workflow
-
-```
-Excel Spreadsheet → Domain Tool Core → JSON Config → SCMP Deploy → Live Service
-     │                   │                  │              │            │
-     │                   │                  │              │            │
-     └───────────────────┤                  │              │            │
-                         │                  │              │            │
-                         └──────────────────┤              │            │
-                                            │              │            │
-                                            └──────────────┤            │
-                                                           │            │
-                                                           └────────────┘
+```text
+User
+  -> Mission Control
+     -> xmem preflight when history/domain risk matters
+     -> Handover when continuity/resume matters
+     -> Creator Gate/source gates when source-backed
+     -> Executor/current agent for scoped implementation
+     -> Work Gate for done-state verification
+     -> Issue Recorder for evidence archive
+     -> SCMP Ops/Feishu Ops only for domain-specific operations
 ```
 
-### Deployment Workflow
+Fast local task:
 
-```
-Git Repo → push Script → Version Bump → Commit → Push → deploy Script → SCMP → Live Service
-    │          │            │            │        │         │            │
-    │          │            │            │        │         │            │
-    └──────────┼────────────┼────────────┼────────┼─────────┼────────────┘
-               │            │            │        │         │
-               └────────────┼────────────┼────────┼─────────┘
-                            │            │        │
-                            └────────────┼────────┘
-                                         │
-                                         └─────────┘
+```text
+User -> Mission Control fast lane -> scoped implementation -> local validation -> scoped diff -> secret scan -> closeout
 ```
 
-## Architecture Principles
+Source-backed task:
 
-### 1. Decentralized Access
-
-- Components can operate independently
-- Global anchor system enables coordination without tight coupling
-- Scripts provide unified interfaces to decentralized functionality
-
-### 2. Security First
-
-- Credentials never stored in plain text
-- Tokens managed with proper permissions
-- Secure authentication flows
-- Minimal data exposure
-
-### 3. Convention Over Configuration
-
-- Standard file names (`.deploy-service`, etc.)
-- Consistent directory structures
-- Predictable behavior based on conventions
-- Intelligent defaults based on context
-
-### 4. Extensibility
-
-- Hook system for custom behaviors
-- Template system for flexible configurations
-- Skills system for extended functionality
-- Modular architecture enables additions
-
-## Technical Patterns
-
-### Global Anchor Pattern
-
-```
-Component A → Reads ~/.domain-tool-core-anchor → Resolves Core Path → Uses Core Functionality
-Component B → Reads ~/.domain-tool-core-anchor → Resolves Core Path → Uses Core Functionality
+```text
+User -> Mission Control -> source pack -> source manifest -> requirement ledger -> QA/source review -> executor packet -> implementation -> Work Gate -> Issue Recorder
 ```
 
-This allows moving the core directory without breaking dependent components.
+PR/deploy task target:
 
-### Convention-Based Configuration
+```text
+VERIFY local -> create PR/MR -> Digger -> Review Hub post optional -> Redline Guard -> human/ops merge approval -> SHIP/deploy -> production verify
+```
 
-Components use file system conventions to determine behavior:
-- `.deploy-service` in git repo → determines deployment target
-- Excel column names → map to configuration keys
-- Branch names → influence version strategies
+## Current Mission Control Shape
 
-### Progressive Enhancement
+Mission Control is a contract-driven phase runner:
 
-Scripts enhance basic functionality:
-- Basic git push → enhanced with versioning, notifications, hooks
-- Basic SCMP access → enhanced with authentication, parameter inference
-- Basic lookups → enhanced with domain intelligence
+```text
+INTAKE -> DECOMPOSE -> LOCATE -> EXECUTE -> VERIFY -> SHIP -> DONE
+```
 
-## Integration Points
+Current observed scale:
 
-### Git Integration
-- Branch detection and versioning
-- Repository-specific configurations
-- Push automation and notifications
+| Surface | Observed shape |
+| --- | --- |
+| Contract | `work-contract.json`: 7 phases, 56 gates, 9 task types, 4 workflow modes. |
+| Runner | `scripts/work_runner.py`: large monolith, about 11.7k lines. |
+| Dashboard | `scripts/mission_dashboard.py`: generated Chinese dashboard view layer, not source truth. |
+| Tests | `scripts/test_work_enforcement.py`: behavior contract tests, about 1.5k lines. |
 
-### External Services
-- SCMP for deployment orchestration
-- Feishu for team notifications
-- Excel for configuration data
+Health notes from the 2026-06-12 inspection:
 
-### Local Environment
-- PATH integration for global access
-- Token file management
-- Local anchor system
+- `work_runner.py init --mode fast "small bugfix"` worked and classified `bugfix`.
+- `doctor --drift --json` had latency/no-progress risk in interactive use.
+- Full enforcement tests did not finish within a short interactive timeout.
+- The runner is useful but has become a hotspot; surgery should add narrow gates/adapters before broad refactors.
 
-## Scaling Considerations
+## Review And PR Gate Model
 
-### Horizontal Scaling
-- Independent component execution
-- Parallel operation possible
-- Distributed anchor system
+Review capabilities should be layered, not centralized into a new coordinator.
 
-### Vertical Scaling
-- Large Excel files handled efficiently
-- Multiple simultaneous deployments possible
-- Concurrent git operations supported
+| Capability | Correct layer | Notes |
+| --- | --- | --- |
+| `interview` | Mission Control front gate | Lightweight execution-shape questions; not a heavy workshop. |
+| `review-hub` | Managed review request/evidence adapter | Phase-based multi-model fanout; can use OpenCode worker plans. |
+| `digger` | PR/MR reviewer and validation evidence | CodeRabbit-like CI reviewer; not final merge gate. |
+| `redline-guard` | Final pre-merge readiness gate evidence | Reports `mergeable`, `needs-review`, `blocked`, or `unknown`; never merges/deploys by default. |
+| `level-up` | L3 experiment/autopilot runtime | Generates PR packet/evidence; should not own Mission Control policy. |
+| `mommy` | Shallow conversational front door | Can route to Mission Control but should not become a lifecycle authority. |
 
-### Maintenance Scaling
-- Clear separation of concerns
-- Independent upgrade paths
-- Isolated failure domains
+## Planned Surgery Priority
 
-## Security Architecture
+### P0: Structure Baseline
 
-### Authentication Layer
-- Token-based with refresh mechanisms
-- Environment-driven configuration
-- Secure storage with restricted permissions
+Status: this document.
 
-### Data Protection
-- No plaintext passwords
-- Encrypted communication
-- Secure credential handling
+Goal: avoid fresh sessions rereading the whole project; establish current authority map and next read order.
 
-### Access Control
-- Principle of least privilege
-- Component-level isolation
-- Environment-based configuration
+### P1: `interview-intake` Gate
 
-## Operational Patterns
+Status: implemented in working tree on 2026-06-12.
 
-### Configuration Management
-- Excel-to-JSON transformation
-- Version-controlled configurations
-- Backup and recovery procedures
+Add a Mission Control front gate before `startup-intake`.
 
-### Deployment Automation
-- Continuous integration-ready
-- Automated parameter inference
-- Intelligent rollback capabilities
+Proposed artifacts:
 
-### Monitoring and Observability
-- Structured logging
-- Notification systems
-- Status tracking and reporting
+```text
+<artifact-root>/.mission/interview-intake.json
+<artifact-root>/.mission/interview-intake.md
+```
 
-This architecture enables rapid development and deployment while maintaining security, scalability, and maintainability.
-## 7. AI 辅助研发与知识管理
+Questions it may ask or default:
 
-本项目引入了 AI 辅助维护机制，确保研发过程中的逻辑变更与技术细节可追溯：
+- full flow vs dispatch/review-only
+- stop at gate packet vs continue implementation
+- deploy allowed vs human approval required
+- PR review required before deploy
+- review-hub pre/mid/post enabled
+- failure policy: auto-fix loop vs stop for human
 
-1. **[docs/changelog/](docs/changelog/)**: 记录每次功能迭代的详细 **Walkthrough**。包含技术方案权衡、Bug 修复细节以及验证结果。
-2. **[docs/README.md](docs/README.md)**: 项目知识库入口，沉淀核心资产的解析。
-3. **Traceability**: 重要的脚本（如 `wt`）在主文档中均会引用对应的 AI 开发日志。
+Stop states:
 
-这种「文档随代码走」的机制保证了项目知识的持久性。
+```text
+ready
+needs-human
+dispatch-only
+deploy-blocked
+review-required
+```
+
+### P2: Flow Weight Reduction And Stop Policy
+
+Status: next.
+
+Recent issue-recorder evidence shows small fixes are often pulled into full source, visual, ad, and deploy evidence chains. Fix that before adding more review fanout.
+
+#### P2a: `qa_stop_policy`
+
+Make QA/review blocking explicit instead of scattering it across `review_policy`, `stop_conditions`, and individual gates.
+
+Candidate values:
+
+```text
+none
+advisory
+stop-before-execute
+stop-before-ship
+stop-on-review-fail
+manual-approval-required
+```
+
+This policy should be written by `interview-intake` and consumed by later Review Hub, Digger, Redline, Work Gate, and SHIP gates.
+
+#### P2b: Tiny/Small Fix Lane
+
+Add a genuinely light lane for scoped fixes that are not source-backed, visual-risk, ad-runtime, telemetry, PR, or deploy tasks.
+
+Candidate hard gates:
+
+```text
+classification
+interview-intake
+git-status
+local-validation
+scoped-diff
+secret-scan
+```
+
+Do not run source-pack, requirement-ledger, QA check-spec, work-gate closeout, issue-recorder closeout, or Review Hub unless the task explicitly asks for them or risk classifiers require them.
+
+#### P2c: `check --gate all` Required-Only Default
+
+Change `check --gate all` to run required gates by default. Advisory gates should require an explicit flag such as `--include-advisory`.
+
+#### P2d: Scoped Production Closeout
+
+For scoped one-domain config, header, ad-removal, and small production fixes, production target/control verification should be reportable success. Recorder closeout, unrelated runtime families, telemetry, lazy-load, click, and ad-family gates should stay `not_applicable_with_reason` or archival pending unless the shared runtime changed or the user asked for audit closure.
+
+### P3: Review Hub Managed Gates
+
+Add Mission Control gates that create and consume Review Hub requests without copy-paste prompts, after P2 stops making small fixes heavy.
+
+Candidate gates:
+
+```text
+review-hub-pre
+review-hub-mid
+review-hub-post
+review-hub-aggregate
+```
+
+OpenCode bridge:
+
+```text
+Mission Control -> review-hub request --artifact-mode mission-control -> review-hub worker-plan --runner opencode -> OpenCode subagents -> review-hub aggregate -> Work Gate evidence
+```
+
+### P4: PR Review / Redline Pre-Ship Lane
+
+Add resumable PR/MR gates after local verify and before deploy.
+
+Candidate gates:
+
+```text
+pr-created
+digger-review
+redline-guard
+pre-ship-approval
+```
+
+States:
+
+```text
+PR_REVIEW_WAITING
+DIGGER_BLOCKED
+REDLINE_BLOCKED
+REDLINE_MERGEABLE
+SHIP_ALLOWED
+```
+
+Resume rule: blocked review sends the task back to `EXECUTE`; mergeable review can advance to `SHIP` only when human/ops policy allows it.
+
+### P5: Level Up Boundary Cleanup
+
+Keep `level-up` as an experiment loop and PR packet producer. Do not let `level-up` become a second Mission Control. It may call `redline-guard` as an adapter, but Mission Control owns lifecycle, merge/deploy policy, and closeout state.
+
+### P6: Runner Refactor After Gates Exist
+
+Only after P2-P4 are working, split `work_runner.py` by stable ownership:
+
+```text
+contract loading and classification
+artifact IO
+source and coverage gates
+visual and UI gates
+review and PR gates
+ship and deploy gates
+dashboard adapter
+```
+
+Do not start with a broad runner refactor; add gates narrowly, then extract repeated patterns with tests.
+
+## Module Disposition Summary
+
+| Module group | Direction |
+| --- | --- |
+| Mission Control | Keep as single lifecycle authority; slim over time. |
+| Creator Gate / Work Gate | Absorb as Mission Control internal source/verification gates. |
+| Review Hub | Promote over Multi Review as review lane adapter/evidence producer. |
+| Multi Review | Retire or absorb after Review Hub is stable. |
+| Digger / Redline Guard | Use after PR/MR; feed evidence into pre-ship gate. |
+| Level Up | Keep as L3 experiment loop, not a lifecycle coordinator. |
+| Mommy / Interview | Use as light front doors; only Mission Control owns lifecycle. |
+| Hive / Mobius / Pilot / Looop | Downgrade to optional lab/tool/special mode; not default top-level authority. |
+| xmem / Handover | Keep as knowledge and continuity authorities. |
+| SCMP / Feishu Ops | Keep domain-specific authority only. |
+| Domain Tool Core / SCMP Deploy / `bin/deploy` / `bin/push` | Ops/legacy toolkit; important operationally, not project-level lifecycle authority. |
+
+## Legacy Ops Components
+
+The original architecture centered on:
+
+```text
+Excel/domain config -> domain-tool-core -> JSON config -> SCMP deploy -> live service
+Git repo -> push script -> version bump -> deploy script -> SCMP
+```
+
+That system remains useful, but it is now an Ops subgraph under SCMP/domain work. It should not define the whole auto-skills architecture.
+
+Relevant paths:
+
+```text
+bin/deploy
+bin/push
+domain-tool-core/
+scmp-deploy/
+```
+
+## Update Rule
+
+When the next architecture iteration lands:
+
+1. Update the snapshot block with new HEAD, branch, repo time, and dirty-scope note.
+2. Append only meaningful changes to the planned surgery section.
+3. Keep this file conclusion-first and authority-focused.
+4. If an implemented gate changes project conventions, update the owning skill doc or `work-contract.json` in the same change.
+5. Do not add new top-level workflow names unless one existing coordinator is retired or explicitly downgraded.

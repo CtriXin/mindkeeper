@@ -219,7 +219,16 @@ function generateDomainConfig(domain, domainData, adsData, config, existingConfi
         const adsType = adsData.type || config.advanced?.defaultAdsType || 'adx'
         const adsense = adsType === 'adsense' ? generateAdsenseConfig(adsData, config, adsTemplate, adsInfo) : generateAdxConfig(adsData, config, adsTemplate, adsInfo)
         result.adsense = result.adsense ? deepMerge(result.adsense, adsense) : adsense
-        if (result.adsense && result.adsense.ads === '${_ads}') result.adsense.ads = result.ads || ''
+        if (result.adsense && result.adsense.ads === '${_ads}') {
+            result.adsense.ads = result.ads || ''
+            delete result.ads  // ads 已移入 adsense，清理顶层副本
+        }
+        // 如果 adsTemplate.wrapper 没有 scriptUrl，清理掉（防止 excel-parser 直接写入的 adsense.scriptUrl 污染）
+        if (adsTemplate && adsTemplate.wrapper && !('scriptUrl' in adsTemplate.wrapper)) {
+            if (result.adsense && 'scriptUrl' in result.adsense) {
+                delete result.adsense.scriptUrl
+            }
+        }
     }
 
 

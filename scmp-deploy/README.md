@@ -12,14 +12,13 @@
 
 ## 首次使用
 
-1) 登录（会保存 token 到 `~/.scmp_token.json`，不会保存密码）：
+1) 保存全局 SCMP 登录配置（LDAP/share_id 写入 config，密码写入 macOS Keychain）：
 
 ```bash
-python3 /Users/xin/auto-skills/scmp-deploy/scripts/scmp_cli.py login --share-id "<share_id>" --prompt-password
+scmp-auth setup
 
-# 如需明文输入密码(可见/有回显):
-# python3 /Users/xin/auto-skills/scmp-deploy/scripts/scmp_cli.py login --plain-password --share-id "<share_id>" --prompt-password
-# 或设置 env: SCMP_PLAIN_PASSWORD=1
+# 查看状态，不会输出密码或完整 token
+scmp-auth status
 ```
 
 2) 执行部署（交互式输入 branch/version，可选 tag/path/DEPLOY）：
@@ -30,7 +29,7 @@ deploy <server-name>
 
 ## PATH 设置（zsh）
 
-把 `/Users/xin/auto-skills/bin` 加入 PATH 后，就能在任意目录直接用 `deploy`：
+把 `/Users/xin/auto-skills/bin` 加入 PATH 后，就能在任意目录直接用 `scmp-auth`、`lookup` 和 `deploy`：
 
 ```bash
 echo 'export PATH="/Users/xin/auto-skills/bin:$PATH"' >> ~/.zshrc

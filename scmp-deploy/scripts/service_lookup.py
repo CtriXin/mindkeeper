@@ -18,7 +18,7 @@ from urllib.parse import quote
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from scmp_api import SCMPApi, ensure_daily_token
+    from scmp_api import CredentialError, SCMPApi, ensure_daily_token
 except ImportError:
     print("Error: Could not import scmp_api. Make sure scmp_api.py is in the same directory.", file=sys.stderr)
     sys.exit(1)
@@ -33,7 +33,10 @@ def _die(msg):
 
 def _load_token():
     # ensure_daily_token handles env vars, file loading, freshness check, and interactive login
-    return ensure_daily_token(BASE_URL)
+    try:
+        return ensure_daily_token(BASE_URL)
+    except CredentialError as e:
+        _die(str(e))
 
 
 def resolve_domain(domain):
