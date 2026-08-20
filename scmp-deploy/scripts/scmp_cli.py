@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -320,6 +321,148 @@ def pipelines_cmd(args: argparse.Namespace) -> None:
     print(json.dumps(result, indent=2, ensure_ascii=True))
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# SCMP-01(2026-08-19 workflow-final-health-audit):`current` 默认脱敏。
+# raw currentPipelineRun 的 status.taskRuns.*.taskSpec.steps[].script 含部署模板
+# 敏感内容(实测回传 Authorization,约 17k tokens),stdout/agent context 永远只出
+# summary + 白名单 projection;完整 raw 只能经 --raw-output-file 落 0600 私有文件。
+# ────────────────────────────────────────────────────────────────────────────
+_CURRENT_SENSITIVE_KEY_RE = (
+    r"authorization|authentication|token|password|passwd|secret|"
+    r"webhook(?:[_\-\s]?url)?|api[_\-\s]?key|access[_\-\s]?key"
+)
+_CURRENT_LABEL_BLOCK_RE = re.compile(r"(?i)" + _CURRENT_SENSITIVE_KEY_RE)
+# 整段替换为 <redacted>(前缀也不留,保证 stdout grep 无 Authorization/token)。
+_CURRENT_REDACT_PATTERNS = (
+    re.compile(r"(?i)\bauthorization\s*[:=]\s*[^\r\n,;]+"),
+    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+"),
+    re.compile(
+        r"(?i)[\"']?\b(?:" + _CURRENT_SENSITIVE_KEY_RE + r")[\"']?\s*[:=]\s*"
+        r"(\"[^\"]*\"|'[^']*'|[^\s,;\}\]\)]+)"
+    ),
+)
+
+
+def _redact_current_text(value: Any, *, limit: int = 300) -> str:
+    text = str(value if value is not None else "")
+    for pattern in _CURRENT_REDACT_PATTERNS:
+        text = pattern.sub("<redacted>", text)
+    text = text.replace("\n", " ").strip()
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _collect_image_refs(node: Any, out: List[str], *, cap: int = 20) -> None:
+    """只摘 key 名为 image/imageID 的值(registry identity),不复制任何其它字段。"""
+    if len(out) >= cap:
+        return
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if len(out) >= cap:
+                break
+            if isinstance(value, str) and str(key).lower() in ("image", "imageid"):
+                out.append(_redact_current_text(value, limit=200))
+            elif isinstance(value, (dict, list)):
+                _collect_image_refs(value, out, cap=cap)
+    elif isinstance(node, list):
+        for item in node:
+            if len(out) >= cap:
+                break
+            _collect_image_refs(item, out, cap=cap)
+
+
+def _project_current_run(result: Any) -> Dict[str, Any]:
+    """currentPipelineRun 的白名单投影:run/terminal/pod/image identity。
+
+    只从这里列出的字段拷出;spec.taskSpec / steps / script 等载体绝不进入输出。
+    """
+    if not isinstance(result, dict):
+        return {}
+    metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+    status = result.get("status") if isinstance(result.get("status"), dict) else {}
+    spec = result.get("spec") if isinstance(result.get("spec"), dict) else {}
+
+    labels: Dict[str, str] = {}
+    raw_labels = metadata.get("labels") if isinstance(metadata.get("labels"), dict) else {}
+    for key, value in list(raw_labels.items())[:30]:
+        if _CURRENT_LABEL_BLOCK_RE.search(str(key)):
+            continue
+        labels[str(key)] = _redact_current_text(value, limit=120)
+
+    terminal: List[Dict[str, str]] = []
+    raw_conditions = status.get("conditions") if isinstance(status.get("conditions"), list) else []
+    for item in raw_conditions[:5]:
+        if not isinstance(item, dict):
+            continue
+        terminal.append(
+            {
+                "type": str(item.get("type") or ""),
+                "status": str(item.get("status") or ""),
+                "reason": _redact_current_text(item.get("reason") or "", limit=120),
+                "message": _redact_current_text(item.get("message") or "", limit=300),
+                "lastTransitionTime": str(item.get("lastTransitionTime") or ""),
+            }
+        )
+
+    pipeline_ref = spec.get("pipelineRef") if isinstance(spec.get("pipelineRef"), dict) else {}
+
+    tasks: List[Dict[str, Any]] = []
+    images: List[str] = []
+    task_runs = status.get("taskRuns") if isinstance(status.get("taskRuns"), dict) else {}
+    for name, item in list(task_runs.items())[:20]:
+        if not isinstance(item, dict):
+            continue
+        tstatus = item.get("status") if isinstance(item.get("status"), dict) else {}
+        tconditions = tstatus.get("conditions") if isinstance(tstatus.get("conditions"), list) else []
+        tcond = next((c for c in tconditions if isinstance(c, dict)), {})
+        _collect_image_refs(tstatus.get("steps"), images)
+        _collect_image_refs(tstatus.get("sidecars"), images)
+        tasks.append(
+            {
+                "name": str(name),
+                "pipelineTaskName": str(item.get("pipelineTaskName") or ""),
+                "pod": str(tstatus.get("podName") or ""),
+                "condition": {
+                    "type": str(tcond.get("type") or ""),
+                    "status": str(tcond.get("status") or ""),
+                    "reason": _redact_current_text(tcond.get("reason") or "", limit=120),
+                },
+                "started_at": str(tstatus.get("startTime") or ""),
+                "completed_at": str(tstatus.get("completionTime") or ""),
+            }
+        )
+
+    unique_images = list(dict.fromkeys(images))[:20]
+    return {
+        "run": {
+            "name": str(metadata.get("name") or ""),
+            "uid": str(metadata.get("uid") or ""),
+            "namespace": str(metadata.get("namespace") or ""),
+            "created": str(metadata.get("creationTimestamp") or ""),
+            "labels": labels,
+        },
+        "pipelineRef": {"name": str(pipeline_ref.get("name") or "")},
+        "terminal": terminal,
+        "started_at": str(status.get("startTime") or ""),
+        "completed_at": str(status.get("completionTime") or ""),
+        "tasks": tasks,
+        "images": unique_images,
+    }
+
+
+def _write_raw_output_file(path: str, payload: Any) -> str:
+    """完整 raw 只落私有 evidence 文件,强制 0600。"""
+    target = os.path.abspath(os.path.expanduser(path))
+    parent = os.path.dirname(target)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    os.chmod(target, 0o600)  # 覆盖已存在的宽权限文件
+    return target
+
+
 def current_cmd(args: argparse.Namespace) -> None:
     token = _load_token_or_die(args.token_file)
     api = SCMPApi(BASE_URL, token)
@@ -341,7 +484,17 @@ def current_cmd(args: argparse.Namespace) -> None:
         "DEPLOY": _extract_param(params, "DEPLOY"),
         "revision": _extract_param(params, "revision"),
     }
-    print(json.dumps({"summary": summary, "raw": result}, indent=2, ensure_ascii=True))
+    out: Dict[str, Any] = {
+        "schema": "scmp.current.v2",
+        "summary": summary,
+        "projection": _project_current_run(result),
+    }
+    raw_output_file = getattr(args, "raw_output_file", "") or ""
+    if raw_output_file:
+        raw_path = _write_raw_output_file(raw_output_file, {"summary": summary, "raw": result})
+        out["raw_path"] = raw_path
+        out["raw_policy"] = "raw payload is private evidence (0600); never paste into agent context or commit"
+    print(json.dumps(out, indent=2, ensure_ascii=True))
 
 
 def run_cmd(args: argparse.Namespace) -> None:
@@ -813,6 +966,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("pipeline", help="pipeline name")
     sp.add_argument("--group", default="FE", help="CI group (default: FE)")
     sp.add_argument("--project", default="fe", help="CI project (default: fe)")
+    sp.add_argument(
+        "--raw-output-file",
+        default="",
+        help="SCMP-01: 完整 raw currentPipelineRun 写入该路径(0600 私有 evidence);"
+        "stdout 永远只出 summary+projection,不含 taskSpec/steps/script",
+    )
     sp.set_defaults(func=current_cmd)
 
     sp = sub.add_parser("run", help="trigger pipeline run")
