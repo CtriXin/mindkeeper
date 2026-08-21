@@ -31,3 +31,7 @@ out/
 
 # 重装备份区(含 secrets tarball,绝不入仓)
 mac-rebuild-keep/
+
+# installed-skills is an independent third-party container repo (S15-PRE-C);
+# its own git boundary is installed-skills/.git, never the parent
+installed-skills/

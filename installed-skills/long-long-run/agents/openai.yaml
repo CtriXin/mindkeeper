@@ -1,8 +1,0 @@
-interface:
-  display_name: "Long Long Run"
-  short_description: "LLR: INC evidence-chain exploration and ACTIVE authorized mainlines"
-  brand_color: "#0F766E"
-  default_prompt: "Use $long-long-run (LLR) when this task needs a persistent session-bound harness for exploration, recovery, monitoring, or long execution. Start in INC unless the user explicitly authorizes ACTIVE. In INC, build an evidence chain with discovery-before-validation domain calibration, project grounding, expert defaults, assumptions, verified constraints, risks, and open decisions. INC may remain standalone decision support. Enter ACTIVE only after explicit authorization, preserve the durable mainline through side questions, avoid premature stopping while contract-covered next steps remain, close LLR when complete, and return to INC when evidence changes the contract."
-
-policy:
-  allow_implicit_invocation: true
