@@ -1,0 +1,13 @@
+#!/usr/bin/env zsh
+set -euo pipefail
+
+SCRIPT_DIR="${0:A:h}"
+PATH="$SCRIPT_DIR:$PATH"
+SCMP_CLI_PATH="$(runtime-component scmp_cli)"
+
+if [[ ! -f "$SCMP_CLI_PATH" ]]; then
+  print -u2 "Error: Script not found at $SCMP_CLI_PATH"
+  exit 1
+fi
+
+exec python3 "$SCMP_CLI_PATH" auth "$@"

@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""Resolve a runtime-manifest component entrypoint for shell wrappers."""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+RUNTIME_ROOT = os.environ.get("RUNTIME_ROOT", os.path.expanduser("~/.local/share/ctrixin-runtime-v2"))
+MANIFEST_BIN = os.environ.get(
+    "CTRIXIN_RUNTIME_MANIFEST_BIN",
+    str(Path(RUNTIME_ROOT) / "runtime-manifest" / "scripts" / "manifest.py"),
+)
+MANIFEST_JSON = os.environ.get(
+    "CTRIXIN_RUNTIME_MANIFEST",
+    str(Path(MANIFEST_BIN).resolve().parent.parent / "runtime-manifest.json"),
+)
+
+
+def component_entrypoint(component: str) -> str:
+    data = json.loads(Path(MANIFEST_JSON).read_text(encoding="utf-8"))
+    for item in data.get("components", []):
+        if item.get("component_id") == component:
+            entrypoint = item.get("entrypoint")
+            if entrypoint:
+                return str(entrypoint)
+    raise ValueError(f"manifest has no entrypoint for {component!r}")
+
+
+def main() -> int:
+    if len(sys.argv) != 2 or not sys.argv[1].strip():
+        print("usage: runtime-component <component-id>", file=sys.stderr)
+        return 2
+    component = sys.argv[1]
+    proc = subprocess.run(
+        [sys.executable, MANIFEST_BIN, "--manifest", MANIFEST_JSON, "resolve", component, "--json"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        print(proc.stderr.strip() or proc.stdout.strip() or f"runtime component {component!r} failed", file=sys.stderr)
+        return proc.returncode
+    try:
+        result = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        print(f"runtime component {component!r} returned invalid JSON: {exc}", file=sys.stderr)
+        return 2
+    path = result.get("git_root") or result.get("path")
+    if not path:
+        print(f"runtime component {component!r} returned no path", file=sys.stderr)
+        return 2
+    try:
+        entrypoint = component_entrypoint(component)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"runtime component {component!r} manifest entrypoint error: {exc}", file=sys.stderr)
+        return 2
+    print(str(Path(path) / entrypoint))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
