@@ -12,12 +12,10 @@ auto-skills/
 │   ├── lookup            # Service/domain lookup utility
 │   ├── claude-provider   # Claude Code integration
 │   └── figmamcp          # Figma integration
-├── scmp-deploy/          # SCMP deployment tools
-│   ├── README.md
-│   └── scripts/
-│       ├── scmp_cli.py    # Main SCMP CLI interface
-│       ├── scmp_api.py    # SCMP API wrapper
-│       └── service_lookup.py # Service/domain lookup
+├── CtriXin-repo/scmp-deploy/ # SCMP deployment source repo
+├── $RUNTIME_ROOT/scmp-deploy/ # pinned runtime checkout
+├── runtime-manifest/      # component resolver and pin contract
+└── bin/                   # resolver-backed wrappers
 ├── domain-tool-core/     # Domain configuration engine
 │   ├── index.js         # Main domain tool engine
 │   ├── install.js       # Anchor installation script
@@ -67,7 +65,8 @@ node index.js --preview  # Preview mode
 ```
 
 ### 2. SCMP Deployment Tools
-**Location:** `/Users/xin/auto-skills/scmp-deploy/`
+**Source:** `/Users/xin/auto-skills/CtriXin-repo/scmp-deploy`
+**Runtime:** `$RUNTIME_ROOT/scmp-deploy` (`RUNTIME_ROOT=~/.local/share/ctrixin-runtime-v2`)
 
 **Purpose:** Command-line tools for deploying services through SCMP without requiring a browser UI.
 
@@ -156,7 +155,7 @@ lookup domain.com                # Look up by domain
 ### Development Workflow
 1. Set up PATH: `export PATH="/Users/xin/auto-skills/bin:$PATH"`
 2. Configure SCMP: `export SCMP_SHARE_ID='your-id'`
-3. Authenticate: `python3 scmp-deploy/scripts/scmp_cli.py login --prompt-password`
+3. Authenticate: `python3 "$(runtime-component scmp_cli)" login --prompt-password`
 4. In service repo, run `push` to set up `.deploy-service`
 5. Make code changes
 6. Use `push -m "message"` to commit and push

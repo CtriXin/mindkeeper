@@ -12,12 +12,9 @@ auto-skills/
 │   ├── lookup             # Domain/service lookup utility
 │   ├── claude-provider    # Claude Code provider script
 │   └── figmamcp           # Figma integration script
-├── scmp-deploy/           # SCMP (Service Control Management Platform) tools
-│   ├── README.md          # Deployment tool documentation
-│   └── scripts/
-│       ├── scmp_cli.py    # Standalone SCMP CLI
-│       └── scmp_api.py    # HTTP API wrapper
-├── domain-tool-core/      # Central domain configuration engine
+├── CtriXin-repo/scmp-deploy/ # SCMP CLI source (separate canonical repo)
+├── $RUNTIME_ROOT/scmp-deploy/ # pinned runtime checkout (`RUNTIME_ROOT=~/.local/share/ctrixin-runtime-v2`)
+└── domain-tool-core/      # Central domain configuration engine
 │   ├── index.js           # Main domain tool engine
 │   ├── install.js         # Installation script for anchor system
 │   ├── MAINTENANCE.md     # Maintenance manual
@@ -58,35 +55,15 @@ adsMapping: {
 }
 ```
 
-### 2. SCMP Deploy Tools (`scmp-deploy/`)
+### 2. SCMP Deploy Tools
 
-Standalone command-line interface for deploying services through SCMP without opening a browser UI.
+The standalone SCMP CLI is owned by the separate `CtriXin/scmp-deploy` repository. This
+parent repo only exposes `bin/deploy`, `bin/lookup`, and `bin/scmp-auth`; each wrapper
+resolves the pinned runtime entrypoint through `runtime-manifest`.
 
-**Features:**
-- Authentication token management
-- Service discovery and pipeline selection
-- Parameter inference from current deployments
-- Automated deployment workflows
-
-**Commands:**
-- `login`: Authenticate and save token
-- `service`: Search for services
-- `pipelines`: List pipelines for a service
-- `current`: Get current pipeline run parameters
-- `run`: Trigger pipeline run
-- `deploy`: One-shot deployment (recommended)
-
-**Usage:**
-```bash
-# Login (first time setup)
-python3 scmp-deploy/scripts/scmp_cli.py login --share-id "<share_id>" --prompt-password
-
-# Deploy service (interactive mode)
-deploy my-service-name
-
-# Or direct CLI usage
-python3 scmp-deploy/scripts/scmp_cli.py deploy my-service-name --env prod
-```
+Do not restore a nested `scmp-deploy/` directory inside this parent repo. The old path is retired
+and must remain absent; source authoring belongs under `CtriXin-repo/scmp-deploy`, and execution
+belongs under `$RUNTIME_ROOT/scmp-deploy`.
 
 ### 3. Global Scripts (`bin/`)
 
@@ -150,7 +127,7 @@ node install.js
 export SCMP_SHARE_ID='<your-share-id>'
 
 # Login to SCMP (token stored securely)
-python3 scmp-deploy/scripts/scmp_cli.py login --prompt-password
+python3 "$(runtime-component scmp_cli)" login --prompt-password
 ```
 
 4. **Configure Feishu notifications (optional):**
@@ -191,6 +168,6 @@ export PUSH_NOTIFY=1  # Enable auto-notifications
 - If domain-tool-core path breaks after directory movement, run `node install.js` from the core directory
 - For deployment authentication issues, run the login command again
 - Check `.deploy-service` file exists in repositories for proper deployment integration
-- Review `scmp-deploy/README.md` for detailed troubleshooting of deployment issues
+- Review the canonical `CtriXin/scmp-deploy` repository for deployment-tool troubleshooting
 
 For more detailed information on specific components, see the individual README files in each directory.

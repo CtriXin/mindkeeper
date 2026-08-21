@@ -14,7 +14,7 @@ export PATH="/Users/xin/auto-skills/bin:$PATH"
 2. For deployment operations, set up SCMP authentication:
 ```bash
 export SCMP_SHARE_ID='<your-share-id>'
-python3 scmp-deploy/scripts/scmp_cli.py login --prompt-password
+python3 "$(runtime-component scmp_cli)" login --prompt-password
 ```
 
 ## Common Workflows
@@ -130,10 +130,10 @@ deploy <config-service-name>
 **Check SCMP authentication status**
 ```bash
 # Verify token is still valid
-python3 scmp-deploy/scripts/scmp_cli.py service test --help
+python3 "$(runtime-component scmp_cli)" service test --help
 
 # If needed, refresh authentication
-python3 scmp-deploy/scripts/scmp_cli.py login --prompt-password
+python3 "$(runtime-component scmp_cli)" login --prompt-password
 ```
 
 **Debug deployment issues**
@@ -142,9 +142,9 @@ python3 scmp-deploy/scripts/scmp_cli.py login --prompt-password
 deploy <service-name> --print-payload --env prod --branch main --version 1.0.0
 
 # Or use individual commands for more granular debugging
-python3 scmp-deploy/scripts/scmp_cli.py service <service-name>
-python3 scmp-deploy/scripts/scmp_cli.py pipelines <service-name>
-python3 scmp-deploy/scripts/scmp_cli.py current <service-name> <pipeline-name>
+python3 "$(runtime-component scmp_cli)" service <service-name>
+python3 "$(runtime-component scmp_cli)" pipelines <service-name>
+python3 "$(runtime-component scmp_cli)" current <service-name> <pipeline-name>
 ```
 
 **Verify domain-tool-core connectivity**
@@ -196,11 +196,11 @@ push -m "docs: update API documentation"
 
 ```bash
 # Direct SCMP operations (when you need fine-grained control)
-python3 scmp-deploy/scripts/scmp_cli.py login --share-id "my-share" --prompt-password
-python3 scmp-deploy/scripts/scmp_cli.py service my-service
-python3 scmp-deploy/scripts/scmp_cli.py pipelines my-service --limit 5
-python3 scmp-deploy/scripts/scmp_cli.py current my-service my-pipeline
-python3 scmp-deploy/scripts/scmp_cli.py run my-service my-pipeline --payload '{"params": [{"name": "branch", "value": "main"}]}'
+python3 "$(runtime-component scmp_cli)" login --share-id "my-share" --prompt-password
+python3 "$(runtime-component scmp_cli)" service my-service
+python3 "$(runtime-component scmp_cli)" pipelines my-service --limit 5
+python3 "$(runtime-component scmp_cli)" current my-service my-pipeline
+python3 "$(runtime-component scmp_cli)" run my-service my-pipeline --payload '{"params": [{"name": "branch", "value": "main"}]}'
 ```
 
 ## Configuration File Examples
@@ -271,7 +271,7 @@ export FEISHU_WEBHOOK='https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook
 export PUSH_NOTIFY=1  # Enable automatic notifications
 
 # Development aliases
-alias deploy-check='python3 /Users/xin/auto-skills/scmp-deploy/scripts/scmp_cli.py service test 2>/dev/null && echo "✓ SCMP connection OK" || echo "✗ SCMP connection failed"'
+alias deploy-check='python3 $(runtime-component scmp_cli) service test 2>/dev/null && echo "✓ SCMP connection OK" || echo "✗ SCMP connection failed"'
 ```
 
 ### Hook Script Examples
@@ -343,7 +343,7 @@ node install.js
 **Solution**:
 ```bash
 # Refresh token
-python3 scmp-deploy/scripts/scmp_cli.py login --prompt-password
+python3 "$(runtime-component scmp_cli)" login --prompt-password
 # Or check if token file permissions are correct
 ls -la ~/.scmp_token.json
 ```
@@ -381,8 +381,8 @@ export PUSH_SKIP_BUMP=1
 | Deploy specific service | `deploy service-name` |
 | Push with notifications | `push -m "message"` |
 | Push without notifications | `push -m "message" --no-notify` |
-| Check SCMP connection | `python3 scmp-deploy/scripts/scmp_cli.py service test` (will fail, but tests connection) |
+| Check SCMP connection | `python3 "$(runtime-component scmp_cli)" service test` (will fail, but tests connection) |
 | Regenerate config suggestions | `node /path/to/domain-tool-core/index.js` + 'y' when prompted |
-| Refresh SCMP token | `python3 scmp-deploy/scripts/scmp_cli.py login --prompt-password` |
+| Refresh SCMP token | `python3 "$(runtime-component scmp_cli)" login --prompt-password` |
 
 These examples and workflows cover the most common use cases for the Auto-Skills project components, providing a solid foundation for productive development and deployment workflows.
