@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
+PATH="$SCRIPT_DIR:$PATH"
+
 # Run Service/Domain Lookup from anywhere.
 
-LOOKUP_SCRIPT_PATH="/Users/xin/auto-skills/scmp-deploy/scripts/service_lookup.py"
+LOOKUP_SCRIPT_PATH="$(runtime-component scmp_cli)"
+LOOKUP_SCRIPT_PATH="${LOOKUP_SCRIPT_PATH%/scmp_cli.py}/service_lookup.py"
 
 if [[ ! -f "$LOOKUP_SCRIPT_PATH" ]]; then
   echo "Error: Script not found at $LOOKUP_SCRIPT_PATH"
