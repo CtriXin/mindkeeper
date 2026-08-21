@@ -13,8 +13,7 @@ dist/
 __pycache__/
 *.pyc
 
-# 公司内部敏感内容 - 仅保留本地版本控制，不上传
-scmp-deploy/
+# scmp-deploy is an independent repository; nested copies must remain absent.
 .worktree-meta.json
 
 # 独立子仓库 / 本地项目集合

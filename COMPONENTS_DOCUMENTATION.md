@@ -13,11 +13,10 @@ Located at `/Users/xin/auto-skills/domain-tool-core/`
 - Generates ads mapping configurations
 
 ### 2. SCMP Deployment Tools
-Located at `/Users/xin/auto-skills/scmp-deploy/`
-- Provides CLI tools for deploying services through SCMP
-- Offers authentication management with secure token handling
-- Automates service discovery and pipeline triggering
-- Ensures secure credential handling
+Owned by the separate `CtriXin/scmp-deploy` repository and executed from the pinned
+runtime checkout under `$RUNTIME_ROOT/scmp-deploy/` (`RUNTIME_ROOT=~/.local/share/ctrixin-runtime-v2`).
+The parent `auto-skills` repo owns only the wrappers in `bin/`; it must not track a
+nested `scmp-deploy` source tree.
 
 ### 3. Global Bin Scripts
 Located at `/Users/xin/auto-skills/bin/`
@@ -268,7 +267,7 @@ export SCMP_SHARE_ID='<your-share-id>'
 
 3. Log in to SCMP for the first time:
 ```bash
-python3 /Users/xin/auto-skills/scmp-deploy/scripts/scmp_cli.py login --prompt-password
+scmp-auth login --prompt-password
 ```
 
 4. For domain-tool-core, run install script if moving directories:

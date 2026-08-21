@@ -14,14 +14,14 @@
 
 | 文件夹/文件 | 处理逻辑 | 原因 |
 | :--- | :--- | :--- |
-| `scmp-deploy/` | **仅本地版本控制** | 包含公司内部部署逻辑和 URL |
+| `CtriXin-repo/scmp-deploy/` | **独立 canonical repo** | 底层 SCMP CLI source；父仓不跟踪嵌套副本 |
 | `node_modules/` | 排除 | 标准依赖项 |
 | `__pycache__` | 排除 | Python 缓存 |
 | `.DS_Store` | 排除 | macOS 系统文件 |
 
 > [!IMPORTANT]
 > **本地与远程的区别**：
-> 虽然 `scmp-deploy/` 被忽略（不会上传到 GitHub），但它在本地 Git 中仍然有版本历史。你可以通过 `git status` 看到它，但 `git push` 不会带走它。
+> 底层 SCMP CLI 已迁到独立 `CtriXin/scmp-deploy` repo；`auto-skills` 不再通过 ignored nested tree 保存或执行它。
 
 ---
 
@@ -69,9 +69,9 @@ git diff HEAD^
 ```
 
 ### 回滚敏感目录
-即便 `scmp-deploy/` 没在远程，本地依然可以找回：
+历史 parent checkout 中的旧 `scmp-deploy/` 仅可作为迁移证据读取，不是当前 source/runtime：
 ```bash
-git checkout <commit-id> -- scmp-deploy/
+git show <commit-id>:scmp-deploy/README.md
 ```
 
 ---

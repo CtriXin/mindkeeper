@@ -17,7 +17,7 @@
 
 脚本位置：
 - `/Users/xin/auto-skills/bin/` - 全局命令
-- `/Users/xin/auto-skills/scmp-deploy/scripts/` - SCMP部署脚本
+- `CtriXin/scmp-deploy runtime entrypoint` - SCMP部署脚本
 - `/Users/xin/auto-skills/domain-service-lookup/scripts/` - 域名查找脚本
 
 ## 部署相关
@@ -34,7 +34,7 @@
 
 **首次登录**:
 ```bash
-python3 /Users/xin/auto-skills/scmp-deploy/scripts/scmp_cli.py login --share-id "<share_id>" --prompt-password
+python3 $(runtime-component scmp_cli) login --share-id "<share_id>" --prompt-password
 ```
 
 **使用方法**:
@@ -54,11 +54,11 @@ deploy <server-name>
 
 **功能**: 根据域名查找对应的后端服务
 
-**位置**: `/Users/xin/auto-skills/scmp-deploy/scripts/service_lookup.py`
+**位置**: `$(runtime-component scmp_cli | sed "s#/scmp_cli.py$#/service_lookup.py#")`
 
 **使用方法**:
 ```bash
-python3 /Users/xin/auto-skills/scmp-deploy/scripts/service_lookup.py <domain>
+python3 $(runtime-component scmp_cli | sed "s#/scmp_cli.py$#/service_lookup.py#") <domain>
 ```
 
 ---

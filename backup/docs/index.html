@@ -639,7 +639,7 @@ python3 /Users/xin/auto-skills/domain-service-lookup/scripts/lookup.py <domain_n
 
 **首次登录**:
 \`\`\`bash
-python3 /Users/xin/auto-skills/scmp-deploy/scripts/scmp_cli.py login --share-id "<share_id>" --prompt-password
+python3 $(runtime-component scmp_cli) login --share-id "<share_id>" --prompt-password
 \`\`\`
 
 **使用方法**:
@@ -654,7 +654,7 @@ deploy <server-name>
 **功能**: 根据域名查找对应的后端服务
 
 \`\`\`bash
-python3 /Users/xin/auto-skills/scmp-deploy/scripts/service_lookup.py <domain>
+python3 $(runtime-component scmp_cli | sed "s#/scmp_cli.py$#/service_lookup.py#") <domain>
 \`\`\`
 
 ---
