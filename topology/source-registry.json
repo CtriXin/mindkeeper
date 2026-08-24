@@ -1,0 +1,365 @@
+{
+  "schema": "auto-skills.source_registry.v1",
+  "updated_at": "2026-08-21T00:00:00+08:00",
+  "generated_by": "S15-PRE-C (SOURCE-TOPOLOGY-01)",
+  "notes": "Machine-readable source topology contract for xin's machine. Consumed by topology/validate_topology.py (also via bin/check-topology --preflight). Physical nesting NEVER implies ownership: /Users/xin/auto-skills/CtriXin-repo, /shared-skills and /installed-skills are peer roots that must not be tracked by the auto-skills parent repo. Exposure dirs own symlinks/registrations only; inline content is an authority ONLY when registered here (inline_overrides), tracked in agents-home, or installed by the skills CLI lock.",
+  "cli_dirs": {
+    "agents": "/Users/xin/.agents/skills",
+    "codex": "/Users/xin/.codex/skills",
+    "claude": "/Users/xin/.claude/skills"
+  },
+  "ignore_entries": [".DS_Store", ".system"],
+  "ignore_note": ".DS_Store is Finder noise; .codex/skills/.system is managed by the codex CLI itself.",
+  "roots": [
+    {
+      "id": "auto-skills",
+      "role": "sync_carrier_and_host_tools",
+      "root": "/Users/xin/auto-skills",
+      "ownership": "user",
+      "git_boundary": "own_repo:mindkeeper(zhiji)@feature/worktree-management",
+      "source_kind": "carrier_repo",
+      "runtime_policy": "hosts bin/ wrappers + topology registry only; wrappers resolve components via runtime-manifest; NEVER a source fallback",
+      "exposure_policy": "serves no skills",
+      "upstream_policy": "github.com/CtriXin/mindkeeper",
+      "allowed_exceptions": []
+    },
+    {
+      "id": "ctrixin-repo",
+      "role": "user_owned_repo_workspace",
+      "root": "/Users/xin/auto-skills/CtriXin-repo",
+      "ownership": "user",
+      "git_boundary": "parent_ignored; each child directory is its own git repo; the workspace root itself is NOT a git repo",
+      "source_kind": "repo_workspace",
+      "runtime_policy": "authoring source only; active runtime resolved via runtime-manifest pins (no silent fallback here)",
+      "exposure_policy": "CLI skill symlinks may point directly at repos under this root",
+      "upstream_policy": "each child repo carries its own GitHub remote",
+      "allowed_exceptions": ["*-worktrees directories are task-owned worktrees, not sources"]
+    },
+    {
+      "id": "shared-skills",
+      "role": "user_owned_cross_cli_skill_source",
+      "root": "/Users/xin/auto-skills/shared-skills",
+      "ownership": "user",
+      "git_boundary": "own_repo:CtriXin/shared-skills@main",
+      "source_kind": "self_dev_skill_source",
+      "runtime_policy": "source of user-authored cross-CLI skills; executor component is consumed via runtime-manifest component_scope pin",
+      "exposure_policy": "CLI skill symlinks may point directly at skill directories here",
+      "upstream_policy": "github.com/CtriXin/shared-skills",
+      "allowed_exceptions": [
+        "creator-gate entry is itself a cross-root pointer to ../CtriXin-repo/creator-gate (debt: re-point consumers directly; owner to remove pointer in a shared-skills commit)",
+        "checkout is intentionally dirty/ahead (user live tree); drift is report-only"
+      ]
+    },
+    {
+      "id": "installed-skills",
+      "role": "third_party_open_source_skill_container",
+      "root": "/Users/xin/auto-skills/installed-skills",
+      "ownership": "user_hosted_third_party",
+      "git_boundary": "own_container_repo (git boundary MUST resolve to this directory, never to /Users/xin/auto-skills)",
+      "source_kind": "third_party_container",
+      "runtime_policy": "not a runtime; snapshots/clones only",
+      "exposure_policy": "CLI skill symlinks may point directly at skill directories here",
+      "upstream_policy": "per-entry upstream/pin metadata in installed-skills/registry.json (upstream_url/ref/version/checked_at/local_modifications/update_policy); upgrades are REPORT-ONLY, never auto-applied",
+      "allowed_exceptions": []
+    },
+    {
+      "id": "ctrixin-runtime-v2",
+      "role": "pinned_active_runtime",
+      "root": "/Users/xin/.local/share/ctrixin-runtime-v2",
+      "ownership": "user",
+      "git_boundary": "each component is a clean checkout pinned by runtime-manifest",
+      "source_kind": "pinned_runtime",
+      "runtime_policy": "manifest-resolved clean checkouts only; not an authoring surface (exception: worktrees dirs)",
+      "exposure_policy": "CLI skill symlinks for pinned components (auditor/mommy/scmp-ops/...) point here",
+      "upstream_policy": "github.com/CtriXin/*",
+      "allowed_exceptions": ["*-worktrees directories are task-owned worktrees"]
+    },
+    {
+      "id": "agents-home",
+      "role": "home_config_and_versioned_exposure",
+      "root": "/Users/xin/.agents",
+      "ownership": "user",
+      "git_boundary": "own_repo:CtriXin/agents-home@main",
+      "source_kind": "home_repo_hybrid",
+      "runtime_policy": "not a runtime",
+      "exposure_policy": "skills/ is the agents CLI exposure surface; content tracked by this repo (e.g. skills-CLI-installed packs) counts as a REGISTERED inline authority (see managers/inline_overrides)",
+      "upstream_policy": "github.com/CtriXin/agents-home",
+      "allowed_exceptions": [
+        "skills/mission-control and skills/work deletions are pending commit in the dirty checkout (PRE-A host cutover); absence on disk is the required state"
+      ]
+    },
+    {
+      "id": "exposure-codex",
+      "role": "exposure_only",
+      "root": "/Users/xin/.codex/skills",
+      "ownership": "none",
+      "git_boundary": "not a git repo; pure exposure",
+      "source_kind": "exposure",
+      "runtime_policy": "none",
+      "exposure_policy": "symlinks + registered inline authorities only; owns no source",
+      "upstream_policy": "n/a",
+      "allowed_exceptions": []
+    },
+    {
+      "id": "exposure-claude",
+      "role": "exposure_only",
+      "root": "/Users/xin/.claude/skills",
+      "ownership": "none",
+      "git_boundary": "not a git repo; pure exposure",
+      "source_kind": "exposure",
+      "runtime_policy": "none",
+      "exposure_policy": "symlinks + registered inline authorities only; owns no source",
+      "upstream_policy": "n/a",
+      "allowed_exceptions": []
+    },
+    {
+      "id": "bin",
+      "role": "host_tools",
+      "root": "/Users/xin/auto-skills/bin",
+      "ownership": "user",
+      "git_boundary": "tracked by auto-skills parent repo",
+      "source_kind": "tools",
+      "runtime_policy": "wrappers resolve via runtime-manifest (deploy/lookup/scmp-auth/runtime-component)",
+      "exposure_policy": "not a skill source; NEVER a source fallback",
+      "upstream_policy": "with auto-skills parent repo",
+      "allowed_exceptions": []
+    }
+  ],
+  "external_managed_roots": [
+    {
+      "id": "mms-vendor",
+      "root": "/Users/xin/.mms",
+      "manager": "multi-model-switch (mms) app runtime data",
+      "upgrade_owner": "xin",
+      "note": "vendored skill copies (handover snapshot, xmem, token-saver, toon pointer target lives under CtriXin-repo/multi-model-switch); NOT authoritative sources except as registered pointers"
+    },
+    {
+      "id": "cc-switch-skills",
+      "root": "/Users/xin/.cc-switch/skills",
+      "manager": "cc-switch app",
+      "upgrade_owner": "xin",
+      "note": "humanizer, last30days live here"
+    },
+    {
+      "id": "ego-skills",
+      "root": "/Users/xin/.local/share/ego/ego-skills",
+      "manager": "ego app (symlink into active_version_dir)",
+      "upgrade_owner": "ego app updates",
+      "note": "ego-browser exposure target"
+    },
+    {
+      "id": "codex-install-skills",
+      "root": "/Users/xin/.codex/install-skills",
+      "manager": "codex CLI",
+      "upgrade_owner": "xin",
+      "note": "keep-codex-fast lives here"
+    },
+    {
+      "id": "pi-gateway-overlays",
+      "root": "/Users/xin/.config/mms-next/pi-gateway/s",
+      "manager": "mms-next pi-gateway (per-session skill overlays)",
+      "upgrade_owner": "mms-next",
+      "note": "session-scoped copies injected per session id; informational registration, not scanned as exposure"
+    }
+  ],
+  "managers": [
+    {
+      "id": "skills-cli",
+      "kind": "external_skill_installer",
+      "lockfiles": ["/Users/xin/.agents/.skill-lock.json"],
+      "note": "vercel-labs skills CLI. Lock entries (lark-* from larksuite/cli, pptx from anthropics/skills, taste-skill pack, find-skills, planning-with-files, ...) are external_managed inline authorities: they stay where the manager installed them (contract #5 exception, 不强搬). Lock also records upstream per entry."
+    }
+  ],
+  "critical_symlinks": {
+    "agents~auditor": "/Users/xin/.local/share/ctrixin-runtime-v2/auditor",
+    "agents~mommy": "/Users/xin/.local/share/ctrixin-runtime-v2/mommy",
+    "agents~scmp-ops": "/Users/xin/.local/share/ctrixin-runtime-v2/scmp-ops",
+    "codex~auditor": "/Users/xin/.local/share/ctrixin-runtime-v2/auditor",
+    "codex~mommy": "/Users/xin/.local/share/ctrixin-runtime-v2/mommy",
+    "codex~scmp-ops": "/Users/xin/.local/share/ctrixin-runtime-v2/scmp-ops",
+    "claude~auditor": "/Users/xin/.local/share/ctrixin-runtime-v2/auditor",
+    "claude~mommy": "/Users/xin/.local/share/ctrixin-runtime-v2/mommy",
+    "claude~scmp-ops": "/Users/xin/.local/share/ctrixin-runtime-v2/scmp-ops",
+    "codex~executor": "/Users/xin/auto-skills/shared-skills/executor",
+    "agents~outpact": "/Users/xin/auto-skills/CtriXin-repo/outpact",
+    "codex~outpact": "/Users/xin/auto-skills/CtriXin-repo/outpact",
+    "claude~outpact": "/Users/xin/auto-skills/CtriXin-repo/outpact",
+    "agents~handover": "/Users/xin/auto-skills/CtriXin-repo/handover",
+    "agents~offduty": "/Users/xin/auto-skills/CtriXin-repo/handover/aliases/offduty",
+    "agents~onduty": "/Users/xin/auto-skills/CtriXin-repo/handover/aliases/onduty",
+    "codex~offduty": "/Users/xin/auto-skills/CtriXin-repo/handover/aliases/offduty",
+    "codex~onduty": "/Users/xin/auto-skills/CtriXin-repo/handover/aliases/onduty",
+    "claude~offduty": "/Users/xin/auto-skills/CtriXin-repo/handover/aliases/offduty",
+    "claude~onduty": "/Users/xin/auto-skills/CtriXin-repo/handover/aliases/onduty",
+    "agents~creator-gate": "/Users/xin/auto-skills/CtriXin-repo/creator-gate",
+    "codex~creator-gate": "/Users/xin/auto-skills/CtriXin-repo/creator-gate",
+    "claude~creator-gate": "/Users/xin/auto-skills/CtriXin-repo/creator-gate",
+    "agents~web-access": "/Users/xin/auto-skills/CtriXin-repo/web-access",
+    "codex~web-access": "/Users/xin/auto-skills/CtriXin-repo/web-access",
+    "claude~web-access": "/Users/xin/auto-skills/CtriXin-repo/web-access",
+    "agents~docx": "/Users/xin/auto-skills/installed-skills/docx",
+    "codex~docx": "/Users/xin/auto-skills/installed-skills/docx",
+    "claude~docx": "/Users/xin/auto-skills/installed-skills/docx",
+    "agents~xlsx": "/Users/xin/auto-skills/installed-skills/xlsx",
+    "codex~xlsx": "/Users/xin/auto-skills/installed-skills/xlsx",
+    "claude~xlsx": "/Users/xin/auto-skills/installed-skills/xlsx"
+  },
+  "critical_symlinks_note": "Hand-copying or re-pointing any of these links is a RED violation (manual symlink change tripwire). They pin the production path of pinned/production components. docx/xlsx converged into the installed-skills container during S15-PRE-C host migration (2026-08-21): former dual inline copies in ~/.codex/skills and ~/.claude/skills were byte-identical; codex copy moved into the container, claude duplicate removed, all three CLIs now symlink the container.",
+  "inline_overrides": [
+    { "cli": "agents", "name": "grill-me", "classification": "user_owned", "upstream": null, "remediation": "1-file alias routing to interview; candidate for shared-skills when agents-home is next committed" },
+    { "cli": "agents", "name": "guizang-ppt-skill", "classification": "user_owned", "upstream": null, "remediation": "tracked in agents-home; candidate to migrate to shared-skills" },
+    { "cli": "agents", "name": "impeccable", "classification": "user_owned", "upstream": null, "remediation": "tracked in agents-home; candidate to migrate to shared-skills" },
+    { "cli": "agents", "name": "caveman-compress", "classification": "user_owned", "upstream": null, "remediation": "diverged from mms caveman pack 'compress' skill (SKILL.md differs); reconcile with pack owner" },
+    { "cli": "agents", "name": "oracle-crs-account-refresh", "classification": "user_owned", "upstream": null, "remediation": "tracked in agents-home; candidate to migrate to shared-skills" },
+    { "cli": "agents", "name": "kimi-webbridge", "classification": "third_party", "upstream": null, "remediation": "owner to identify upstream; then move snapshot to installed-skills and re-point agents+codex+claude" },
+    { "cli": "codex", "name": "webapp-testing", "classification": "third_party", "upstream": null, "remediation": "owner to identify upstream (Anthropic webapp-testing?); claude exposure chains here; then move snapshot to installed-skills" },
+    { "cli": "codex", "name": "playwright", "classification": "third_party", "upstream": null, "remediation": "owner to identify upstream; candidate snapshot move to installed-skills" },
+    { "cli": "codex", "name": "screenshot", "classification": "third_party", "upstream": null, "remediation": "owner to identify upstream; candidate snapshot move to installed-skills" },
+    { "cli": "codex", "name": "bugfix", "classification": "unknown", "upstream": null, "remediation": "owner to classify (user_owned vs third_party)" },
+    { "cli": "codex", "name": "commit-scribe", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "codex", "name": "distill", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "codex", "name": "hatch-pet", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "codex", "name": "ops-env-safe", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "codex", "name": "project-tracker", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "codex", "name": "runtimia-upstream-drift", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "codex", "name": "codex-primary-runtime", "classification": "empty_placeholder", "upstream": null, "remediation": "empty directory; delete on owner approval" },
+    { "cli": "claude", "name": "agentbus", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "claude", "name": "changelog-generator", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "claude", "name": "doc-coauthoring", "classification": "third_party", "upstream": null, "remediation": "bundled Claude skill; owner to confirm provenance" },
+    { "cli": "claude", "name": "domain-service-lookup", "classification": "user_owned", "upstream": null, "remediation": "SCMP 域名查找 skill; candidate to migrate to CtriXin-repo or shared-skills" },
+    { "cli": "claude", "name": "domain-tool-expert", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "claude", "name": "excalidraw-agent-local-kit", "classification": "user_owned", "upstream": null, "remediation": "duplicate of CtriXin-repo/excalidraw-agent-local-kit; re-point to repo copy after diff review" },
+    { "cli": "claude", "name": "internal-comms", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "claude", "name": "knowledge-wiki", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "claude", "name": "mail", "classification": "unknown", "upstream": null, "remediation": "owner to classify" },
+    { "cli": "claude", "name": "map", "classification": "unknown", "upstream": null, "remediation": "shared-skills/map also exists unexposed; align after diff review" },
+    { "cli": "claude", "name": "planning-with-files", "classification": "third_party", "upstream": "OthmanAdi/planning-with-files", "remediation": "skills-lock registered" }
+  ],
+  "container_registry_relpath": "registry.json",
+  "runtime_manifest_path": "/Users/xin/.local/share/ctrixin-runtime-v2/runtime-manifest/runtime-manifest.json",
+  "runtime_manifest_note": "The ACTIVE manifest is the runtime-v2 checkout (consumed by resolver/wrappers). The CtriXin-repo/runtime-manifest checkout is an authoring twin; file existence there never means active (IMMEDIATE-EXECUTION-WIRING-CLOSURE-ADDENDUM §3/§6).",
+  "layer_probe_surfaces": [
+    {
+      "id": "ad-pack-generator",
+      "kind": "file_canonicality",
+      "repo": "/Users/xin/feature-update",
+      "path": "scripts/ad_pack_from_task.py",
+      "canonical_ref": "origin/main",
+      "expectation": "local_only_debt",
+      "owner_card": "S15-PRE-D-b2",
+      "note": "ad pack generator lives only in local commit(s) (worktree file exists, origin/main does not contain it); landing checkout is 38 commits ahead local-only. Debt owned by D-b2 (canonical provider-neutral generator in frontend-baseline)."
+    },
+    {
+      "id": "feature-update-landing",
+      "kind": "local_commits",
+      "repo": "/Users/xin/feature-update",
+      "expectation": "local_only_debt",
+      "owner_card": "OI-11",
+      "note": "landing checkout diverged from origin/main (OI-11 owner one-shot ff); not a canonical surface"
+    },
+    {
+      "id": "runtime-manifest-authoring",
+      "kind": "authoring_twin",
+      "repo": "/Users/xin/auto-skills/CtriXin-repo/runtime-manifest",
+      "active_twin": "/Users/xin/.local/share/ctrixin-runtime-v2/runtime-manifest",
+      "expectation": "stale_twin_warn",
+      "note": "authoring copy; active manifest = runtime-v2 checkout"
+    },
+    {
+      "id": "auditor-source",
+      "kind": "manifest_component",
+      "component": "auditor",
+      "repo": "/Users/xin/auto-skills/CtriXin-repo/auditor",
+      "expectation": "stale_twin_warn",
+      "note": "authoring source twin; active consumer = ${RUNTIME_ROOT}/auditor pin"
+    },
+    {
+      "id": "state-core-source",
+      "kind": "manifest_component",
+      "component": "state-core",
+      "repo": "/Users/xin/auto-skills/CtriXin-repo/state-core",
+      "expectation": "stale_twin_warn",
+      "note": "authoring source twin"
+    },
+    {
+      "id": "frontend-baseline-source",
+      "kind": "manifest_component",
+      "component": "frontend-baseline",
+      "repo": "/Users/xin/auto-skills/CtriXin-repo/frontend-baseline",
+      "expectation": "stale_twin_warn",
+      "note": "authoring source twin (dirty user live tree; report-only)"
+    },
+    {
+      "id": "mommy-source",
+      "kind": "manifest_component",
+      "component": "mommy",
+      "repo": "/Users/xin/auto-skills/CtriXin-repo/mommy",
+      "expectation": "stale_twin_warn",
+      "note": "authoring source twin"
+    },
+    {
+      "id": "scmp-ops-source",
+      "kind": "manifest_component",
+      "component": "scmp-ops",
+      "repo": "/Users/xin/auto-skills/CtriXin-repo/scmp-ops",
+      "expectation": "stale_twin_warn",
+      "note": "authoring source twin"
+    },
+    {
+      "id": "outpact-source",
+      "kind": "manifest_component",
+      "component": "outpact",
+      "repo": "/Users/xin/auto-skills/CtriXin-repo/outpact",
+      "expectation": "waivered_active_source",
+      "owner_card": "S15-PRE-E-a",
+      "note": "manifest runtime_path points HERE under waiver (branch work/ad-source-pack-provenance); entry hash currently matches pin. Waiver exit owned by PRE-E-a."
+    },
+    {
+      "id": "shared-skills-executor-host",
+      "kind": "manifest_component",
+      "component": "executor",
+      "repo": "/Users/xin/auto-skills/shared-skills",
+      "expectation": "active_subtree",
+      "owner_card": "runtime-manifest component_scope (S15-PRE-C PR-C3)",
+      "note": "executor subtree byte-identical to pin (verified 2026-08-21); host checkout is intentionally dirty — component_scope checks the subtree only"
+    },
+    {
+      "id": "scmp-deploy-source",
+      "kind": "manifest_component",
+      "component": "scmp_cli",
+      "repo": "/Users/xin/auto-skills/CtriXin-repo/scmp-deploy",
+      "expectation": "active_source_canonical",
+      "note": "canonical default branch == pin == runtime twin (S15-PRE-B); this is BOTH authoring source and canonical"
+    },
+    {
+      "id": "web-access-source",
+      "kind": "direct_exposure",
+      "repo": "/Users/xin/auto-skills/CtriXin-repo/web-access",
+      "expectation": "canonical_source",
+      "note": "exposed directly by CLI symlinks; clean on main"
+    }
+  ],
+  "misplaced_exceptions": [
+    { "root": "installed-skills", "name": "token-saver", "kind": "symlink", "target": "/Users/xin/.mms/vendor/token-saver", "classification": "external_managed_pointer", "remediation": "only registration for token-saver; keep until exposed in a CLI dir" }
+  ],
+  "revival_tripwires": {
+    "forbidden_paths": [
+      "/Users/xin/auto-skills/scmp-deploy"
+    ],
+    "forbidden_path_note": "Old scmp-deploy active home (S15-PRE-B). Revival as directory OR symlink = RED. Backups under /Users/xin/auto-skills/backups/ are allowlisted.",
+    "forbidden_target_prefixes": [
+      "/Users/xin/auto-skills/scmp-deploy"
+    ]
+  },
+  "parent_boundary": {
+    "repo_root": "/Users/xin/auto-skills",
+    "must_not_track": ["shared-skills", "installed-skills", "CtriXin-repo"],
+    "note": "git ls-files for these prefixes must be empty; allowed items are only registry/pointer/.gitignore rules (PR codex/s15-pre-c-boundary)."
+  },
+  "container_boundary": {
+    "root": "/Users/xin/auto-skills/installed-skills",
+    "toplevel_must_equal": "/Users/xin/auto-skills/installed-skills",
+    "note": "git -C installed-skills rev-parse --show-toplevel must resolve to the container itself, never to /Users/xin/auto-skills (S15-PRE-C hard acceptance #3)."
+  },
+  "agents_home_repo": "/Users/xin/.agents"
+}

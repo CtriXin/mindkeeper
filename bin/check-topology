@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# check-topology — validate source topology ownership/symlink contract (S15-PRE-C).
+# Exit 0 = no red; exit 2 = red violations; exit 1 = usage/registry error.
+#
+# Used by tracked-repo-workflow preflight (`--preflight`) and weekly drift sweeps.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REGISTRY="$HERE/../topology/source-registry.json"
+exec python3 "$HERE/../topology/validate_topology.py" --registry "$REGISTRY" "$@"
