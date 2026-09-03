@@ -64,6 +64,9 @@ def parse_line(raw: str):
         return None, None, None, 'comment'
     if not line.startswith(PREFIXES):
         return None, None, None, 'no-prefix'          # 关键：不给兜底分支任何机会
+    if '→' in line or '重定向到' in line or '取消 301' in line:
+        # 预览输出被误当成输入喂回来。宁可整行丢弃并报出来，也不要写出半截规则。
+        return None, None, None, 'looks-like-preview-output'
 
     if line.startswith('301:'):
         body, action = line[4:].strip(), '301'
@@ -83,8 +86,13 @@ def parse_line(raw: str):
     if not src:
         return None, None, None, f'bad-source:{parts[0][:30]!r}'
 
+    # 行尾多余 token 必须报出来，不能静默吞掉 —— 飞书把消息压平后，
+    # '@宋鑫 新增需求~' 会黏在最后一条规则后面。
+    extra = parts[2:] if action == '301' else parts[1:]
+    tail = ('ok+trailing:' + ' '.join(extra)[:40]) if extra else 'ok'
+
     if action == 'restore':
-        return 'restore', src, None, 'ok'
+        return 'restore', src, None, tail
 
     if len(parts) < 2:
         return None, None, None, 'missing-target'
@@ -93,13 +101,16 @@ def parse_line(raw: str):
         return None, None, None, f'bad-target:{parts[1][:30]!r}'
     if src == dst:
         return None, None, None, 'source-equals-target'
-    return '301', src, dst, 'ok'
+    return '301', src, dst, tail
 
 
 def parse_message(text: str):
     rules, ignored, seen = [], [], set()
     for i, raw in enumerate(text.splitlines(), 1):
         action, src, dst, reason = parse_line(raw)
+        if action is not None and reason.startswith('ok+trailing:'):
+            ignored.append({'line': i, 'raw': reason.split(':', 1)[1],
+                            'reason': 'trailing-dropped'})
         if action is None:
             if reason not in ('empty', 'comment'):
                 ignored.append({'line': i, 'raw': raw.strip(), 'reason': reason})
@@ -139,14 +150,17 @@ def main() -> int:
                                       'ignored': len(ignored)}}, ensure_ascii=False, indent=2))
     else:
         print(f"新增 {len(adds)} 条 / 恢复 {len(restores)} 条 / 忽略 {len(ignored)} 行\n")
+        # 预览刻意不用 "+src target" 的输入格式：这段文本会被复制来复制去，
+        # 一旦被当成输入喂回去，'→' 会变成目标域名的一部分，写出
+        # { to: 'https://→' } 这种坏规则（2026-09-03 真实发生过）。
         if adds:
             print("新增 301：")
             for r in adds:
-                print(f"  +{r['source']} → {r['target']}")
+                print(f"  [{r['source']}]  重定向到  [{r['target']}]")
         if restores:
             print("恢复：")
             for r in restores:
-                print(f"  -{r['source']}")
+                print(f"  [{r['source']}]  取消 301")
         if ignored:
             print("\n被忽略的行（请确认没有误杀）：")
             for g in ignored:

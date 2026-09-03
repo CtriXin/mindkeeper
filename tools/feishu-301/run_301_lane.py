@@ -24,7 +24,7 @@ from parse_301_message import parse_message, render_redirects  # noqa: E402
 PTC = Path("/Users/xin/ptc_301")
 STATE = HERE / ".state"
 PENDING = STATE / "pending.json"
-CN = ZoneInfo("Asia/Shanghai")
+CN = ZoneInfo("Asia/Singapore")
 
 
 def now() -> str:
@@ -52,10 +52,13 @@ def cmd_preview(args) -> int:
     res = [r for r in rules if r["action"] == "restore"]
     print(f"【301 变更预览】token={token}   {now()}")
     print(f"新增 {len(adds)} 条 / 恢复 {len(res)} 条 / 忽略 {len(ignored)} 行\n")
+    # 刻意不用 "+src target" / "→" 这种输入格式：这段预览会被复制来复制去，
+    # 一旦被当成输入喂回去，'→' 会变成目标域名的一部分，写出 { to: 'https://→' }
+    # 这种坏规则（2026-09-03 真实发生过）。
     for r in adds:
-        print(f"  +{r['source']} → {r['target']}")
+        print(f"  [{r['source']}]  重定向到  [{r['target']}]")
     for r in res:
-        print(f"  -{r['source']}")
+        print(f"  [{r['source']}]  取消 301")
     if ignored:
         print("\n被忽略的行（确认没有误杀）：")
         for g in ignored:
@@ -81,7 +84,14 @@ def cmd_apply(args) -> int:
     target.write_text(render_redirects(p["rules"]), encoding="utf-8")
     print(f"已写入 {target}（{len(p['rules'])} 条）")
 
-    cmd = [sys.executable, "scripts/redirect-cli.py", "run"]
+    # 用 apply-batch 而不是 301run。
+    # 301run 是 owner 的交互入口：读 macOS 剪贴板、检测「剪贴板里有没有规则」、
+    # 冲突时问要合并还是覆盖。对人方便，对自动化是灾难 —— parse_batch_line() 的
+    # 兜底分支把任意两个空格分隔的 token 都当规则，剪贴板里随便一句话都会被合并
+    # 进生产部署。2026-09-03 连踩两次：owner 复制确认口令去粘贴到飞书，口令留在
+    # 剪贴板里被读走，变成 { '确认': { to: 'https://<token>' } } 上线。
+    # apply-batch 只吃我们刚写好的 redirects.txt，不读剪贴板、不问任何问题。
+    cmd = [sys.executable, "scripts/redirect-cli.py", "apply-batch"]
     if args.dry_run:
         cmd.append("--dry-run")
     print(f"\n执行：{' '.join(cmd)}  (cwd={PTC})\n" + "=" * 60)
@@ -109,8 +119,7 @@ def cmd_status(_args) -> int:
     p = json.loads(PENDING.read_text(encoding="utf-8"))
     print(f"token={p['token']}  创建于 {p['created_at']}  规则 {len(p['rules'])} 条")
     for r in p["rules"]:
-        print(f"  {'+' if r['action']=='301' else '-'}{r['source']}"
-              + (f" → {r['target']}" if r.get('target') else ""))
+        print(f"  [{r['source']}]" + (f"  重定向到  [{r['target']}]" if r.get('target') else "  取消 301"))
     return 0
 
 
