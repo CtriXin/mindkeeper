@@ -1,0 +1,23 @@
+{
+  "_": [
+    "runtimia 技能名 → canonical 源。kind=dir 时源目录里的 SKILL.md 是正文、references/ 是附件；",
+    "kind=file 时那个文件就是正文全文（这类技能是本地写的、没有独立仓，bodies/ 就是它们的 git 家）。",
+    "hidden=true 表示这是进程技能，要在正文 frontmatter 里补 disable-model-invocation: true——",
+    "canonical 仓没有这一行，不补就会把隐藏撞掉。",
+    "没进这张表的技能不会被碰。work / oii-executor-sop 故意不列，见 README。"
+  ],
+  "skills": {
+    "scmp-ops":            { "kind": "dir",  "source": "/Users/xin/.local/share/ctrixin-runtime-v2/scmp-ops" },
+    "mommy":               { "kind": "dir",  "source": "/Users/xin/.local/share/ctrixin-runtime-v2/mommy", "hidden": true },
+    "outpact":             { "kind": "dir",  "source": "/Users/xin/.local/share/ctrixin-runtime-v2/outpact", "hidden": true },
+    "frontend-baseline":   { "kind": "dir",  "source": "/Users/xin/.local/share/ctrixin-runtime-v2/frontend-baseline" },
+    "qa":                  { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/qa" },
+    "issue-recorder":      { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/issue-recorder-worktrees/oii-05f-active" },
+    "xmem":                { "kind": "dir",  "source": "/Users/xin/.mms/vendor/xmem" },
+    "work-done":           { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/work-done", "hidden": true },
+    "work-gate":           { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/work-gate", "hidden": true },
+    "workflow-runner":     { "kind": "file", "source": "/Users/xin/auto-skills/tools/runtimia-skill-sync/bodies/workflow-runner.md" },
+    "executor-discipline": { "kind": "file", "source": "/Users/xin/auto-skills/tools/runtimia-skill-sync/bodies/executor-discipline.md" },
+    "state-core":          { "kind": "file", "source": "/Users/xin/auto-skills/tools/runtimia-skill-sync/bodies/state-core.md" }
+  }
+}
