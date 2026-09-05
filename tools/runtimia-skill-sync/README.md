@@ -32,8 +32,24 @@ python3 tools/runtimia-skill-sync/sync.py --only scmp-ops --only mommy
 python3 tools/runtimia-skill-sync/sync.py --json        # 机器可读
 ```
 
-定时任务见 `com.ctrixin.runtimia-skill-sync.plist`（launchd，每 30 分钟 + 登录时各跑一次 `--apply`）。
-日志：`~/.local/state/runtimia-skill-sync/sync.log`。
+### 定时任务（已安装）
+
+`com.ctrixin.runtimia-skill-sync.plist` —— launchd，每 30 分钟 + 每次登录各跑一次 `--apply`。
+日志 `~/.local/state/runtimia-skill-sync/sync.log`（超过 2MB 自动截到后 1000 行）。
+
+```bash
+# 装（已于 2026-09-05 22:19 +08 装好并实跑验证：runs=1, exit 0）
+cp tools/runtimia-skill-sync/com.ctrixin.runtimia-skill-sync.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ctrixin.runtimia-skill-sync.plist
+
+# 立刻跑一次 / 看状态 / 卸
+launchctl kickstart -p gui/$(id -u)/com.ctrixin.runtimia-skill-sync
+launchctl print gui/$(id -u)/com.ctrixin.runtimia-skill-sync | grep -E 'runs|last exit'
+launchctl bootout gui/$(id -u)/com.ctrixin.runtimia-skill-sync
+```
+
+**改了 `sync.py` 或 `sources.json` 不用重装**，plist 只指向 `run.sh`。
+只有挪动仓库路径才需要改 plist 并重新 bootstrap。
 
 ## 它替你记住的三件事
 

@@ -214,7 +214,7 @@ def apply_one(name: str, entry: dict, res: dict) -> list[str]:
         finally:
             os.unlink(tmp)
     for path in res["refs"]["missing"] + res["refs"]["changed"]:
-        local = src / path[len("references/"):]
+        local = src / path   # path 已经是 "references/x"，别再拼一次前缀
         tmp = write_tmp(local.read_text(encoding="utf-8"))
         try:
             r = run([MULTICA, "skill", "files", "upsert", sid, "--path", path,
