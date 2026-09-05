@@ -40,6 +40,7 @@ HERE = Path(__file__).resolve().parent
 SOURCES = HERE / "sources.json"
 MULTICA = os.environ.get("MULTICA_BIN", str(Path.home() / ".local/bin/multica"))
 TZ8 = timezone(timedelta(hours=8))
+NO_FETCH = False
 
 # runtimia 只铺 SKILL.md + 上传的 skill files，**不铺 scripts/ / schemas/**。
 # 带脚本的技能必须在正文顶部说明脚本根在哪，否则每条闸门命令都会 no such file，
@@ -119,11 +120,13 @@ def git_state(src: Path, kind: str = "dir") -> dict:
     if kind == "file":
         # kind=file 的源就是那一个文件本身，盯它自己；未跟踪也算脏，
         # 免得「源之源」自己没进版本库还被当成权威推出去。
+        rel = run(["git", "-C", str(base), "ls-files", "--full-name", src.name]).stdout.strip()
         st = run(["git", "-C", str(base), "status", "--porcelain", "--", src.name])
         head = run(["git", "-C", str(base), "rev-parse", "--short", "HEAD"])
         return {"repo": top.stdout.strip(),
                 "dirty": [l for l in st.stdout.splitlines() if l.strip()],
-                "head": head.stdout.strip() or None}
+                "head": head.stdout.strip() or None,
+                "incoming": incoming_commits(base, [rel or src.name])}
     watch = ["SKILL.md"]
     if (src / "references").is_dir():
         watch.append("references")
@@ -133,7 +136,35 @@ def git_state(src: Path, kind: str = "dir") -> dict:
         "repo": top.stdout.strip(),
         "dirty": [l for l in st.stdout.splitlines() if l.strip()],
         "head": head.stdout.strip() or None,
+        "incoming": incoming_commits(src, watch),
     }
+
+
+_FETCHED: set[str] = set()
+
+
+def incoming_commits(src: Path, watch: list[str]) -> list[str]:
+    """上游有、本地没有、且**动过这些技能文件**的提交。
+
+    只挡「脏」是不够的：checkout 停在 main 但落后于 origin/main 时，正文完全干净，
+    推上去却是一次内容倒退。2026-09-05 真撞到——issue-recorder 的 checkout 落后 6 个
+    提交，正文比 runtimia 里那份少 5,462 字；等那个未提交改动一提交，定时任务就会把
+    倒退推上去，而且全程零报错。
+
+    刻意只看「动过 watch 路径」的提交：仓里有别的领域的新提交不该拦技能同步，
+    源文件本身有未合并的上游改动才该拦。
+    """
+    top = run(["git", "-C", str(src), "rev-parse", "--show-toplevel"]).stdout.strip()
+    if top and top not in _FETCHED and not NO_FETCH:
+        _FETCHED.add(top)
+        # 读之前先 fetch。ahead/behind 不 fetch 就是上一次 fetch 的快照——
+        # 一个自信但过期的答案，正是最难事后归因的那类事故。
+        run(["git", "-C", str(src), "fetch", "--prune", "--quiet", "origin"])
+    up = run(["git", "-C", str(src), "rev-parse", "--abbrev-ref", "@{u}"])
+    if up.returncode != 0:
+        return []                       # 没有 upstream（本地临时分支），没得比
+    log = run(["git", "-C", str(src), "log", "--oneline", "HEAD..@{u}", "--", *watch])
+    return [l for l in log.stdout.splitlines() if l.strip()]
 
 
 def sha256_bytes(b: bytes) -> str:
@@ -167,6 +198,11 @@ def check_one(name: str, entry: dict, skill_index: dict) -> dict:
     if g["dirty"]:
         out["status"] = "source-dirty"
         out["notes"].append(f"canonical 工作区有未提交改动（{len(g['dirty'])} 项），跳过不推")
+    elif g.get("incoming"):
+        out["status"] = "source-behind"
+        out["notes"].append(
+            "checkout 落后 upstream %d 个动过技能文件的提交，跳过不推（先 pull 再说）：%s"
+            % (len(g["incoming"]), "; ".join(g["incoming"][:3])))
 
     want = expected_body(entry)
     live = multica_json(["skill", "get", skill["id"], "--with-content"]).get("content", "")
@@ -232,7 +268,11 @@ def main() -> int:
     ap.add_argument("--apply", action="store_true", help="真的推平（默认只检查）")
     ap.add_argument("--only", action="append", default=[], help="只处理这些技能名，可重复")
     ap.add_argument("--json", action="store_true", help="机器可读输出")
+    ap.add_argument("--no-fetch", action="store_true",
+                    help="不 fetch（离线用）。此时「落后」判断读的是上次 fetch 的快照，只能信它说落后")
     args = ap.parse_args()
+    global NO_FETCH
+    NO_FETCH = args.no_fetch
 
     entries = json.loads(SOURCES.read_text(encoding="utf-8"))["skills"]
     if args.only:
@@ -270,7 +310,8 @@ def main() -> int:
         print(f"[{now8()}] runtimia skill sync（{'apply' if args.apply else 'check'}）")
         for r in results:
             mark = {"ok": "  ok  ", "drift": " DRIFT", "synced": " 已同步",
-                    "source-dirty": " 源脏 ", "source-missing": " 源缺 ",
+                    "source-dirty": " 源脏 ", "source-behind": " 源旧 ",
+                    "source-missing": " 源缺 ",
                     "skill-missing": " 无技能", "error": " 出错 ",
                     "apply-failed": " 失败 "}.get(r["status"], r["status"])
             bits = []
@@ -287,7 +328,8 @@ def main() -> int:
                 print(f"        ✔ {path}")
 
     bad = [r for r in results if r["status"] in
-           ("drift", "source-dirty", "source-missing", "skill-missing", "error", "apply-failed")]
+           ("drift", "source-dirty", "source-behind", "source-missing", "skill-missing",
+            "error", "apply-failed")]
     if bad:
         print(f"\n{len(bad)} 个技能未对齐：" +
               ", ".join(f"{r['name']}({r['status']})" for r in bad), file=sys.stderr)

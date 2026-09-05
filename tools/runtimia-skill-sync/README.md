@@ -71,10 +71,16 @@ launchctl bootout gui/$(id -u)/com.ctrixin.runtimia-skill-sync
 
 - **canonical 工作区脏就跳过不推。** 半写完的技能推上去比旧技能更危险。
   盯的是 `SKILL.md` 和 `references/`（`kind=file` 盯那个文件本身，未跟踪也算脏）。
+- **checkout 落后 upstream 也跳过不推。** 只挡「脏」不够：checkout 停在 main 但落后于
+  `origin/main` 时，工作区完全干净，推上去却是一次**内容倒退**，而且全程零报错。
+  2026-09-05 真撞到——`issue-recorder` 的 checkout 落后 6 个提交，正文比 runtimia 里那份
+  少 5,462 字。只看「上游有没有动过 `SKILL.md` / `references/` 的提交」，仓里别的领域有
+  新提交不拦。
 - **runtimia 里多出来的 reference 文件只报告，不自动删。** 删除不可恢复，
   按全局规则要 owner 针对这一次的明确授权。
-- **不做 `git fetch`。** ahead/behind 要先 fetch 才有意义；定时任务里静默 fetch 一堆仓
-  既慢又会掩盖问题。这里只报 HEAD 短 sha 和脏不脏，对齐上游是人的事。
+- **读之前一定 fetch。** 不 fetch 的 ahead/behind 是上一次 fetch 的快照——一个自信但过期的
+  答案，正是最难事后归因的那类事故（这条闸是 `scmp-ops` 里 Latest branch gate 的同一条道理）。
+  只 `fetch --prune`，不 pull、不改工作区。离线时用 `--no-fetch`，此时「落后」只能信它说落后。
 - **只碰 `sources.json` 里列出的技能。** 没列的一个都不动。
 
 ## 源的两种形态
