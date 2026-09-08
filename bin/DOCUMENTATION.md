@@ -17,10 +17,13 @@ Advanced git push workflow with version bumping, notifications, and hooks.
 ### 3. `lookup` - Service Lookup
 Utility for looking up domain services and related information.
 
-### 4. `claude-provider` - Claude Code Integration
+### 4. `scmp-auth` - SCMP Authentication
+Authentication setup and status through the bounded Stride Company entrypoint.
+
+### 5. `claude-provider` - Claude Code Integration
 Provider script for Claude Code integration.
 
-### 5. `figmamcp` - Figma Integration
+### 6. `figmamcp` - Figma Integration
 Script for Figma design system integration with SCMP.
 
 ## Setup
@@ -43,10 +46,10 @@ source ~/.zshrc
 The `deploy` script is the primary interface for service deployment through SCMP.
 
 #### Functionality
-- Wrapper around `scmp_cli.py` for simplified usage
-- Automatic service name detection from repository
-- Interactive deployment with intelligent defaults
-- Daily token refresh for authentication
+- Forwards to Stride's task-aware Company release path
+- Keeps automatic service name detection from the repository
+- Keeps interactive deployment and authentication behavior in the canonical Stride entrypoint
+- Does not resolve the retired runtime-manifest wrapper path
 
 #### Usage
 ```bash
@@ -68,7 +71,7 @@ The script looks for service names in order:
 If in a git repository and no service name is provided, the script will attempt to read the service name from these files.
 
 #### Options
-- Automatically passes through all options to underlying `scmp_cli.py deploy` command
+- Passes arguments unchanged to Stride's guarded `deploy` entrypoint
 
 ### push Script
 
@@ -157,6 +160,20 @@ The `lookup` script provides domain and service lookup capabilities.
 # Look up information for a domain or service
 lookup <search-term>
 ```
+
+It forwards only to Stride's bounded read-only lookup entrypoint. A release-dispatcher drift does not block this query; a changed `scmp-deploy` bundle still fails closed.
+
+### scmp-auth Script
+
+```bash
+# Set up credentials without exposing a password in shell history
+scmp-auth setup --share-id "$SCMP_SHARE_ID" --prompt-password
+
+# Inspect only the local authentication configuration
+scmp-auth status
+```
+
+`scmp-auth token` and `scmp-auth env` can print secrets. Their stdout is deliberately not captured into a Stride task or operation record.
 
 ### claude-provider Script
 

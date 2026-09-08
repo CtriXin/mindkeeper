@@ -1,7 +1,7 @@
 {
   "schema": "auto-skills.source_registry.v1",
-  "updated_at": "2026-08-21T00:00:00+08:00",
-  "generated_by": "S15-PRE-C (SOURCE-TOPOLOGY-01)",
+  "updated_at": "2026-09-08T14:45:00+08:00",
+  "generated_by": "S15-PRE-C (SOURCE-TOPOLOGY-01); Stride SCMP wrapper cutover",
   "notes": "Machine-readable source topology contract for xin's machine. Consumed by topology/validate_topology.py (also via bin/check-topology --preflight). Physical nesting NEVER implies ownership: /Users/xin/auto-skills/CtriXin-repo, /shared-skills and /installed-skills are peer roots that must not be tracked by the auto-skills parent repo. Exposure dirs own symlinks/registrations only; inline content is an authority ONLY when registered here (inline_overrides), tracked in agents-home, or installed by the skills CLI lock.",
   "cli_dirs": {
     "agents": "/Users/xin/.agents/skills",
@@ -18,7 +18,7 @@
       "ownership": "user",
       "git_boundary": "own_repo:mindkeeper(zhiji)@feature/worktree-management",
       "source_kind": "carrier_repo",
-      "runtime_policy": "hosts bin/ wrappers + topology registry only; wrappers resolve components via runtime-manifest; NEVER a source fallback",
+      "runtime_policy": "hosts bin/ wrappers + topology registry only; lookup/scmp-auth forward to Stride bounded Company passthrough and deploy forwards to Stride company run; runtime-component retains legacy manifest resolution; NEVER a source fallback",
       "exposure_policy": "serves no skills",
       "upstream_policy": "github.com/CtriXin/mindkeeper",
       "allowed_exceptions": []
@@ -119,7 +119,7 @@
       "ownership": "user",
       "git_boundary": "tracked by auto-skills parent repo",
       "source_kind": "tools",
-      "runtime_policy": "wrappers resolve via runtime-manifest (deploy/lookup/scmp-auth/runtime-component)",
+      "runtime_policy": "lookup/scmp-auth forward to Stride bounded Company passthrough; deploy forwards to Stride company run; runtime-component remains the legacy runtime-manifest resolver",
       "exposure_policy": "not a skill source; NEVER a source fallback",
       "upstream_policy": "with auto-skills parent repo",
       "allowed_exceptions": []
@@ -237,7 +237,7 @@
   ],
   "container_registry_relpath": "registry.json",
   "runtime_manifest_path": "/Users/xin/.local/share/ctrixin-runtime-v2/runtime-manifest/runtime-manifest.json",
-  "runtime_manifest_note": "The ACTIVE manifest is the runtime-v2 checkout (consumed by resolver/wrappers). The CtriXin-repo/runtime-manifest checkout is an authoring twin; file existence there never means active (IMMEDIATE-EXECUTION-WIRING-CLOSURE-ADDENDUM §3/§6).",
+  "runtime_manifest_note": "The ACTIVE manifest is the runtime-v2 checkout, consumed by runtime-component and explicitly legacy component wrappers. Stride owns the active SCMP lookup/auth/deploy wrappers. The CtriXin-repo/runtime-manifest checkout is an authoring twin; file existence there never means active (IMMEDIATE-EXECUTION-WIRING-CLOSURE-ADDENDUM §3/§6).",
   "layer_probe_surfaces": [
     {
       "id": "ad-pack-generator",
