@@ -1,28 +1,9 @@
 #!/usr/bin/env python3
-"""runtimia skill 同步器：把 canonical 技能源推平到 runtimia workspace。
+"""Synchronize current Stride capabilities; retired roles remain historical data.
 
-背景（2026-09-04 一天之内踩了三次）：
-  runtimia 把技能正文存在自己的 DB 里，跟 canonical 仓**没有任何链接**。
-  canonical 仓合一个 PR，runtimia 这边就静默变旧——agent 照跑、skill 照读，
-  只是读的是旧版。三次实例：
-    · scmp-ops 停在 2026-06-16 的副本，3 个月没人发现（51,030 → 72,324 字）
-    · state-core 技能正文里的 CLI 路径指向滞后 checkout，缺 record-decision
-    · PR #68 合并后 1 小时内又漂（74,418 → 76,516 字）
-  手动同步不是解法，是症状。这个脚本是解法。
-
-用法：
-  sync.py                 # 只检查，有漂移退出码 1（给定时任务/hook 用）
-  sync.py --apply         # 检查并推平
-  sync.py --only scmp-ops # 只处理某几个技能，可重复
-  sync.py --json          # 机器可读输出
-
-安全边界（刻意的）：
-  · canonical 工作区脏（SKILL.md / references 有未提交改动）→ **跳过不推**。
-    半写完的技能推上去比旧技能更危险。
-  · runtimia 里多出来的 reference 文件 → 只报告，**不自动删**。
-    删除不可恢复，按全局规则要 owner 明确授权。
-  · 不做 git fetch。ahead/behind 需要先 fetch 才有意义，定时任务里静默 fetch
-    6 个仓既慢又会掩盖问题；这里只报 HEAD 和脏不脏，对齐上游是人的事。
+Default is read-only check; --apply creates missing declared skills and updates
+body/description/references. Dirty or behind sources are skipped. Extra references
+are reported, never deleted. Every existing skill mutation has a private backup.
 """
 from __future__ import annotations
 
@@ -30,6 +11,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -49,7 +31,7 @@ NOTE_TEMPLATE = """<!-- runtimia-skill-root -->
 > **脚本根目录**：runtimia 只铺 `SKILL.md` + `references/`，本技能的 `scripts/` / `schemas/` **没有**跟着铺到工作目录。
 > 本文中所有 `scripts/…`、`schemas/…` 之类的相对路径，一律以 `{root}/` 为根解析，
 > 例如 `scripts/x.py` → `{root}/scripts/x.py`。
-> 闸门就是这些脚本本身（带退出码），**不要用「我检查过了」代替真跑一遍**。
+> 只运行当前需求适用且已授权的命令；脚本检查、发布结果和产品验收各自如实记录。
 
 """
 
@@ -59,6 +41,7 @@ def now8() -> str:
 
 
 def run(args: list[str], **kw) -> subprocess.CompletedProcess:
+    kw.setdefault("timeout", 60)
     return subprocess.run(args, capture_output=True, text=True, **kw)
 
 
@@ -99,8 +82,18 @@ def ensure_hidden(body: str) -> str:
     return body[:end] + "\n" + flag + body[end:]
 
 
-def expected_body(entry: dict) -> str:
+def source_path(entry: dict) -> Path:
     src = Path(entry["source"]).expanduser()
+    return src if src.is_absolute() else HERE / src
+
+
+def description(body: str) -> str:
+    match = re.search(r"(?m)^description:\s*(.+)$", body.split("\n---", 1)[0])
+    return match.group(1).strip().strip('"\'') if match else ""
+
+
+def expected_body(entry: dict) -> str:
+    src = source_path(entry)
     if entry.get("kind") == "file":
         return src.read_text(encoding="utf-8")
     body = (src / "SKILL.md").read_text(encoding="utf-8")
@@ -181,18 +174,14 @@ def write_tmp(text: str) -> str:
 def check_one(name: str, entry: dict, skill_index: dict) -> dict:
     out: dict = {"name": name, "status": "ok", "notes": [], "body": None, "refs": {
         "changed": [], "missing": [], "extra": []}}
-    src = Path(entry["source"]).expanduser()
+    src = source_path(entry)
     if not src.exists():
         out["status"] = "source-missing"
         out["notes"].append(f"源不存在：{src}")
         return out
     skill = skill_index.get(name)
-    if not skill:
-        out["status"] = "skill-missing"
-        out["notes"].append(f"runtimia 里没有名为 {name} 的技能")
-        return out
-    out["id"] = skill["id"]
-
+    if skill:
+        out["id"] = skill["id"]
     g = git_state(src, entry.get("kind", "dir"))
     out["head"] = g["head"]
     if g["dirty"]:
@@ -205,14 +194,26 @@ def check_one(name: str, entry: dict, skill_index: dict) -> dict:
             % (len(g["incoming"]), "; ".join(g["incoming"][:3])))
 
     want = expected_body(entry)
-    live = multica_json(["skill", "get", skill["id"], "--with-content"]).get("content", "")
+    out["description"] = description(want)
+    out["source_body_sha256"] = sha256_bytes(want.encode())
+    if not skill:
+        if out["status"] == "ok":
+            out["status"] = "skill-missing"
+        out["body"] = {"want": len(want), "live": 0, "delta": len(want)}
+        return out
+    out["description_drift"] = out["description"] != skill.get("description", "")
+    if out["description_drift"] and out["status"] == "ok":
+        out["status"] = "drift"
+    current = multica_json(["skill", "get", skill["id"], "--with-content"])
+    out["live_sha256"] = sha256_bytes(json.dumps(current, sort_keys=True).encode())
+    live = current.get("content", "")
     if want != live:
         out["body"] = {"want": len(want), "live": len(live), "delta": len(want) - len(live)}
         if out["status"] == "ok":
             out["status"] = "drift"
 
     refdir = src / "references"
-    if entry.get("kind") != "file" and refdir.is_dir():
+    if skill:
         remote = {f["path"]: f for f in multica_json(["skill", "files", "list", skill["id"]])}
         local = {}
         for p in sorted(refdir.rglob("*")):
@@ -238,15 +239,49 @@ def check_one(name: str, entry: dict, skill_index: dict) -> dict:
 
 def apply_one(name: str, entry: dict, res: dict) -> list[str]:
     done: list[str] = []
-    sid = res["id"]
-    src = Path(entry["source"]).expanduser()
-    if res["body"]:
+    src = source_path(entry)
+    if res.get("source_body_sha256") != sha256_bytes(expected_body(entry).encode()):
+        raise RuntimeError("canonical 正文在检查后改变，停止并重新检查")
+    if res.get("id"):
+        current = multica_json(["skill", "get", res["id"], "--with-content"])
+        if sha256_bytes(json.dumps(current, sort_keys=True).encode()) != res.get("live_sha256"):
+            raise RuntimeError("远端技能在检查后改变，停止并重新检查")
+        directory = Path(os.environ.get("RUNTIMIA_SKILL_BACKUP_DIR",
+            str(Path.home() / ".local/state/runtimia-skill-sync/skill-backups")))
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        fd, backup = tempfile.mkstemp(prefix=name + "-", suffix=".json", dir=directory)
+        with os.fdopen(fd, "w") as handle:
+            json.dump(current, handle, ensure_ascii=False, indent=2)
+        res["backup"] = backup
+    if res["status"] == "skill-missing":
+        # Re-list immediately before create to prevent an ordinary repeated run
+        # from duplicating a skill. The API's unique-name constraint handles races.
+        existing = [s for s in multica_json(["skill", "list"]) if s["name"] == name]
+        if existing:
+            raise RuntimeError("技能已被另一同步创建，请重新 check")
         tmp = write_tmp(expected_body(entry))
         try:
-            r = run([MULTICA, "skill", "update", sid, "--content-file", tmp, "--output", "json"])
+            created = multica_json(["skill", "create", "--name", name,
+                "--description", res["description"], "--content-file", tmp])
+        finally:
+            os.unlink(tmp)
+        res["id"] = created["id"]
+        res["body"] = None
+        res["description_drift"] = False
+        refdir = src / "references"
+        if entry.get("kind") != "file" and refdir.is_dir():
+            res["refs"]["missing"] = [f"references/{p.relative_to(refdir)}" for p in sorted(refdir.rglob("*"))
+                if p.is_file() and not p.name.startswith(".")]
+        done.append("created")
+    sid = res["id"]
+    if res["body"] or res.get("description_drift"):
+        tmp = write_tmp(expected_body(entry))
+        try:
+            r = run([MULTICA, "skill", "update", sid, "--content-file", tmp,
+                     "--description", res["description"], "--output", "json"])
             if r.returncode != 0:
                 raise RuntimeError(f"正文推送失败: {r.stderr.strip()[:300]}")
-            done.append(f"SKILL.md {res['body']['live']} → {res['body']['want']} 字")
+            done.append("SKILL.md / description updated")
         finally:
             os.unlink(tmp)
     for path in res["refs"]["missing"] + res["refs"]["changed"]:
@@ -260,6 +295,13 @@ def apply_one(name: str, entry: dict, res: dict) -> list[str]:
             done.append(path)
         finally:
             os.unlink(tmp)
+    readback = multica_json(["skill", "get", sid, "--with-content"])
+    if readback.get("content") != expected_body(entry) or readback.get("description") != res["description"]:
+        raise RuntimeError("正文或描述写后回读不匹配")
+    remote_files = {f["path"]: f for f in multica_json(["skill", "files", "list", sid])}
+    for path in res["refs"]["missing"] + res["refs"]["changed"]:
+        if remote_files.get(path, {}).get("content_hash") != sha256_bytes((src / path).read_bytes()):
+            raise RuntimeError("reference 写后回读不匹配：" + path)
     return done
 
 
@@ -295,7 +337,7 @@ def main() -> int:
         except Exception as e:
             res = {"name": name, "status": "error", "notes": [str(e)[:300]],
                    "body": None, "refs": {"changed": [], "missing": [], "extra": []}}
-        if args.apply and res["status"] == "drift":
+        if args.apply and res["status"] in ("drift", "skill-missing"):
             try:
                 res["applied"] = apply_one(name, entry, res)
                 res["status"] = "synced"

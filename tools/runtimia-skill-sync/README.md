@@ -1,104 +1,54 @@
-# runtimia-skill-sync
+# Runtimia skill 与 Agent 配置同步
 
-把 canonical 技能源同步到 runtimia workspace 的技能正文与 `references/`。
+Runtimia 保存独立的技能副本。这个工具将当前 Stride 和专业能力同步到它的数据库，并提供一次可审阅、可备份的 Agent 配置迁移；不启动任务、模型或发布。
 
-## 为什么存在
-
-runtimia 把技能正文存在**自己的数据库**里，跟 canonical 仓之间**没有任何链接**。
-canonical 仓合一个 PR，runtimia 这边就静默变旧——agent 照跑、skill 照读，只是读的是旧版，
-没有任何报错、没有任何信号。
-
-2026-09-04 到 09-05 一天之内撞了三次同一类问题：
-
-| 现象 | 代价 |
-|---|---|
-| `scmp-ops` 停在 2026-06-16 的副本（51,030 → 72,324 字） | 3 个月没人发现 |
-| `state-core` 技能正文里的 CLI 路径指向滞后 checkout | 缺 `record-decision`，两次实验跑在不同版本上 |
-| 别人合了 PR #68，1 小时内又漂（74,418 → 76,516 字） | 靠人恰好想起来去查才发现 |
-
-**手动同步不是解法，是症状。** 这个脚本是解法。
-
-首次跑 `--check` 就翻出 **9 个技能在漂**，其中包括：
-- `qa` 在 canonical 里已经标了「[已退役 2026-08-13·U1 定调] 默认不再触发」，runtimia 里还是旧的「活跃」描述
-- `frontend-baseline` 的广告位顺序闸在 canonical 已改成「触发只看 grounded 输入，不看任务文本」，runtimia 跑的是更松的旧版
-- `outpact` 缺整段 `Intake phase firewall`
-
-## 用法
+## 持续技能同步
 
 ```bash
-python3 tools/runtimia-skill-sync/sync.py               # 只检查，有漂移退出码 1
-python3 tools/runtimia-skill-sync/sync.py --apply       # 检查并推平
-python3 tools/runtimia-skill-sync/sync.py --only scmp-ops --only mommy
-python3 tools/runtimia-skill-sync/sync.py --json        # 机器可读
+python3 tools/runtimia-skill-sync/sync.py --json          # 默认只检查
+python3 tools/runtimia-skill-sync/sync.py --apply         # 同步声明的能力
+python3 tools/runtimia-skill-sync/sync.py --only scmp-ops  # 定向检查
 ```
 
-### 定时任务（已安装）
+`sources.json` 只同步 9 项：Stride、SCMP、frontend-baseline、Figma atomic intake / pixel QA、ego-browser，以及按需 auditor / issue-recorder / xmem。它保留前端和设计解析能力，不把全清单变成串行前置阶段。`issue-recorder` 使用本工具的薄入口，历史正文仍保留在原仓和数据库备份中。
 
-`com.ctrixin.runtimia-skill-sync.plist` —— launchd，每 30 分钟 + 每次登录各跑一次 `--apply`。
-日志 `~/.local/state/runtimia-skill-sync/sync.log`（超过 2MB 自动截到后 1000 行）。
+- 创建缺少的声明技能；同步正文、列表 description 和实际 references。更新 description 避免列表仍宣传旧 xmem/receipt gate。
+- 路径型来源读 canonical SKILL.md。文件型来源可相对本工具目录；`bodies/` 是受跟踪来源。
+- 源脏或落后 upstream 时跳过该技能；每仓 fetch 一次，不 pull、不改 checkout。`--no-fetch` 适合离线检查，不能证明 upstream 最新。
+- 每次更新现有技能前回读并比较检查时内容，将原正文、附件和描述保存到 `~/.local/state/runtimia-skill-sync/skill-backups/` 的 `0600` 文件；写后回读正文、description 和受影响 reference hashes。
+- 缺少技能先重新查询，服务端唯一名称约束防止普通并发创建重复。任何同步失败均明确报出，不启动角色兜底。
+- 多出的 references 只报告、不删除。当前正文不引用退役流程；旧角色技能随后从默认 Agent 关联中移除，历史 DB 和附件不删除。
+- 脚本根注入 canonical 绝对路径。技能物化目录由 runtime 决定，pi 是 `.pi/skills/<name>/SKILL.md`；不能写死 `skills/`，也不能假定脚本跟着正文下发。
+
+### 定时入口
+
+`com.ctrixin.runtimia-skill-sync.plist` / `run.sh` 每 30 分钟与登录执行 `--apply`。脚本更新后下一次直接使用新名单，无需重建定时任务。它只同步技能，不定时覆盖 Agent instructions，不 dispatch issue。
+
+现有 `bodies/workflow-runner.md`、`state-core.md`、`executor-discipline.md` 是历史来源，已不在默认同步名单。`retired_skills` 也包含 outpact、mommy、work、work-gate、work-done、qa 与旧 executor SOP。
+
+## Agent profile 迁移
+
+先同步技能，再生成计划。`--owner-id` 必填，支持重复 `--agent-id` 明确限定已有 Agents；不创建替代 Agent，不碰 builtin runtime skills、其他 owner 或业务 issues。
 
 ```bash
-# 装（已于 2026-09-05 22:19 +08 装好并实跑验证：runs=1, exit 0）
-cp tools/runtimia-skill-sync/com.ctrixin.runtimia-skill-sync.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ctrixin.runtimia-skill-sync.plist
-
-# 立刻跑一次 / 看状态 / 卸
-launchctl kickstart -p gui/$(id -u)/com.ctrixin.runtimia-skill-sync
-launchctl print gui/$(id -u)/com.ctrixin.runtimia-skill-sync | grep -E 'runs|last exit'
-launchctl bootout gui/$(id -u)/com.ctrixin.runtimia-skill-sync
+python3 tools/runtimia-skill-sync/profile_migrate.py \
+  --plan /private/path/stride-profile-plan.json --owner-id OWNER_ID
+python3 tools/runtimia-skill-sync/profile_migrate.py \
+  --apply /private/path/stride-profile-plan.json
 ```
 
-**改了 `sync.py` 或 `sources.json` 不用重装**，plist 只指向 `run.sh`。
-只有挪动仓库路径才需要改 plist 并重新 bootstrap。
+计划保存每个 Agent 的 ID、目标字段、现有 `updated_at`、技能关联与保护字段快照、内容 hash。默认承接位 `workflow-agent` 原 ID 改名 `stride-agent`，其余模型 Agent 名字不变；共同 instructions 来自 `bodies/stride-agent.md`。保留自定义非退役技能，增加当前声明能力。多余旧角色只解除关联，不删除技能或历史任务。
 
-## 它替你记住的三件事
+**保护范围：** `model`、runtime、custom args、effort、MMS/env、permission、并发数与 builtin `disabled_runtime_skills` 不写。`planned_custom_args` 仅用于保存和比较；guard 的独立启用由维护者另行处理。工具不读 custom env，也不原样转发可能含 secret 的 API payload。备份里保留的 runtime_config/custom_args 可能仍有敏感参数，文件为 `0600`，只放私有路径，不提交公开仓。
 
-1. **脚本根说明。** runtimia 只铺 `SKILL.md` + 上传的 skill files，**不铺 `scripts/` / `schemas/`**。
-   带脚本的技能（源目录里有 `scripts/` 或 `schemas/`）会自动在 frontmatter 之后插入脚本根说明，
-   把所有 `scripts/…` 相对路径重定向回 canonical 目录。不插的话每条闸门命令都会 `no such file`，
-   闸就静默降级成「让 agent 自己检查一下」——而被告知要检查的 agent 不是闸。
+**并发与恢复：** API 没有原子的 If-Match/CAS 或跨 Agent 事务。本工具在所有写入前比较全部计划快照；每个 Agent 及其技能关联写入前再次比较，并逐步回读保护字段。发现变更立即停止，已经完成的 Agent 不自动回滚，以免覆盖他人更新。备份和逐 Agent journal 在 `~/.local/state/runtimia-skill-sync/profile-backups/<timestamp>/`。重新回读当前状态后生成新计划，可无副作用地接续；再次执行已完成迁移不会写相同值。需要回滚时只从备份恢复本工具改动字段，并先比较实际状态，不把整个 Agent JSON 写回。
 
-2. **隐藏标记。** `disable-model-invocation: true` 是 runtimia 侧独有的：进程技能
-   （`mommy` / `outpact` / `work-*` / `workflow-runner`）不进模型可见的技能清单，
-   只有 issue 正文点名时才加载。canonical 仓**没有**这一行，所以照搬 canonical 会把隐藏撞掉。
-   `sources.json` 里标 `"hidden": true` 的技能会自动补回。
-   （这条是首跑 check 时靠 `mommy` / `work-done` 那个 **-31 字的负增长**发现的——
-   如果只看「canonical 更长就是更新」，这个 bug 会被直接推上去。）
+**生效范围：** 更新 DB 影响后续运行；正在执行的任务不会自动刷新已加载 prompt，也不会因本工具被打断或重派。已有旧 issue 正文中的 `plan-only`、授权与来源仍需按事实解释，不能把改 profile 当作扩大发布权限。Runtimia issue 用 `stride carrier attach --issue ISSUE_ID` 对应原 Stride task，续接读 `next` / `packet`。
 
-3. **不该动的东西。** 见下。
+## 验证
 
-## 刻意的安全边界
+```bash
+python3 -m unittest discover -s tools/runtimia-skill-sync/tests -v
+```
 
-- **canonical 工作区脏就跳过不推。** 半写完的技能推上去比旧技能更危险。
-  盯的是 `SKILL.md` 和 `references/`（`kind=file` 盯那个文件本身，未跟踪也算脏）。
-- **checkout 落后 upstream 也跳过不推。** 只挡「脏」不够：checkout 停在 main 但落后于
-  `origin/main` 时，工作区完全干净，推上去却是一次**内容倒退**，而且全程零报错。
-  2026-09-05 真撞到——`issue-recorder` 的 checkout 落后 6 个提交，正文比 runtimia 里那份
-  少 5,462 字。只看「上游有没有动过 `SKILL.md` / `references/` 的提交」，仓里别的领域有
-  新提交不拦。
-- **runtimia 里多出来的 reference 文件只报告，不自动删。** 删除不可恢复，
-  按全局规则要 owner 针对这一次的明确授权。
-- **读之前一定 fetch。** 不 fetch 的 ahead/behind 是上一次 fetch 的快照——一个自信但过期的
-  答案，正是最难事后归因的那类事故（这条闸是 `scmp-ops` 里 Latest branch gate 的同一条道理）。
-  只 `fetch --prune`，不 pull、不改工作区。离线时用 `--no-fetch`，此时「落后」只能信它说落后。
-- **只碰 `sources.json` 里列出的技能。** 没列的一个都不动。
-
-## 源的两种形态
-
-- `kind: "dir"` —— 源目录里的 `SKILL.md` 是正文，`references/` 是附件。
-- `kind: "file"` —— 那个文件就是正文全文。这类技能是本地写的、没有独立仓，
-  `bodies/` 就是它们的 git 家（`workflow-runner` / `executor-discipline` / `state-core`）。
-  在此之前它们只活在 runtimia 的数据库里，删库即失传。
-
-## 故意没列进 sources.json 的
-
-| 技能 | 原因 |
-|---|---|
-| `work` | 源歧义：`shared-skills/work` 与 CtriXin-repo 下几处都像候选，且 runtimia 里那份只有 769 字（已被换成指路桩）。定不了权威源就不该自动推。 |
-| `oii-executor-sop` | 2026-09-03 owner 决定退掉，不再维护。 |
-
-## reference 文件怎么比的
-
-`multica skill files list` 直接返回每个文件的 `content_hash`（= 文件原始字节的 sha256）
-和 `size`，所以比对**不需要**下载文件正文。已验证与本地 `shasum -a 256` 逐字节一致。
-只有正文（`SKILL.md`）没有暴露 hash，必须 `--with-content` 拉一次。
+测试使用合成 API：验证 owner 范围、旧 ID 保留、模型/runtime/权限未写、默认技能替换但历史未删、版本漂移停止、private backup、重复执行不写、缺失技能和 description 更新，以及源/远端变更时拒绝覆盖。不会调用真实 API、模型、浏览器或发布。

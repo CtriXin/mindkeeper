@@ -1,29 +1,57 @@
 {
   "_": [
-    "runtimia 技能名 → canonical 源。kind=dir 时源目录里的 SKILL.md 是正文、references/ 是附件；",
-    "kind=file 时那个文件就是正文全文（这类技能是本地写的、没有独立仓，bodies/ 就是它们的 git 家）。",
-    "hidden=true 表示这是进程技能，要在正文 frontmatter 里补 disable-model-invocation: true——",
-    "canonical 仓没有这一行，不补就会把隐藏撞掉。",
-    "",
-    "2026-09-05 cutover 后：/Users/xin/auto-skills/CtriXin-repo/<组件> 是唯一 checkout（停在 main，",
-    "改代码一律去 task worktree 开 branch）。~/.local/share/ctrixin-runtime-v2 已降级成指向它的",
-    "back-compat symlink。这里一律写真实路径，不写 symlink——因为这些路径会被原样写进技能正文的",
-    "「脚本根目录」说明里，而 guard 会拦旧 symlink 路径下的操作。",
-    "",
-    "没进这张表的技能不会被碰。work / oii-executor-sop 故意不列，见 README。"
+    "Stride 当前能力目录。目录源同步 SKILL.md、description 与 references；文件源相对本工具目录。",
+    "退役技能不再同步，也不删除历史 DB；profile_migrate.py 从当前 Agent 关联中移除它们。",
+    "脚本按 canonical 目录执行；技能物化位置由当前 runtime 指定，pi 为 .pi/skills。"
+  ],
+  "retired_skills": [
+    "workflow-runner",
+    "executor-discipline",
+    "outpact",
+    "mommy",
+    "state-core",
+    "work",
+    "work-gate",
+    "work-done",
+    "qa",
+    "oii-executor-sop"
   ],
   "skills": {
-    "scmp-ops":            { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/scmp-ops" },
-    "mommy":               { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/mommy", "hidden": true },
-    "outpact":             { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/outpact", "hidden": true },
-    "frontend-baseline":   { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/frontend-baseline" },
-    "qa":                  { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/qa" },
-    "issue-recorder":      { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/issue-recorder" },
-    "xmem":                { "kind": "dir",  "source": "/Users/xin/.mms/vendor/xmem" },
-    "work-done":           { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/work-done", "hidden": true },
-    "work-gate":           { "kind": "dir",  "source": "/Users/xin/auto-skills/CtriXin-repo/work-gate", "hidden": true },
-    "workflow-runner":     { "kind": "file", "source": "/Users/xin/auto-skills/tools/runtimia-skill-sync/bodies/workflow-runner.md" },
-    "executor-discipline": { "kind": "file", "source": "/Users/xin/auto-skills/tools/runtimia-skill-sync/bodies/executor-discipline.md" },
-    "state-core":          { "kind": "file", "source": "/Users/xin/auto-skills/tools/runtimia-skill-sync/bodies/state-core.md" }
+    "stride": {
+      "kind": "dir",
+      "source": "/Users/xin/stride/skills/stride"
+    },
+    "scmp-ops": {
+      "kind": "dir",
+      "source": "/Users/xin/auto-skills/CtriXin-repo/scmp-ops"
+    },
+    "frontend-baseline": {
+      "kind": "dir",
+      "source": "/Users/xin/auto-skills/CtriXin-repo/frontend-baseline"
+    },
+    "auditor": {
+      "kind": "dir",
+      "source": "/Users/xin/auto-skills/CtriXin-repo/auditor"
+    },
+    "figma-atomic-intake": {
+      "kind": "dir",
+      "source": "/Users/xin/auto-skills/CtriXin-repo/source-fidelity/figma-atomic-intake"
+    },
+    "figma-pixel-qa": {
+      "kind": "dir",
+      "source": "/Users/xin/auto-skills/CtriXin-repo/source-fidelity/figma-pixel-qa"
+    },
+    "ego-browser": {
+      "kind": "dir",
+      "source": "/Users/xin/.local/share/ego/ego-skills"
+    },
+    "xmem": {
+      "kind": "dir",
+      "source": "/Users/xin/auto-skills/CtriXin-repo/xmem/skills/xmem"
+    },
+    "issue-recorder": {
+      "kind": "file",
+      "source": "bodies/issue-recorder.md"
+    }
   }
 }
