@@ -1,13 +1,15 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="${0:A:h}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
 PATH="$SCRIPT_DIR:$PATH"
-SCMP_CLI_PATH="$(runtime-component scmp_cli)"
+STRIDE_ROOT="${STRIDE_ROOT:-/Users/xin/stride}"
+ENTRYPOINT="$STRIDE_ROOT/bin/scmp-auth"
 
-if [[ ! -f "$SCMP_CLI_PATH" ]]; then
-  print -u2 "Error: Script not found at $SCMP_CLI_PATH"
+if [[ ! -x "$ENTRYPOINT" ]]; then
+  echo "Error: Stride auth entrypoint not found at $ENTRYPOINT" >&2
   exit 1
 fi
 
-exec python3 "$SCMP_CLI_PATH" auth "$@"
+# Keep auth stdout untouched: it may contain a token.
+exec "$ENTRYPOINT" "$@"

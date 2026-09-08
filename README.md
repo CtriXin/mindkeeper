@@ -59,16 +59,20 @@ adsMapping: {
 
 The standalone SCMP CLI is owned by the separate `CtriXin/scmp-deploy` repository. This
 parent repo only exposes `bin/deploy`, `bin/lookup`, and `bin/scmp-auth`; each wrapper
-resolves the pinned runtime entrypoint through `runtime-manifest`.
+delegates to Stride. `lookup` and `scmp-auth` use bounded Company entrypoints, while
+`deploy` uses Stride's task-aware Company release path. These three commands no longer
+resolve `scmp_cli` through `runtime-manifest` and never fall back to an unpinned source checkout.
+`runtime-component` remains only for explicitly legacy component consumers.
+The default Stride root is `/Users/xin/stride`; a second host can set `STRIDE_ROOT` before using these compatibility commands.
 
 Do not restore a nested `scmp-deploy/` directory inside this parent repo. The old path is retired
 and must remain absent; source authoring belongs under `CtriXin-repo/scmp-deploy`, and execution
-belongs under `$RUNTIME_ROOT/scmp-deploy`.
+uses Stride's verified Company bundle.
 
 ### 3. Global Scripts (`bin/`)
 
 #### `deploy` Script
-The primary deployment command that wraps `scmp_cli.py`. Can infer service names from the current git repository.
+The primary deployment command that forwards to Stride Company. It can infer service names from the current git repository.
 
 **Features:**
 - Automatic service name detection from `.deploy-service` or `.deploy-name`
@@ -127,7 +131,7 @@ node install.js
 export SCMP_SHARE_ID='<your-share-id>'
 
 # Login to SCMP (token stored securely)
-python3 "$(runtime-component scmp_cli)" login --prompt-password
+scmp-auth setup --share-id "$SCMP_SHARE_ID" --prompt-password
 ```
 
 4. **Configure Feishu notifications (optional):**

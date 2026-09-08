@@ -13,9 +13,9 @@ auto-skills/
 │   ├── claude-provider   # Claude Code integration
 │   └── figmamcp          # Figma integration
 ├── CtriXin-repo/scmp-deploy/ # SCMP deployment source repo
-├── $RUNTIME_ROOT/scmp-deploy/ # pinned runtime checkout
-├── runtime-manifest/      # component resolver and pin contract
-└── bin/                   # resolver-backed wrappers
+├── ~/.local/share/stride/tools/company/ # verified Stride Company bundle
+├── runtime-manifest/      # legacy component resolver and pin contract
+└── bin/                   # Stride-backed compatibility wrappers
 ├── domain-tool-core/     # Domain configuration engine
 │   ├── index.js         # Main domain tool engine
 │   ├── install.js       # Anchor installation script
@@ -66,7 +66,7 @@ node index.js --preview  # Preview mode
 
 ### 2. SCMP Deployment Tools
 **Source:** `/Users/xin/auto-skills/CtriXin-repo/scmp-deploy`
-**Runtime:** `$RUNTIME_ROOT/scmp-deploy` (`RUNTIME_ROOT=~/.local/share/ctrixin-runtime-v2`)
+**Runtime:** Stride's verified Company bundle under `~/.local/share/stride/tools/company/`
 
 **Purpose:** Command-line tools for deploying services through SCMP without requiring a browser UI.
 
@@ -87,10 +87,11 @@ node index.js --preview  # Preview mode
 **Purpose:** Globally accessible command-line utilities that integrate all components.
 
 #### deploy
-**Purpose:** Wrapper for SCMP CLI tool with automatic service name inference.
+**Purpose:** Task-aware Stride Company release entry with automatic service name inference.
 - Infers service name from `.deploy-service` or `.deploy-name` files
 - Handles daily token refresh
 - Interactive deployment workflow
+- Keeps task binding, release checks and readback in Stride
 
 **Usage:**
 ```bash
@@ -126,6 +127,16 @@ lookup service-name              # Look up service
 lookup domain.com                # Look up by domain
 ```
 
+`lookup` is a bounded Stride Company read path. It does not inherit release-dispatcher drift or fall back to `runtime-manifest`.
+
+#### scmp-auth
+**Purpose:** Set up and inspect SCMP authentication without writing token output into a task record.
+
+```bash
+scmp-auth setup --share-id "$SCMP_SHARE_ID" --prompt-password
+scmp-auth status
+```
+
 #### figmamcp
 **Purpose:** Figma integration for SCMP.
 
@@ -155,7 +166,7 @@ lookup domain.com                # Look up by domain
 ### Development Workflow
 1. Set up PATH: `export PATH="/Users/xin/auto-skills/bin:$PATH"`
 2. Configure SCMP: `export SCMP_SHARE_ID='your-id'`
-3. Authenticate: `python3 "$(runtime-component scmp_cli)" login --prompt-password`
+3. Authenticate: `scmp-auth setup --share-id "$SCMP_SHARE_ID" --prompt-password`
 4. In service repo, run `push` to set up `.deploy-service`
 5. Make code changes
 6. Use `push -m "message"` to commit and push

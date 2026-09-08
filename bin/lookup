@@ -4,14 +4,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
 PATH="$SCRIPT_DIR:$PATH"
 
-# Run Service/Domain Lookup from anywhere.
+# Domain/service lookup is a bounded Stride Company entrypoint.
+STRIDE_ROOT="${STRIDE_ROOT:-/Users/xin/stride}"
+ENTRYPOINT="$STRIDE_ROOT/bin/lookup"
 
-LOOKUP_SCRIPT_PATH="$(runtime-component scmp_cli)"
-LOOKUP_SCRIPT_PATH="${LOOKUP_SCRIPT_PATH%/scmp_cli.py}/service_lookup.py"
-
-if [[ ! -f "$LOOKUP_SCRIPT_PATH" ]]; then
-  echo "Error: Script not found at $LOOKUP_SCRIPT_PATH"
+if [[ ! -x "$ENTRYPOINT" ]]; then
+  echo "Error: Stride lookup entrypoint not found at $ENTRYPOINT" >&2
   exit 1
 fi
 
-exec python3 "$LOOKUP_SCRIPT_PATH" "$@"
+exec "$ENTRYPOINT" "$@"
